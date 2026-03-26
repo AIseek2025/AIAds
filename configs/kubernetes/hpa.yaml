@@ -1,0 +1,347 @@
+# AIAds Platform - Horizontal Pod Autoscaler Configuration
+# Version: 1.3.0
+# Last Updated: 2026-05-06
+
+# ============================================
+# Production HPA (Formerly Canary)
+# ============================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: aiads-production-hpa
+  namespace: aiads
+  labels:
+    app: aiads
+    environment: production
+  annotations:
+    description: "HPA for Production Deployment - 100% Traffic"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: aiads-production
+  minReplicas: 12
+  maxReplicas: 30
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300  # 5 minutes
+      policies:
+      - type: Percent
+        value: 25
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Min
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 4
+        periodSeconds: 15
+      selectPolicy: Max
+  metrics:
+  # CPU-based scaling
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+  # Memory-based scaling
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 75
+  # Request-based scaling (custom metric)
+  - type: Pods
+    pods:
+      metric:
+        name: http_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "200"
+  # Latency-based scaling (custom metric)
+  - type: Pods
+    pods:
+      metric:
+        name: p95_latency_ms
+      target:
+        type: AverageValue
+        averageValue: "150"
+
+---
+# ============================================
+# Stable HPA
+# ============================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: aiads-stable-hpa
+  namespace: aiads
+  labels:
+    app: aiads
+    environment: stable
+  annotations:
+    description: "HPA for Stable Deployment - Aggressive scaling for production"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: aiads-stable
+  minReplicas: 6
+  maxReplicas: 30
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600  # 10 minutes
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Min
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 4
+        periodSeconds: 15
+      selectPolicy: Max
+  metrics:
+  # CPU-based scaling
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+  # Memory-based scaling
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 75
+  # Request-based scaling (custom metric)
+  - type: Pods
+    pods:
+      metric:
+        name: http_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "200"
+  # Latency-based scaling (custom metric)
+  - type: Pods
+    pods:
+      metric:
+        name: p95_latency_ms
+      target:
+        type: AverageValue
+        averageValue: "150"
+  # Connection-based scaling
+  - type: Pods
+    pods:
+      metric:
+        name: active_connections
+      target:
+        type: AverageValue
+        averageValue: "500"
+
+---
+# ============================================
+# Vertical Pod Autoscaler (VPA) - Canary
+# ============================================
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: aiads-canary-vpa
+  namespace: aiads
+  labels:
+    app: aiads
+    environment: canary
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: aiads-canary
+  updatePolicy:
+    updateMode: "Auto"  # Options: Off, Initial, Recreate, Auto
+  resourcePolicy:
+    containerPolicies:
+    - containerName: aiads
+      minAllowed:
+        cpu: "100m"
+        memory: "256Mi"
+      maxAllowed:
+        cpu: "2000m"
+        memory: "4Gi"
+      controlledResources: ["cpu", "memory"]
+
+---
+# ============================================
+# Vertical Pod Autoscaler (VPA) - Stable
+# ============================================
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: aiads-stable-vpa
+  namespace: aiads
+  labels:
+    app: aiads
+    environment: stable
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: aiads-stable
+  updatePolicy:
+    updateMode: "Recommendation"  # Only recommend, don't auto-update
+  resourcePolicy:
+    containerPolicies:
+    - containerName: aiads
+      minAllowed:
+        cpu: "250m"
+        memory: "512Mi"
+      maxAllowed:
+        cpu: "4000m"
+        memory: "8Gi"
+      controlledResources: ["cpu", "memory"]
+
+---
+# ============================================
+# KEDA ScaledObject for Event-Driven Scaling
+# ============================================
+# Note: Requires KEDA (Kubernetes Event-Driven Autoscaling) to be installed
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: aiads-canary-scaledobject
+  namespace: aiads
+  labels:
+    app: aiads
+    environment: canary
+spec:
+  scaleTargetRef:
+    name: aiads-canary
+  minReplicaCount: 6
+  maxReplicaCount: 15
+  cooldownPeriod: 300
+  pollingInterval: 30
+  triggers:
+  # Prometheus trigger for custom metrics
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.monitoring.svc.cluster.local:9090
+      metricName: http_requests_total
+      query: sum(rate(http_requests_total{environment="canary"}[5m]))
+      threshold: '100'
+  # CPU trigger
+  - type: cpu
+    metadata:
+      value: '70'
+      type: Utilization
+  # Memory trigger
+  - type: memory
+    metadata:
+      value: '80'
+      type: Utilization
+
+---
+# ============================================
+# KEDA ScaledObject - Stable
+# ============================================
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: aiads-stable-scaledobject
+  namespace: aiads
+  labels:
+    app: aiads
+    environment: stable
+spec:
+  scaleTargetRef:
+    name: aiads-stable
+  minReplicaCount: 6
+  maxReplicaCount: 50
+  cooldownPeriod: 600
+  pollingInterval: 30
+  triggers:
+  # Prometheus trigger for custom metrics
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.monitoring.svc.cluster.local:9090
+      metricName: http_requests_total
+      query: sum(rate(http_requests_total{environment="stable"}[5m]))
+      threshold: '500'
+  # CPU trigger
+  - type: cpu
+    metadata:
+      value: '60'
+      type: Utilization
+  # Memory trigger
+  - type: memory
+    metadata:
+      value: '75'
+      type: Utilization
+
+---
+# ============================================
+# Resource Quota for AIAds Namespace
+# ============================================
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: aiads-quota
+  namespace: aiads
+spec:
+  hard:
+    requests.cpu: "50"
+    requests.memory: "100Gi"
+    limits.cpu: "100"
+    limits.memory: "200Gi"
+    pods: "100"
+    services: "20"
+    secrets: "50"
+    configmaps: "50"
+
+---
+# ============================================
+# Limit Range for AIAds Namespace
+# ============================================
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: aiads-limit-range
+  namespace: aiads
+spec:
+  limits:
+  # Default limits for containers
+  - type: Container
+    default:
+      cpu: "1000m"
+      memory: "1Gi"
+    defaultRequest:
+      cpu: "250m"
+      memory: "512Mi"
+    max:
+      cpu: "4000m"
+      memory: "8Gi"
+    min:
+      cpu: "100m"
+      memory: "128Mi"
+  # PVC limits
+  - type: PersistentVolumeClaim
+    max:
+      storage: "100Gi"
+    min:
+      storage: "1Gi"

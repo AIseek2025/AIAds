@@ -1,0 +1,258 @@
+# AIAds Platform - Stable Service
+# Version: 1.0.0
+# Environment: Stable
+# Last Updated: 2026-03-24
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: aiads-stable
+  namespace: aiads
+  labels:
+    app: aiads
+    environment: stable
+    track: stable
+  annotations:
+    description: "AIAds Stable Service - Routes 90% traffic"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "3000"
+spec:
+  type: ClusterIP
+  selector:
+    app: aiads
+    environment: stable
+    track: stable
+  ports:
+  - name: http
+    port: 80
+    targetPort: 3000
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: 3000
+    protocol: TCP
+  
+  # Session affinity for consistent user experience
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 hours
+
+---
+# Stable Service - Headless for direct pod access
+apiVersion: v1
+kind: Service
+metadata:
+  name: aiads-stable-headless
+  namespace: aiads
+  labels:
+    app: aiads
+    environment: stable
+  annotations:
+    description: "Headless service for stable direct access"
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: aiads
+    environment: stable
+    track: stable
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+    protocol: TCP
+
+---
+# Stable Ingress (Main Production)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: aiads-stable-ingress
+  namespace: aiads
+  labels:
+    app: aiads
+    environment: stable
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/rate-limit: "200"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  rules:
+  - host: aiads.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: aiads-stable
+            port:
+              number: 80
+  - host: www.aiads.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: aiads-stable
+            port:
+              number: 80
+  - host: api.aiads.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: aiads-stable
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - aiads.com
+    - www.aiads.com
+    - api.aiads.com
+    secretName: aiads-stable-tls
+
+---
+# Stable PodDisruptionBudget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: aiads-stable-pdb
+  namespace: aiads
+  labels:
+    app: aiads
+    environment: stable
+spec:
+  minAvailable: 4  # Ensure at least 4 pods available
+  selector:
+    matchLabels:
+      app: aiads
+      environment: stable
+      track: stable
+
+---
+# Stable NetworkPolicy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: aiads-stable-netpol
+  namespace: aiads
+  labels:
+    app: aiads
+    environment: stable
+spec:
+  podSelector:
+    matchLabels:
+      app: aiads
+      environment: stable
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - podSelector:
+        matchLabels:
+          app: nginx-ingress
+    ports:
+    - protocol: TCP
+      port: 3000
+  # Allow from monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 3000
+  # Allow from canary (for internal testing)
+  - from:
+    - podSelector:
+        matchLabels:
+          environment: canary
+    ports:
+    - protocol: TCP
+      port: 3000
+  egress:
+  # Allow to database
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: aiads
+      podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow to Redis
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: aiads
+      podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow to external APIs
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow DNS
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: UDP
+      port: 53
+
+---
+# External LoadBalancer Service (Optional - for direct access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: aiads-stable-lb
+  namespace: aiads
+  labels:
+    app: aiads
+    environment: stable
+  annotations:
+    description: "External LoadBalancer for stable environment"
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-internal: "false"
+spec:
+  type: LoadBalancer
+  selector:
+    app: aiads
+    environment: stable
+    track: stable
+  ports:
+  - name: http
+    port: 80
+    targetPort: 3000
+    protocol: TCP
+  - name: https
+    port: 443
+    targetPort: 3000
+    protocol: TCP
+  externalTrafficPolicy: Local

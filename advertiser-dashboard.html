@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIAds - 广告主后台</title>
+    <link rel="stylesheet" href="public/css/app.css?v=20260325-v16">
+    <link rel="stylesheet" href="css/theme-picker.css">
+    <link rel="stylesheet" href="css/ui-styles.css">
+    <link rel="stylesheet" href="css/ui-style-selector.css">
+    <link rel="stylesheet" href="css/ux-modes.css">
+    <link rel="stylesheet" href="css/ux-mode-selector.css">
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="navbar-left">
+            <h1> AIAds</h1>
+            <div class="navbar-nav">
+                <a href="#" class="active" onclick="switchTab('dashboard'); return false;">仪表盘</a>
+                <a href="#" onclick="switchTab('create'); return false;">创建活动</a>
+                <a href="#" onclick="switchTab('kols'); return false;">选择 KOL</a>
+                <a href="#" onclick="switchTab('campaigns'); return false;">我的活动</a>
+            </div>
+        </div>
+        <div class="user-info">
+            <div class="balance"> 余额：<span id="user-balance">$15,000</span></div>
+            <div id="user-name">深圳科技有限公司</div>
+            <button class="logout-btn" onclick="logout()">退出</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- 仪表盘 -->
+        <div id="dashboard" class="tab-pane active">
+            <div class="alert alert-info">
+                💡 欢迎回来！您有 <strong id="active-campaigns">2</strong> 个进行中的活动
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="total-campaigns">5</div>
+                    <div class="stat-label">总活动数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="total-kols">125</div>
+                    <div class="stat-label">合作 KOL</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="total-views">2.5M</div>
+                    <div class="stat-label">总曝光量</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="total-spend">$45,280</div>
+                    <div class="stat-label">总花费</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2> 最近活动</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>活动名称</th>
+                            <th>预算</th>
+                            <th>KOL 数量</th>
+                            <th>曝光量</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="campaigns-table">
+                        <tr>
+                            <td>夏季促销活动</td>
+                            <td>$5,000</td>
+                            <td>25</td>
+                            <td>850,000</td>
+                            <td><span class="status-badge status-active">进行中</span></td>
+                            <td><button class="btn btn-primary btn-sm" onclick="viewCampaign(1)">查看</button></td>
+                        </tr>
+                        <tr>
+                            <td>新品发布推广</td>
+                            <td>$8,000</td>
+                            <td>40</td>
+                            <td>1,200,000</td>
+                            <td><span class="status-badge status-active">进行中</span></td>
+                            <td><button class="btn btn-primary btn-sm" onclick="viewCampaign(2)">查看</button></td>
+                        </tr>
+                        <tr>
+                            <td>品牌知名度提升</td>
+                            <td>$12,000</td>
+                            <td>60</td>
+                            <td>2,500,000</td>
+                            <td><span class="status-badge status-completed">已完成</span></td>
+                            <td><button class="btn btn-primary btn-sm" onclick="viewCampaign(3)">查看</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 创建活动 -->
+        <div id="create" class="tab-pane">
+            <div class="section">
+                <h2> 创建新活动</h2>
+                <form onsubmit="createCampaign(event)">
+                    <div class="form-group">
+                        <label>活动名称 *</label>
+                        <input type="text" id="campaign-name" placeholder="例如：夏季促销活动" required />
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>目标平台 *</label>
+                            <select id="campaign-platform" required>
+                                <option value="">选择平台</option>
+                                <option value="tiktok">TikTok</option>
+                                <option value="youtube">YouTube</option>
+                                <option value="instagram">Instagram</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>预算 ($) *</label>
+                            <input type="number" id="campaign-budget" placeholder="5000" min="100" required />
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>计价方式 *</label>
+                            <select id="campaign-pricing" required>
+                                <option value="">选择计价方式</option>
+                                <option value="cpm">CPM (按曝光)</option>
+                                <option value="cpc">CPC (按点击)</option>
+                                <option value="cpa">CPA (按转化)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>活动周期 *</label>
+                            <input type="text" id="campaign-duration" placeholder="2026-05-01 至 2026-05-31" required />
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>目标受众</label>
+                        <textarea id="campaign-target" rows="3" placeholder="描述您的目标受众，例如：18-35 岁女性，对时尚和美妆感兴趣"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>活动描述 *</label>
+                        <textarea id="campaign-desc" rows="4" placeholder="详细描述您的活动内容和要求" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">创建活动</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 选择 KOL -->
+        <div id="kols" class="tab-pane">
+            <div class="section">
+                <h2> 选择 KOL</h2>
+                <div class="filters">
+                    <select class="filter-select" onchange="filterKols()">
+                        <option value="">所有平台</option>
+                        <option value="tiktok">TikTok</option>
+                        <option value="youtube">YouTube</option>
+                        <option value="instagram">Instagram</option>
+                    </select>
+                    <select class="filter-select" onchange="filterKols()">
+                        <option value="">粉丝数范围</option>
+                        <option value="1k-5k">1,000 - 5,000</option>
+                        <option value="5k-10k">5,000 - 10,000</option>
+                        <option value="10k-50k">10,000 - 50,000</option>
+                    </select>
+                    <input type="text" class="filter-select" placeholder="搜索 KOL..." onkeyup="filterKols()" />
+                </div>
+                
+                <div class="kol-grid" id="kol-grid">
+                    <!-- KOL 卡片由 JS 生成 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 我的活动 -->
+        <div id="campaigns" class="tab-pane">
+            <div class="section">
+                <h2> 我的活动</h2>
+                <div class="filters">
+                    <select class="filter-select">
+                        <option value="">所有状态</option>
+                        <option value="draft">草稿</option>
+                        <option value="active">进行中</option>
+                        <option value="completed">已完成</option>
+                    </select>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>活动名称</th>
+                            <th>平台</th>
+                            <th>预算</th>
+                            <th>KOL 数量</th>
+                            <th>状态</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="my-campaigns-table">
+                        <!-- 活动数据由 JS 生成 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- KOL 详情模态框 -->
+    <div id="kol-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>KOL 详情</h2>
+                <button class="modal-close" onclick="closeModal('kol-modal')">&times;</button>
+            </div>
+            <div class="modal-body" id="kol-modal-body">
+                <!-- KOL 详情内容 -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('kol-modal')">取消</button>
+                <button class="btn btn-primary" onclick="selectKol()">选择此 KOL</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/advertiser-dashboard.js"></script>
+    <!-- 主题切换 -->
+    <script src="js/theme-manager.js"></script>
+    <!-- UI 风格切换 -->
+    <script src="js/ui-style-manager.js"></script>
+    <!-- UX 模式切换 -->
+    <script src="js/ux-mode-manager.js"></script>
+</body>
+</html>

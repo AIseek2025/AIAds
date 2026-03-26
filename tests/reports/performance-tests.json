@@ -1,0 +1,169 @@
+{
+  "testSuite": "Performance Tests",
+  "timestamp": "2026-03-24T10:00:00.000Z",
+  "status": "PENDING",
+  "summary": {
+    "totalScenarios": 4,
+    "completed": 0,
+    "pending": 4
+  },
+  "scenarios": [
+    {
+      "name": "Smoke Test",
+      "id": "perf-smoke",
+      "status": "PENDING",
+      "configuration": {
+        "concurrentUsers": 10,
+        "duration": "1m",
+        "rampUp": "30s"
+      },
+      "endpoints": [
+        "/api/v1/auth/login",
+        "/api/v1/kols",
+        "/api/v1/campaigns",
+        "/health"
+      ],
+      "thresholds": {
+        "p50": "<100ms",
+        "p95": "<200ms",
+        "p99": "<500ms",
+        "errorRate": "<1%"
+      },
+      "results": null
+    },
+    {
+      "name": "Load Test",
+      "id": "perf-load",
+      "status": "PENDING",
+      "configuration": {
+        "concurrentUsers": 100,
+        "duration": "5m",
+        "rampUp": "2m"
+      },
+      "endpoints": [
+        "/api/v1/auth/login",
+        "/api/v1/kols",
+        "/api/v1/campaigns",
+        "/api/v1/orders",
+        "/api/v1/admin/dashboard/stats"
+      ],
+      "thresholds": {
+        "p50": "<100ms",
+        "p95": "<200ms",
+        "p99": "<500ms",
+        "errorRate": "<0.5%"
+      },
+      "results": null
+    },
+    {
+      "name": "Stress Test",
+      "id": "perf-stress",
+      "status": "PENDING",
+      "configuration": {
+        "concurrentUsers": 500,
+        "duration": "10m",
+        "rampUp": "5m"
+      },
+      "endpoints": [
+        "/api/v1/auth/login",
+        "/api/v1/kols",
+        "/api/v1/campaigns",
+        "/api/v1/orders"
+      ],
+      "thresholds": {
+        "p50": "<150ms",
+        "p95": "<300ms",
+        "p99": "<1000ms",
+        "errorRate": "<2%"
+      },
+      "results": null
+    },
+    {
+      "name": "Breakpoint Test",
+      "id": "perf-breakpoint",
+      "status": "PENDING",
+      "configuration": {
+        "concurrentUsers": 1000,
+        "duration": "15m",
+        "rampUp": "10m"
+      },
+      "endpoints": [
+        "/api/v1/auth/login",
+        "/api/v1/kols",
+        "/api/v1/campaigns",
+        "/api/v1/admin/dashboard/stats"
+      ],
+      "thresholds": {
+        "p50": "<200ms",
+        "p95": "<500ms",
+        "p99": "<2000ms",
+        "errorRate": "<5%"
+      },
+      "results": null
+    }
+  ],
+  "databaseTests": {
+    "slowQueryDetection": {
+      "status": "PENDING",
+      "threshold": "100ms",
+      "results": null
+    },
+    "connectionPoolTest": {
+      "status": "PENDING",
+      "configuration": {
+        "maxConnections": 10,
+        "minConnections": 2,
+        "idleTimeout": "30s",
+        "connectionTimeout": "5s"
+      },
+      "results": null
+    },
+    "indexEfficiencyTest": {
+      "status": "PENDING",
+      "indexes": [
+        "idx_users_email",
+        "idx_users_role_status",
+        "idx_kols_platform_followers",
+        "idx_campaigns_advertiser_status",
+        "idx_orders_status_created"
+      ],
+      "results": null
+    }
+  },
+  "expectedMetrics": {
+    "api": {
+      "health": { "p50": "10ms", "p95": "20ms", "p99": "50ms", "maxRPS": 1000 },
+      "auth_login": { "p50": "50ms", "p95": "150ms", "p99": "300ms", "maxRPS": 200 },
+      "kols_list": { "p50": "30ms", "p95": "100ms", "p99": "200ms", "maxRPS": 500 },
+      "campaigns_list": { "p50": "40ms", "p95": "150ms", "p99": "300ms", "maxRPS": 300 },
+      "orders_list": { "p50": "40ms", "p95": "150ms", "p99": "300ms", "maxRPS": 300 },
+      "dashboard_stats": { "p50": "60ms", "p95": "200ms", "p99": "400ms", "maxRPS": 50 }
+    },
+    "database": {
+      "avgQueryTime": "<50ms",
+      "slowQueryRate": "<1%",
+      "connectionPoolUsage": "<80%",
+      "indexHitRatio": ">95%"
+    }
+  },
+  "tools": {
+    "loadTesting": "k6",
+    "monitoring": "Prometheus + Grafana",
+    "profiling": "clinic.js",
+    "apm": "DataDog/New Relic"
+  },
+  "commands": {
+    "runSmoke": "k6 run tests/performance/smoke-test.js",
+    "runLoad": "k6 run tests/performance/load-test.js",
+    "runStress": "k6 run tests/performance/stress-test.js",
+    "runBreakpoint": "k6 run tests/performance/breakpoint-test.js",
+    "viewReport": "k6 result convert json results.json"
+  },
+  "prerequisites": [
+    "Backend server running in production mode",
+    "Database with production-like data volume",
+    "Redis configured",
+    "Monitoring tools deployed",
+    "No other load on the system"
+  ]
+}

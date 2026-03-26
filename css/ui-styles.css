@@ -1,0 +1,304 @@
+/* ========================================
+   UI 风格切换 - 复刻 UI-UX Pro Max
+   ======================================== */
+
+/* 1. Glassmorphism (玻璃拟态) */
+[data-ui-style="glassmorphism"] body {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-attachment: fixed;
+  background-size: cover;
+}
+
+[data-ui-style="glassmorphism"] .navbar,
+[data-ui-style="glassmorphism"] .sidebar,
+[data-ui-style="glassmorphism"] .content-area,
+[data-ui-style="glassmorphism"] .section,
+[data-ui-style="glassmorphism"] .stat-card,
+[data-ui-style="glassmorphism"] .modal-content {
+  background: rgba(255, 255, 255, 0.15) !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.37);
+  color: #ffffff;
+}
+
+[data-ui-style="glassmorphism"] .theme-select-button {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+[data-ui-style="glassmorphism"] input,
+[data-ui-style="glassmorphism"] select,
+[data-ui-style="glassmorphism"] textarea {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+}
+
+[data-ui-style="glassmorphism"] input::placeholder,
+[data-ui-style="glassmorphism"] textarea::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+[data-ui-style="glassmorphism"] .text-secondary {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+[data-ui-style="glassmorphism"] .text-muted {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+/* 2. Aurora UI (极光 UI) */
+[data-ui-style="aurora"] body {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background-attachment: fixed;
+  background-size: 200% 200%;
+  animation: aurora-flow 15s ease infinite;
+}
+
+@keyframes aurora-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+[data-ui-style="aurora"] .navbar,
+[data-ui-style="aurora"] .sidebar,
+[data-ui-style="aurora"] .content-area,
+[data-ui-style="aurora"] .section,
+[data-ui-style="aurora"] .stat-card,
+[data-ui-style="aurora"] .modal-content {
+  background: rgba(255, 255, 255, 0.1) !important;
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  color: #ffffff;
+}
+
+[data-ui-style="aurora"] .theme-select-button {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+[data-ui-style="aurora"] input,
+[data-ui-style="aurora"] select,
+[data-ui-style="aurora"] textarea {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+[data-ui-style="aurora"] input::placeholder,
+[data-ui-style="aurora"] textarea::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+[data-ui-style="aurora"] .text-secondary {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+[data-ui-style="aurora"] .text-muted {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+/* 3. Dark Mode OLED (深色 OLED) */
+[data-ui-style="oled"] body {
+  background: #000000;
+  color: #ffffff;
+}
+
+[data-ui-style="oled"] .navbar,
+[data-ui-style="oled"] .sidebar,
+[data-ui-style="oled"] .content-area,
+[data-ui-style="oled"] .section,
+[data-ui-style="oled"] .stat-card,
+[data-ui-style="oled"] .modal-content {
+  background: #0a0a0a !important;
+  border: 1px solid #1a1a1a;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+  color: #ffffff;
+}
+
+[data-ui-style="oled"] .theme-select-button {
+  background: #1a1a1a;
+  color: #ffffff;
+  border: 1px solid #2a2a2a;
+}
+
+[data-ui-style="oled"] input,
+[data-ui-style="oled"] select,
+[data-ui-style="oled"] textarea {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  color: #ffffff;
+}
+
+[data-ui-style="oled"] input::placeholder,
+[data-ui-style="oled"] textarea::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+[data-ui-style="oled"] .text-secondary {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+[data-ui-style="oled"] .text-muted {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+/* 4. Claymorphism (黏土拟态) */
+[data-ui-style="clay"] body {
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  background-attachment: fixed;
+}
+
+[data-ui-style="clay"] .navbar,
+[data-ui-style="clay"] .sidebar,
+[data-ui-style="clay"] .content-area,
+[data-ui-style="clay"] .section,
+[data-ui-style="clay"] .stat-card,
+[data-ui-style="clay"] .modal-content {
+  background: linear-gradient(145deg, #ffffff 0%, #f0f0f0 100%) !important;
+  border-radius: 20px !important;
+  border: 3px solid #e0e0e0;
+  box-shadow: 
+    inset -3px -3px 8px rgba(0, 0, 0, 0.1),
+    inset 3px 3px 8px rgba(255, 255, 255, 0.8),
+    8px 8px 16px rgba(0, 0, 0, 0.1);
+  color: #333333;
+}
+
+[data-ui-style="clay"] .theme-select-button {
+  background: linear-gradient(145deg, #f0f0f0, #ffffff);
+  color: #333333;
+  border: 2px solid #e0e0e0;
+  border-radius: 16px;
+  box-shadow: 
+    inset -2px -2px 6px rgba(0, 0, 0, 0.1),
+    inset 2px 2px 6px rgba(255, 255, 255, 0.8);
+}
+
+[data-ui-style="clay"] input,
+[data-ui-style="clay"] select,
+[data-ui-style="clay"] textarea {
+  background: linear-gradient(145deg, #f0f0f0, #ffffff);
+  border: 2px solid #e0e0e0;
+  color: #333333;
+  border-radius: 12px;
+}
+
+[data-ui-style="clay"] input::placeholder,
+[data-ui-style="clay"] textarea::placeholder {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+[data-ui-style="clay"] .text-secondary {
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+[data-ui-style="clay"] .text-muted {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 5. Minimalism (极简主义) */
+[data-ui-style="minimal"] body {
+  background: #ffffff;
+  color: #000000;
+}
+
+[data-ui-style="minimal"] .navbar,
+[data-ui-style="minimal"] .sidebar,
+[data-ui-style="minimal"] .content-area,
+[data-ui-style="minimal"] .section,
+[data-ui-style="minimal"] .stat-card,
+[data-ui-style="minimal"] .modal-content {
+  background: #ffffff !important;
+  border: 1px solid #e0e0e0;
+  border-radius: 0;
+  box-shadow: none;
+  color: #000000;
+}
+
+[data-ui-style="minimal"] .theme-select-button {
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid #000000;
+  border-radius: 0;
+}
+
+[data-ui-style="minimal"] input,
+[data-ui-style="minimal"] select,
+[data-ui-style="minimal"] textarea {
+  background: #ffffff;
+  border: 1px solid #000000;
+  color: #000000;
+  border-radius: 0;
+}
+
+[data-ui-style="minimal"] input::placeholder,
+[data-ui-style="minimal"] textarea::placeholder {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+[data-ui-style="minimal"] .text-secondary {
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+[data-ui-style="minimal"] .text-muted {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 6. Brutalism (粗野主义) */
+[data-ui-style="brutalism"] body {
+  background: #ffffff;
+  color: #000000;
+}
+
+[data-ui-style="brutalism"] .navbar,
+[data-ui-style="brutalism"] .sidebar,
+[data-ui-style="brutalism"] .content-area,
+[data-ui-style="brutalism"] .section,
+[data-ui-style="brutalism"] .stat-card,
+[data-ui-style="brutalism"] .modal-content {
+  background: #ffffff !important;
+  border: 3px solid #000000;
+  border-radius: 0;
+  box-shadow: 4px 4px 0 #000000;
+  color: #000000;
+}
+
+[data-ui-style="brutalism"] .theme-select-button {
+  background: #ffffff;
+  color: #000000;
+  border: 2px solid #000000;
+  border-radius: 0;
+  box-shadow: 2px 2px 0 #000000;
+  font-weight: 700;
+}
+
+[data-ui-style="brutalism"] input,
+[data-ui-style="brutalism"] select,
+[data-ui-style="brutalism"] textarea {
+  background: #ffffff;
+  border: 2px solid #000000;
+  color: #000000;
+  border-radius: 0;
+  font-weight: 600;
+}
+
+[data-ui-style="brutalism"] input::placeholder,
+[data-ui-style="brutalism"] textarea::placeholder {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+[data-ui-style="brutalism"] .text-secondary {
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+[data-ui-style="brutalism"] .text-muted {
+  color: rgba(0, 0, 0, 0.5) !important;
+}

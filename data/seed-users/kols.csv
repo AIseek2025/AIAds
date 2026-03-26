@@ -1,0 +1,31 @@
+id,username,platform,followers,region,category,engagement_rate,email,invite_code,register_date,verify_date,status,active_days,total_earnings
+KOL0001,@FashionGirl,TikTok,25000,USA,fashion,3.5,fashiongirl@email.com,KOL-TIK-0001,2026-03-24,2026-03-24,verified,1,2500
+KOL0002,@TechReviewer,YouTube,18000,Europe,tech,4.2,techreviewer@email.com,KOL-YT-0001,2026-03-24,2026-03-24,verified,1,3200
+KOL0003,@BeautyTips,Instagram,32000,USA,beauty,3.8,beautytips@email.com,KOL-INS-0001,2026-03-24,2026-03-24,verified,1,2800
+KOL0004,@LifeHacks,TikTok,45000,Southeast Asia,lifestyle,2.9,lifehacks@email.com,KOL-TIK-0002,2026-03-24,2026-03-24,verified,1,3500
+KOL0005,@GadgetGuru,YouTube,15000,USA,tech,4.5,gadgetguru@email.com,KOL-YT-0002,2026-03-24,2026-03-24,verified,1,2200
+KOL0006,@StyleIcon,Instagram,28000,Europe,fashion,3.2,styleicon@email.com,KOL-INS-0002,2026-03-24,2026-03-24,verified,1,2600
+KOL0007,@MakeupMaster,TikTok,22000,USA,beauty,3.6,makeupmaster@email.com,KOL-TIK-0003,2026-03-24,2026-03-24,verified,1,2400
+KOL0008,@HomeDecor,YouTube,12000,Europe,lifestyle,4.0,homedecor@email.com,KOL-YT-0003,2026-03-24,2026-03-24,verified,1,1800
+KOL0009,@FitnessLife,Instagram,35000,USA,lifestyle,3.1,fitnesslife@email.com,KOL-INS-0003,2026-03-24,2026-03-24,verified,1,3000
+KOL0010,@TravelBug,TikTok,48000,Southeast Asia,lifestyle,2.5,travelbug@email.com,KOL-TIK-0004,2026-03-24,2026-03-24,verified,1,3800
+KOL0011,@FoodieFun,YouTube,20000,Europe,lifestyle,3.9,foodiefun@email.com,KOL-YT-0004,2026-03-24,2026-03-24,verified,1,2700
+KOL0012,@SkincarePro,Instagram,30000,USA,beauty,3.4,skincarepro@email.com,KOL-INS-0004,2026-03-24,2026-03-24,verified,1,2900
+KOL0013,@GamingZone,TikTok,42000,USA,tech,2.8,gamingzone@email.com,KOL-TIK-0005,2026-03-24,2026-03-24,verified,1,3400
+KOL0014,@DIYCrafts,YouTube,16000,Europe,lifestyle,4.1,diycrafts@email.com,KOL-YT-0005,2026-03-24,2026-03-24,verified,1,2100
+KOL0015,@OutfitInspo,Instagram,26000,USA,fashion,3.3,outfitinspo@email.com,KOL-INS-0005,2026-03-24,2026-03-24,verified,1,2500
+KOL0016,@PetLovers,TikTok,38000,Southeast Asia,lifestyle,2.7,petlovers@email.com,KOL-TIK-0006,2026-03-24,2026-03-24,verified,1,3100
+KOL0017,@AutoReview,YouTube,14000,Europe,tech,4.3,autoreview@email.com,KOL-YT-0006,2026-03-24,2026-03-24,verified,1,2000
+KOL0018,@NailArt,Instagram,24000,USA,beauty,3.5,nailart@email.com,KOL-INS-0006,2026-03-24,2026-03-24,verified,1,2300
+KOL0019,@MusicVibes,TikTok,50000,USA,lifestyle,2.4,musicvibes@email.com,KOL-TIK-0007,2026-03-24,2026-03-24,verified,1,4000
+KOL0020,@PlantParent,YouTube,10000,Europe,lifestyle,4.4,plantparent@email.com,KOL-YT-0007,2026-03-24,2026-03-24,verified,1,1500
+KOL0021,@HairStyle,Instagram,33000,USA,beauty,3.0,hairstyle@email.com,KOL-INS-0007,2026-03-24,2026-03-24,verified,1,2950
+KOL0022,@ComedyKing,TikTok,47000,Southeast Asia,lifestyle,2.6,comedyking@email.com,KOL-TIK-0008,2026-03-24,2026-03-24,verified,1,3700
+KOL0023,@BookWorm,YouTube,11000,Europe,lifestyle,4.2,bookworm@email.com,KOL-YT-0008,2026-03-24,2026-03-24,verified,1,1600
+KOL0024,@JewelryBox,Instagram,29000,USA,fashion,3.2,jewelrybox@email.com,KOL-INS-0008,2026-03-24,2026-03-24,verified,1,2700
+KOL0025,@SmartHome,TikTok,21000,USA,tech,3.7,smarthome@email.com,KOL-TIK-0009,2026-03-24,2026-03-24,verified,1,2350
+KOL0026,@YogaFlow,YouTube,17000,Europe,lifestyle,3.9,yogaflow@email.com,KOL-YT-0009,2026-03-24,2026-03-24,verified,1,2250
+KOL0027,@MensFashion,Instagram,31000,USA,fashion,3.1,mensfashion@email.com,KOL-INS-0009,2026-03-24,2026-03-24,verified,1,2850
+KOL0028,@DanceMoves,TikTok,44000,Southeast Asia,lifestyle,2.8,dancemoves@email.com,KOL-TIK-0010,2026-03-24,2026-03-24,verified,1,3550
+KOL0029,@PhotoTips,YouTube,13000,Europe,tech,4.1,phototips@email.com,KOL-YT-0010,2026-03-24,2026-03-24,verified,1,1900
+KOL0030,@FragranceFan,Instagram,27000,USA,beauty,3.4,fragrancefan@email.com,KOL-INS-0010,2026-03-24,2026-03-24,verified,1,2550

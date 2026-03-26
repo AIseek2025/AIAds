@@ -1,0 +1,267 @@
+# AIAds Platform - Production Deployment
+# Version: 1.3.0
+# Environment: Production (100% Traffic)
+# Last Updated: 2026-05-06
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiads-production
+  namespace: aiads
+  labels:
+    app: aiads
+    environment: production
+    version: v1.3.0
+    track: production
+  annotations:
+    description: "AIAds Production Deployment - 100% Traffic"
+    contact: "devops@aiads.com"
+spec:
+  replicas: 12
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: aiads
+      environment: production
+      track: production
+  template:
+    metadata:
+      labels:
+        app: aiads
+        environment: production
+        version: v1.3.0
+        track: production
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Priority for production pods
+      priorityClassName: high-priority
+
+      # Affinity rules for high availability
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: aiads
+                  environment: production
+              topologyKey: kubernetes.io/hostname
+
+        # Spread across availability zones
+        podTopologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: aiads
+              environment: production
+
+      # Node selector for production workloads
+      nodeSelector:
+        workload-type: application
+        environment: production
+
+      # Tolerations for production nodes
+      tolerations:
+      - key: "production"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+
+      # Service account
+      serviceAccountName: aiads-production-sa
+
+      # Security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      # Containers
+      containers:
+      - name: aiads
+        image: aiads/platform:v1.3.0-production
+        imagePullPolicy: Always
+
+        ports:
+        - name: http
+          containerPort: 3000
+          protocol: TCP
+
+        # Environment variables
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: ENVIRONMENT
+          value: "production"
+        - name: VERSION
+          value: "v1.3.0"
+        - name: CANARY_RELEASE
+          value: "false"
+        - name: LOG_LEVEL
+          value: "info"
+        - name: ENABLE_NEW_DASHBOARD
+          value: "true"
+        - name: ENABLE_AI_MATCHING
+          value: "true"
+        - name: ENABLE_AI_MATCHING_V2
+          value: "true"
+        - name: ENABLE_PAYMENT_V2
+          value: "false"
+        # Database connection
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: aiads-db-secret
+              key: url
+        # Redis cache
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: aiads-redis-secret
+              key: url
+        # API keys
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aiads-api-secret
+              key: key
+
+        # Resource limits and requests
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2000m"
+            memory: "2Gi"
+
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        startupProbe:
+          httpGet:
+            path: /health/startup
+            port: 3000
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+
+        # Volume mounts
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        - name: logs
+          mountPath: /app/logs
+
+      # Init containers
+      initContainers:
+      - name: wait-for-db
+        image: busybox:1.36
+        command: ['sh', '-c', 'until nc -z $DATABASE_HOST 5432; do echo waiting for database; sleep 2; done']
+        env:
+        - name: DATABASE_HOST
+          value: "postgres.aiads.svc.cluster.local"
+
+      # Volumes
+      volumes:
+      - name: config
+        configMap:
+          name: aiads-production-config
+      - name: logs
+        emptyDir: {}
+
+      # DNS configuration
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        searches:
+          - aiads.svc.cluster.local
+          - svc.cluster.local
+          - cluster.local
+
+      # Termination grace period
+      terminationGracePeriodSeconds: 30
+
+      # Restart policy
+      restartPolicy: Always
+
+---
+# Production Deployment - ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aiads-production-config
+  namespace: aiads
+  labels:
+    app: aiads
+    environment: production
+data:
+  app.config.json: |
+    {
+      "environment": "production",
+      "version": "v1.3.0",
+      "featureFlags": {
+        "canaryRelease": false,
+        "newDashboard": true,
+        "aiMatching": true,
+        "aiMatchingV2": true,
+        "paymentV2": false
+      },
+      "analytics": {
+        "enabled": true,
+        "samplingRate": 1.0
+      },
+      "logging": {
+        "level": "info",
+        "format": "json"
+      }
+    }
+
+---
+# Service Account for Production Deployment
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aiads-production-sa
+  namespace: aiads
+  labels:
+    app: aiads
+    environment: production
+automountServiceAccountToken: false
+
+---
+# Priority Class for Production Pods
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+value: 1000000
+globalDefault: false
+description: "High priority for production workloads"

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIAds - 管理后台</title>
+    <link rel="stylesheet" href="public/css/app.css?v=20260325-v16">
+    <link rel="stylesheet" href="css/theme-picker.css">
+    <link rel="stylesheet" href="css/ui-styles.css">
+    <link rel="stylesheet" href="css/ui-style-selector.css">
+    <link rel="stylesheet" href="css/ux-modes.css">
+    <link rel="stylesheet" href="css/ux-mode-selector.css">
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+    <!-- 登录页面 -->
+    <div id="admin-login-page" class="admin-login-container">
+        <div class="admin-login-card">
+            <div class="admin-login-header">
+                <h1>AIAds 管理后台</h1>
+                <p>管理员登录</p>
+            </div>
+            
+            <form id="admin-login-form" class="admin-login-form">
+                <div class="form-group">
+                    <label for="admin-username">用户名</label>
+                    <input type="text" id="admin-username" placeholder="请输入用户名" required autocomplete="username">
+                </div>
+                
+                <div class="form-group">
+                    <label for="admin-password">密码</label>
+                    <input type="password" id="admin-password" placeholder="请输入密码" required autocomplete="current-password">
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="admin-remember">
+                        <span>记住我</span>
+                    </label>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-block">登录</button>
+                
+                <div id="login-error" class="admin-login-error" style="display: none;"></div>
+            </form>
+            
+            <div class="admin-login-footer">
+                <p>默认管理员账号：</p>
+                <code>admin / admin123</code>
+            </div>
+        </div>
+    </div>
+
+    <!-- 管理后台主界面 -->
+    <div id="admin-dashboard" class="admin-dashboard" style="display: none;">
+        <!-- 导航栏 -->
+        <nav class="navbar admin-navbar">
+            <div class="navbar-left">
+                <h1>🛡️ AIAds 管理后台</h1>
+                <div class="navbar-nav">
+                    <a href="#" class="active" onclick="switchAdminTab('overview'); return false;">总览</a>
+                    <a href="#" onclick="switchAdminTab('users'); return false;">用户管理</a>
+                    <a href="#" onclick="switchAdminTab('advertisers'); return false;">广告主</a>
+                    <a href="#" onclick="switchAdminTab('kols'); return false;">KOL 管理</a>
+                    <a href="#" onclick="switchAdminTab('campaigns'); return false;">活动管理</a>
+                    <a href="#" onclick="switchAdminTab('finance'); return false;">财务管理</a>
+                    <a href="#" onclick="switchAdminTab('settings'); return false;">系统设置</a>
+                </div>
+            </div>
+            <div class="user-info">
+                <span class="admin-role">超级管理员</span>
+                <span id="admin-username-display">admin</span>
+                <button class="logout-btn" onclick="adminLogout()">退出</button>
+            </div>
+        </nav>
+
+        <!-- 主内容区 -->
+        <div class="admin-main-content">
+            <!-- 侧边栏 -->
+            <aside class="admin-sidebar">
+                <div class="admin-sidebar-section">
+                    <h3>数据统计</h3>
+                    <ul>
+                        <li><a href="#" class="active" onclick="switchAdminTab('overview'); return false;">📊 总览</a></li>
+                        <li><a href="#" onclick="switchAdminTab('analytics'); return false;">📈 数据分析</a></li>
+                        <li><a href="#" onclick="switchAdminTab('reports'); return false;">📋 报表导出</a></li>
+                    </ul>
+                </div>
+                
+                <div class="admin-sidebar-section">
+                    <h3>用户管理</h3>
+                    <ul>
+                        <li><a href="#" onclick="switchAdminTab('users'); return false;">👥 用户列表</a></li>
+                        <li><a href="#" onclick="switchAdminTab('advertisers'); return false;">🏢 广告主</a></li>
+                        <li><a href="#" onclick="switchAdminTab('kols'); return false;">🌟 KOL</a></li>
+                    </ul>
+                </div>
+                
+                <div class="admin-sidebar-section">
+                    <h3>内容管理</h3>
+                    <ul>
+                        <li><a href="#" onclick="switchAdminTab('campaigns'); return false;">📢 活动管理</a></li>
+                        <li><a href="#" onclick="switchAdminTab('content-review'); return false;">🔍 内容审核</a></li>
+                    </ul>
+                </div>
+                
+                <div class="admin-sidebar-section">
+                    <h3>财务管理</h3>
+                    <ul>
+                        <li><a href="#" onclick="switchAdminTab('finance'); return false;">💰 财务总览</a></li>
+                        <li><a href="#" onclick="switchAdminTab('withdrawals'); return false;">💸 提现审核</a></li>
+                    </ul>
+                </div>
+                
+                <div class="admin-sidebar-section">
+                    <h3>系统设置</h3>
+                    <ul>
+                        <li><a href="#" onclick="switchAdminTab('settings'); return false;">⚙️ 系统配置</a></li>
+                        <li><a href="#" onclick="switchAdminTab('admins'); return false;">👮 管理员</a></li>
+                        <li><a href="#" onclick="switchAdminTab('logs'); return false;">📜 操作日志</a></li>
+                    </ul>
+                </div>
+            </aside>
+
+            <!-- 内容区域 -->
+            <main class="admin-content-area">
+                <!-- 总览页面 -->
+                <div id="admin-tab-overview" class="admin-tab-content active">
+                    <h2>📊 数据总览</h2>
+                    
+                    <div class="admin-stats-grid">
+                        <div class="admin-stat-card">
+                            <div class="stat-icon">👥</div>
+                            <div class="stat-content">
+                                <div class="stat-number" id="stat-total-users">0</div>
+                                <div class="stat-label">总用户数</div>
+                            </div>
+                        </div>
+                        
+                        <div class="admin-stat-card">
+                            <div class="stat-icon">🏢</div>
+                            <div class="stat-content">
+                                <div class="stat-number" id="stat-total-advertisers">0</div>
+                                <div class="stat-label">广告主数量</div>
+                            </div>
+                        </div>
+                        
+                        <div class="admin-stat-card">
+                            <div class="stat-icon">🌟</div>
+                            <div class="stat-content">
+                                <div class="stat-number" id="stat-total-kols">0</div>
+                                <div class="stat-label">KOL 数量</div>
+                            </div>
+                        </div>
+                        
+                        <div class="admin-stat-card">
+                            <div class="stat-icon">📢</div>
+                            <div class="stat-content">
+                                <div class="stat-number" id="stat-total-campaigns">0</div>
+                                <div class="stat-label">活动总数</div>
+                            </div>
+                        </div>
+                        
+                        <div class="admin-stat-card">
+                            <div class="stat-icon">💰</div>
+                            <div class="stat-content">
+                                <div class="stat-number" id="stat-total-gmv">$0</div>
+                                <div class="stat-label">总 GMV</div>
+                            </div>
+                        </div>
+                        
+                        <div class="admin-stat-card">
+                            <div class="stat-icon">💵</div>
+                            <div class="stat-content">
+                                <div class="stat-number" id="stat-total-revenue">$0</div>
+                                <div class="stat-label">平台收入</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="admin-section">
+                        <h3>📈 最近活动</h3>
+                        <div class="admin-table-container">
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>时间</th>
+                                        <th>用户</th>
+                                        <th>操作</th>
+                                        <th>类型</th>
+                                        <th>状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recent-activity-table">
+                                    <tr>
+                                        <td>2026-03-25 10:30</td>
+                                        <td>深圳科技有限公司</td>
+                                        <td>创建了新活动</td>
+                                        <td><span class="badge badge-blue">活动</span></td>
+                                        <td><span class="badge badge-green">成功</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>2026-03-25 10:25</td>
+                                        <td>@fashion_guru</td>
+                                        <td>提交了作品</td>
+                                        <td><span class="badge badge-purple">KOL</span></td>
+                                        <td><span class="badge badge-green">成功</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>2026-03-25 10:20</td>
+                                        <td>admin</td>
+                                        <td>审核通过了 KOL</td>
+                                        <td><span class="badge badge-orange">审核</span></td>
+                                        <td><span class="badge badge-green">成功</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 用户管理页面 -->
+                <div id="admin-tab-users" class="admin-tab-content">
+                    <h2>👥 用户管理</h2>
+                    
+                    <div class="admin-toolbar">
+                        <input type="text" class="admin-search-input" placeholder="搜索用户...">
+                        <select class="admin-filter-select">
+                            <option value="">所有角色</option>
+                            <option value="advertiser">广告主</option>
+                            <option value="kol">KOL</option>
+                            <option value="admin">管理员</option>
+                        </select>
+                        <select class="admin-filter-select">
+                            <option value="">所有状态</option>
+                            <option value="active">活跃</option>
+                            <option value="inactive">未激活</option>
+                            <option value="banned">已封禁</option>
+                        </select>
+                    </div>
+                    
+                    <div class="admin-table-container">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>用户名</th>
+                                    <th>邮箱</th>
+                                    <th>角色</th>
+                                    <th>状态</th>
+                                    <th>注册时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body">
+                                <!-- 动态生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 其他页面占位 -->
+                <div id="admin-tab-advertisers" class="admin-tab-content">
+                    <h2>🏢 广告主管理</h2>
+                    <p>广告主管理功能开发中...</p>
+                </div>
+
+                <div id="admin-tab-kols" class="admin-tab-content">
+                    <h2>🌟 KOL 管理</h2>
+                    <p>KOL 管理功能开发中...</p>
+                </div>
+
+                <div id="admin-tab-campaigns" class="admin-tab-content">
+                    <h2>📢 活动管理</h2>
+                    <p>活动管理功能开发中...</p>
+                </div>
+
+                <div id="admin-tab-finance" class="admin-tab-content">
+                    <h2>💰 财务管理</h2>
+                    <p>财务管理功能开发中...</p>
+                </div>
+
+                <div id="admin-tab-settings" class="admin-tab-content">
+                    <h2>⚙️ 系统设置</h2>
+                    <p>系统设置功能开发中...</p>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- 引入 JS -->
+    <script src="js/admin-auth.js"></script>
+    <script src="js/admin-dashboard.js"></script>
+    <script src="js/theme-manager.js"></script>
+    <script src="js/ui-style-manager.js"></script>
+    <script src="js/ux-mode-manager.js"></script>
+</body>
+</html>

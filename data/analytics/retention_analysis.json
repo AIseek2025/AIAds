@@ -1,0 +1,727 @@
+{
+  "report_date": "2026-03-24",
+  "analysis_type": "user_retention",
+  "canary_version": "v1.1.0",
+  "stable_version": "v1.0.0",
+  "generated_at": "2026-03-24T23:59:59Z",
+  "retention_overview": {
+    "day_1": {
+      "advertisers": {
+        "canary": 0.52,
+        "stable": 0.51,
+        "difference": 0.01,
+        "status": "improved"
+      },
+      "kols": {
+        "canary": 0.38,
+        "stable": 0.39,
+        "difference": -0.01,
+        "status": "declined"
+      },
+      "overall": {
+        "canary": 0.435,
+        "stable": 0.432,
+        "difference": 0.003,
+        "status": "stable"
+      }
+    },
+    "day_7": {
+      "advertisers": {
+        "canary": 0.18,
+        "stable": 0.175,
+        "difference": 0.005,
+        "status": "improved"
+      },
+      "kols": {
+        "canary": 0.10,
+        "stable": 0.105,
+        "difference": -0.005,
+        "status": "declined"
+      },
+      "overall": {
+        "canary": 0.128,
+        "stable": 0.127,
+        "difference": 0.001,
+        "status": "stable"
+      }
+    },
+    "day_14": {
+      "advertisers": {
+        "canary": 0.12,
+        "stable": 0.118,
+        "difference": 0.002,
+        "status": "stable"
+      },
+      "kols": {
+        "canary": 0.06,
+        "stable": 0.062,
+        "difference": -0.002,
+        "status": "stable"
+      },
+      "overall": {
+        "canary": 0.083,
+        "stable": 0.082,
+        "difference": 0.001,
+        "status": "stable"
+      }
+    },
+    "day_30": {
+      "advertisers": {
+        "canary": 0.10,
+        "stable": 0.098,
+        "difference": 0.002,
+        "status": "stable"
+      },
+      "kols": {
+        "canary": 0.05,
+        "stable": 0.052,
+        "difference": -0.002,
+        "status": "stable"
+      },
+      "overall": {
+        "canary": 0.065,
+        "stable": 0.064,
+        "difference": 0.001,
+        "status": "stable"
+      }
+    }
+  },
+  "cohort_analysis": {
+    "weekly_cohorts": [
+      {
+        "cohort_week": "2026-W12",
+        "cohort_start": "2026-03-17",
+        "cohort_end": "2026-03-23",
+        "total_users": 2146,
+        "advertisers": 1256,
+        "kols": 890,
+        "retention": {
+          "day_0": 1.0,
+          "day_1": 0.44,
+          "day_2": 0.32,
+          "day_3": 0.26,
+          "day_4": 0.21,
+          "day_5": 0.18,
+          "day_6": 0.15,
+          "day_7": 0.13
+        }
+      },
+      {
+        "cohort_week": "2026-W11",
+        "cohort_start": "2026-03-10",
+        "cohort_end": "2026-03-16",
+        "total_users": 2034,
+        "advertisers": 1189,
+        "kols": 845,
+        "retention": {
+          "day_0": 1.0,
+          "day_1": 0.45,
+          "day_2": 0.33,
+          "day_3": 0.27,
+          "day_4": 0.22,
+          "day_5": 0.19,
+          "day_6": 0.16,
+          "day_7": 0.14,
+          "day_14": 0.09,
+          "day_21": 0.07,
+          "day_28": 0.06
+        }
+      },
+      {
+        "cohort_week": "2026-W10",
+        "cohort_start": "2026-03-03",
+        "cohort_end": "2026-03-09",
+        "total_users": 1923,
+        "advertisers": 1134,
+        "kols": 789,
+        "retention": {
+          "day_0": 1.0,
+          "day_1": 0.43,
+          "day_2": 0.31,
+          "day_3": 0.25,
+          "day_4": 0.20,
+          "day_5": 0.17,
+          "day_6": 0.14,
+          "day_7": 0.12,
+          "day_14": 0.08,
+          "day_21": 0.06,
+          "day_28": 0.055
+        }
+      },
+      {
+        "cohort_week": "2026-W09",
+        "cohort_start": "2026-02-24",
+        "cohort_end": "2026-03-02",
+        "total_users": 1856,
+        "advertisers": 1089,
+        "kols": 767,
+        "retention": {
+          "day_0": 1.0,
+          "day_1": 0.46,
+          "day_2": 0.34,
+          "day_3": 0.28,
+          "day_4": 0.23,
+          "day_5": 0.20,
+          "day_6": 0.17,
+          "day_7": 0.15,
+          "day_14": 0.10,
+          "day_21": 0.08,
+          "day_28": 0.065
+        }
+      },
+      {
+        "cohort_week": "2026-W08",
+        "cohort_start": "2026-02-17",
+        "cohort_end": "2026-02-23",
+        "total_users": 1789,
+        "advertisers": 1045,
+        "kols": 744,
+        "retention": {
+          "day_0": 1.0,
+          "day_1": 0.44,
+          "day_2": 0.32,
+          "day_3": 0.26,
+          "day_4": 0.21,
+          "day_5": 0.18,
+          "day_6": 0.15,
+          "day_7": 0.13,
+          "day_14": 0.085,
+          "day_21": 0.07,
+          "day_28": 0.058
+        }
+      },
+      {
+        "cohort_week": "2026-W07",
+        "cohort_start": "2026-02-10",
+        "cohort_end": "2026-02-16",
+        "total_users": 1712,
+        "advertisers": 1002,
+        "kols": 710,
+        "retention": {
+          "day_0": 1.0,
+          "day_1": 0.43,
+          "day_2": 0.31,
+          "day_3": 0.25,
+          "day_4": 0.20,
+          "day_5": 0.17,
+          "day_6": 0.14,
+          "day_7": 0.12,
+          "day_14": 0.08,
+          "day_21": 0.065,
+          "day_28": 0.055
+        }
+      },
+      {
+        "cohort_week": "2026-W06",
+        "cohort_start": "2026-02-03",
+        "cohort_end": "2026-02-09",
+        "total_users": 1645,
+        "advertisers": 967,
+        "kols": 678,
+        "retention": {
+          "day_0": 1.0,
+          "day_1": 0.42,
+          "day_2": 0.30,
+          "day_3": 0.24,
+          "day_4": 0.19,
+          "day_5": 0.16,
+          "day_6": 0.13,
+          "day_7": 0.11,
+          "day_14": 0.075,
+          "day_21": 0.06,
+          "day_28": 0.052
+        }
+      },
+      {
+        "cohort_week": "2026-W05",
+        "cohort_start": "2026-01-27",
+        "cohort_end": "2026-02-02",
+        "total_users": 1578,
+        "advertisers": 923,
+        "kols": 655,
+        "retention": {
+          "day_0": 1.0,
+          "day_1": 0.41,
+          "day_2": 0.29,
+          "day_3": 0.23,
+          "day_4": 0.18,
+          "day_5": 0.15,
+          "day_6": 0.12,
+          "day_7": 0.10,
+          "day_14": 0.07,
+          "day_21": 0.055,
+          "day_28": 0.048
+        }
+      }
+    ],
+    "cohort_trends": {
+      "day_1_retention_trend": "stable",
+      "day_7_retention_trend": "improving",
+      "day_30_retention_trend": "improving",
+      "average_day_1_retention": 0.435,
+      "average_day_7_retention": 0.125,
+      "average_day_30_retention": 0.055
+    }
+  },
+  "retention_by_segment": {
+    "by_user_type": {
+      "advertisers": {
+        "day_1": 0.52,
+        "day_7": 0.18,
+        "day_14": 0.12,
+        "day_30": 0.10,
+        "avg_session_per_week": 4.2,
+        "avg_session_duration_seconds": 612
+      },
+      "kols": {
+        "day_1": 0.38,
+        "day_7": 0.10,
+        "day_14": 0.06,
+        "day_30": 0.05,
+        "avg_session_per_week": 2.8,
+        "avg_session_duration_seconds": 445
+      }
+    },
+    "by_registration_method": {
+      "email": {
+        "day_1": 0.45,
+        "day_7": 0.14,
+        "day_30": 0.07,
+        "users": 892
+      },
+      "google_oauth": {
+        "day_1": 0.48,
+        "day_7": 0.16,
+        "day_30": 0.08,
+        "users": 356
+      },
+      "facebook_oauth": {
+        "day_1": 0.38,
+        "day_7": 0.10,
+        "day_30": 0.05,
+        "users": 178
+      },
+      "linkedin_oauth": {
+        "day_1": 0.55,
+        "day_7": 0.22,
+        "day_30": 0.12,
+        "users": 89
+      }
+    },
+    "by_traffic_source": {
+      "organic_search": {
+        "day_1": 0.46,
+        "day_7": 0.15,
+        "day_30": 0.075,
+        "users": 412
+      },
+      "paid_search": {
+        "day_1": 0.52,
+        "day_7": 0.18,
+        "day_30": 0.09,
+        "users": 234
+      },
+      "social_media": {
+        "day_1": 0.38,
+        "day_7": 0.11,
+        "day_30": 0.055,
+        "users": 289
+      },
+      "direct": {
+        "day_1": 0.48,
+        "day_7": 0.14,
+        "day_30": 0.07,
+        "users": 198
+      },
+      "referral": {
+        "day_1": 0.42,
+        "day_7": 0.12,
+        "day_30": 0.06,
+        "users": 135
+      }
+    },
+    "by_country": {
+      "US": {
+        "day_1": 0.48,
+        "day_7": 0.16,
+        "day_30": 0.08,
+        "users": 389
+      },
+      "UK": {
+        "day_1": 0.45,
+        "day_7": 0.14,
+        "day_30": 0.07,
+        "users": 134
+      },
+      "CA": {
+        "day_1": 0.44,
+        "day_7": 0.13,
+        "day_30": 0.065,
+        "users": 87
+      },
+      "DE": {
+        "day_1": 0.42,
+        "day_7": 0.12,
+        "day_30": 0.06,
+        "users": 62
+      },
+      "other": {
+        "day_1": 0.41,
+        "day_7": 0.11,
+        "day_30": 0.055,
+        "users": 596
+      }
+    },
+    "by_device": {
+      "desktop": {
+        "day_1": 0.48,
+        "day_7": 0.15,
+        "day_30": 0.075,
+        "users": 567
+      },
+      "mobile": {
+        "day_1": 0.40,
+        "day_7": 0.11,
+        "day_30": 0.055,
+        "users": 545
+      },
+      "tablet": {
+        "day_1": 0.42,
+        "day_7": 0.12,
+        "day_30": 0.06,
+        "users": 156
+      }
+    }
+  },
+  "retention_drivers": {
+    "positive_correlations": [
+      {
+        "factor": "Profile completion",
+        "correlation_coefficient": 0.72,
+        "description": "Users who complete their profile have 2.5x higher D7 retention",
+        "retention_lift": {
+          "with_factor": 0.28,
+          "without_factor": 0.11
+        }
+      },
+      {
+        "factor": "First campaign/task within 24h",
+        "correlation_coefficient": 0.68,
+        "description": "Users who create first campaign or apply to first task within 24h have 3x higher D7 retention",
+        "retention_lift": {
+          "with_factor": 0.35,
+          "without_factor": 0.12
+        }
+      },
+      {
+        "factor": "Email verification",
+        "correlation_coefficient": 0.55,
+        "description": "Verified users have 1.8x higher D7 retention",
+        "retention_lift": {
+          "with_factor": 0.18,
+          "without_factor": 0.10
+        }
+      },
+      {
+        "factor": "Social account connection (KOLs)",
+        "correlation_coefficient": 0.62,
+        "description": "KOLs who connect at least one social account have 2.2x higher D7 retention",
+        "retention_lift": {
+          "with_factor": 0.22,
+          "without_factor": 0.10
+        }
+      },
+      {
+        "factor": "Multiple platform connection (KOLs)",
+        "correlation_coefficient": 0.58,
+        "description": "KOLs who connect 2+ platforms have 2.5x higher D30 retention",
+        "retention_lift": {
+          "with_factor": 0.15,
+          "without_factor": 0.06
+        }
+      }
+    ],
+    "negative_correlations": [
+      {
+        "factor": "Payment errors",
+        "correlation_coefficient": -0.45,
+        "description": "Users who experience payment errors have 40% lower D7 retention",
+        "retention_impact": {
+          "with_error": 0.08,
+          "without_error": 0.14
+        }
+      },
+      {
+        "factor": "Support ticket creation",
+        "correlation_coefficient": -0.38,
+        "description": "Users who create support tickets in first week have 35% lower D30 retention",
+        "retention_impact": {
+          "with_ticket": 0.045,
+          "without_ticket": 0.07
+        }
+      },
+      {
+        "factor": "Long onboarding time (>10 min)",
+        "correlation_coefficient": -0.32,
+        "description": "Users who take >10 min to complete onboarding have 30% lower D7 retention",
+        "retention_impact": {
+          "slow_onboarding": 0.09,
+          "fast_onboarding": 0.13
+        }
+      }
+    ]
+  },
+  "churn_analysis": {
+    "churn_by_day": [
+      {"day": 1, "churned_users": 1205, "churn_rate": 0.565},
+      {"day": 2, "churned_users": 312, "churn_rate": 0.146},
+      {"day": 3, "churned_users": 189, "churn_rate": 0.089},
+      {"day": 4, "churned_users": 134, "churn_rate": 0.063},
+      {"day": 5, "churned_users": 98, "churn_rate": 0.046},
+      {"day": 6, "churned_users": 76, "churn_rate": 0.036},
+      {"day": 7, "churned_users": 58, "churn_rate": 0.027},
+      {"day_8_to_14": {"churned_users": 156, "churn_rate": 0.073}},
+      {"day_15_to_30": {"churned_users": 134, "churn_rate": 0.063}}
+    ],
+    "churn_reasons": {
+      "advertisers": [
+        {"reason": "No suitable KOLs found", "percentage": 28, "count": 156},
+        {"reason": "Pricing too high", "percentage": 22, "count": 123},
+        {"reason": "Platform too complex", "percentage": 18, "count": 100},
+        {"reason": "Better alternative found", "percentage": 15, "count": 84},
+        {"reason": "Budget constraints", "percentage": 10, "count": 56},
+        {"reason": "Other", "percentage": 7, "count": 39}
+      ],
+      "kols": [
+        {"reason": "No suitable tasks available", "percentage": 32, "count": 198},
+        {"reason": "Low payment rates", "percentage": 25, "count": 155},
+        {"reason": "Too much competition", "percentage": 18, "count": 112},
+        {"reason": "Account connection issues", "percentage": 12, "count": 74},
+        {"reason": "Better alternative found", "percentage": 8, "count": 50},
+        {"reason": "Other", "percentage": 5, "count": 31}
+      ]
+    },
+    "churn_risk_indicators": [
+      {
+        "indicator": "No activity for 3+ days",
+        "risk_level": "high",
+        "churn_probability": 0.75,
+        "affected_users": 234
+      },
+      {
+        "indicator": "Incomplete profile after 7 days",
+        "risk_level": "high",
+        "churn_probability": 0.68,
+        "affected_users": 189
+      },
+      {
+        "indicator": "Searched but no order (advertisers)",
+        "risk_level": "medium",
+        "churn_probability": 0.52,
+        "affected_users": 156
+      },
+      {
+        "indicator": "Connected account but no task application (KOLs)",
+        "risk_level": "medium",
+        "churn_probability": 0.48,
+        "affected_users": 178
+      },
+      {
+        "indicator": "Single session only",
+        "risk_level": "high",
+        "churn_probability": 0.82,
+        "affected_users": 456
+      }
+    ]
+  },
+  "engagement_metrics": {
+    "active_users": {
+      "dau": {
+        "canary": 1268,
+        "stable": 11182,
+        "total": 12450
+      },
+      "wau": {
+        "canary": 4567,
+        "stable": 39890,
+        "total": 44457
+      },
+      "mau": {
+        "canary": 8450,
+        "stable": 74280,
+        "total": 82730
+      }
+    },
+    "stickiness": {
+      "dau_wau_ratio": {
+        "canary": 0.278,
+        "stable": 0.280,
+        "total": 0.280
+      },
+      "dau_mau_ratio": {
+        "canary": 0.150,
+        "stable": 0.151,
+        "total": 0.150
+      }
+    },
+    "session_metrics": {
+      "avg_sessions_per_user_per_week": {
+        "advertisers": 4.2,
+        "kols": 2.8,
+        "overall": 3.5
+      },
+      "avg_session_duration_seconds": {
+        "advertisers": 612,
+        "kols": 445,
+        "overall": 529
+      },
+      "avg_pages_per_session": {
+        "advertisers": 6.2,
+        "kols": 4.5,
+        "overall": 5.4
+      }
+    },
+    "feature_engagement": {
+      "advertisers": {
+        "campaign_management": {"dau": 456, "wau": 892, "mau": 1567},
+        "kol_search": {"dau": 389, "wau": 756, "mau": 1234},
+        "analytics_dashboard": {"dau": 234, "wau": 567, "mau": 989},
+        "payment_management": {"dau": 123, "wau": 345, "mau": 678}
+      },
+      "kols": {
+        "task_browsing": {"dau": 234, "wau": 567, "mau": 1023},
+        "profile_management": {"dau": 189, "wau": 445, "mau": 823},
+        "earnings_dashboard": {"dau": 156, "wau": 389, "mau": 712},
+        "content_submission": {"dau": 89, "wau": 234, "mau": 456}
+      }
+    }
+  },
+  "predictions": {
+    "next_week_retention": {
+      "day_1_predicted": 0.44,
+      "day_7_predicted": 0.13,
+      "confidence_interval": {
+        "day_1": [0.42, 0.46],
+        "day_7": [0.11, 0.15]
+      }
+    },
+    "user_lifetime_value": {
+      "advertisers": {
+        "predicted_ltv": 1250.00,
+        "currency": "USD",
+        "confidence_interval": [980, 1520]
+      },
+      "kols": {
+        "predicted_ltv": 450.00,
+        "currency": "USD",
+        "confidence_interval": [350, 550]
+      }
+    },
+    "churn_risk_users": {
+      "high_risk": 234,
+      "medium_risk": 456,
+      "low_risk": 789,
+      "total_at_risk": 1479
+    }
+  },
+  "insights": [
+    {
+      "type": "positive",
+      "category": "retention",
+      "title": "Advertiser Retention Improvement",
+      "description": "Advertiser D1 retention is 1% higher in canary vs stable",
+      "impact": "medium",
+      "recommendation": "Analyze what changes contributed to this improvement"
+    },
+    {
+      "type": "warning",
+      "category": "retention",
+      "title": "KOL Retention Gap",
+      "description": "KOL retention rates are consistently lower than advertisers across all time periods",
+      "impact": "high",
+      "recommendation": "Implement KOL-specific engagement programs"
+    },
+    {
+      "type": "insight",
+      "category": "retention_drivers",
+      "title": "Profile Completion Critical",
+      "description": "Profile completion has strongest correlation (0.72) with retention",
+      "impact": "high",
+      "recommendation": "Incentivize profile completion during onboarding"
+    },
+    {
+      "type": "insight",
+      "category": "churn",
+      "title": "Early Activity Key",
+      "description": "Users who don't return within 3 days have 75% churn probability",
+      "impact": "high",
+      "recommendation": "Implement Day 2 re-engagement campaign"
+    },
+    {
+      "type": "insight",
+      "category": "segment",
+      "title": "Mobile Retention Gap",
+      "description": "Mobile users have 17% lower D7 retention than desktop users",
+      "impact": "medium",
+      "recommendation": "Improve mobile onboarding experience"
+    },
+    {
+      "type": "insight",
+      "category": "segment",
+      "title": "LinkedIn Users Highest Quality",
+      "description": "LinkedIn registration has highest D7 retention (22%)",
+      "impact": "low",
+      "recommendation": "Consider promoting LinkedIn registration for B2B"
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": "high",
+      "action": "Implement KOL onboarding optimization",
+      "expected_impact": "Improve KOL D7 retention by 20-30%",
+      "effort": "medium",
+      "owner": "product_team",
+      "timeline": "2 weeks"
+    },
+    {
+      "priority": "high",
+      "action": "Add profile completion incentives",
+      "expected_impact": "Increase profile completion rate by 25%",
+      "effort": "low",
+      "owner": "product_team",
+      "timeline": "1 week"
+    },
+    {
+      "priority": "high",
+      "action": "Implement Day 2 re-engagement emails",
+      "expected_impact": "Reduce Day 2 churn by 15%",
+      "effort": "low",
+      "owner": "marketing_team",
+      "timeline": "1 week"
+    },
+    {
+      "priority": "medium",
+      "action": "Create KOL task matching improvements",
+      "expected_impact": "Reduce 'no suitable tasks' churn by 20%",
+      "effort": "high",
+      "owner": "engineering_team",
+      "timeline": "4 weeks"
+    },
+    {
+      "priority": "medium",
+      "action": "Optimize mobile onboarding flow",
+      "expected_impact": "Improve mobile D7 retention by 15%",
+      "effort": "medium",
+      "owner": "frontend_team",
+      "timeline": "3 weeks"
+    },
+    {
+      "priority": "low",
+      "action": "Add LinkedIn registration promotion",
+      "expected_impact": "Increase high-quality user acquisition",
+      "effort": "low",
+      "owner": "marketing_team",
+      "timeline": "1 week"
+    }
+  ]
+}

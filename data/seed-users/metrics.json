@@ -1,0 +1,234 @@
+{
+  "report_date": "2026-03-24",
+  "report_time": "23:59:59",
+  "summary": {
+    "advertisers": {
+      "target": 500,
+      "registered": 520,
+      "verified": 520,
+      "active": 420,
+      "completion_rate": 1.04
+    },
+    "kols": {
+      "target": 10000,
+      "registered": 10500,
+      "verified": 10500,
+      "active": 8200,
+      "completion_rate": 1.05
+    }
+  },
+  "funnel": {
+    "advertisers": {
+      "invitations_sent": 1000,
+      "opened": 850,
+      "clicked": 700,
+      "registered": 650,
+      "verified": 520,
+      "active": 420,
+      "open_rate": 0.85,
+      "click_rate": 0.7,
+      "register_rate": 0.65,
+      "verify_rate": 0.52,
+      "active_rate": 0.42
+    },
+    "kols": {
+      "invitations_sent": 20000,
+      "opened": 16800,
+      "clicked": 14000,
+      "registered": 13000,
+      "verified": 10500,
+      "active": 8200,
+      "open_rate": 0.84,
+      "click_rate": 0.7,
+      "register_rate": 0.65,
+      "verify_rate": 0.525,
+      "active_rate": 0.41
+    }
+  },
+  "channels": {
+    "advertisers": [
+      {
+        "code": "ADV-001",
+        "name": "行业协会",
+        "sent": 200,
+        "opened": 180,
+        "registered": 150,
+        "verified": 120,
+        "verify_rate": 0.6
+      },
+      {
+        "code": "ADV-002",
+        "name": "跨境电商群",
+        "sent": 350,
+        "opened": 310,
+        "registered": 230,
+        "verified": 180,
+        "verify_rate": 0.51
+      },
+      {
+        "code": "ADV-003",
+        "name": "行业媒体",
+        "sent": 200,
+        "opened": 170,
+        "registered": 130,
+        "verified": 100,
+        "verify_rate": 0.5
+      },
+      {
+        "code": "ADV-004",
+        "name": "线下展会",
+        "sent": 100,
+        "opened": 90,
+        "registered": 70,
+        "verified": 60,
+        "verify_rate": 0.6
+      },
+      {
+        "code": "ADV-005",
+        "name": "供应商推荐",
+        "sent": 150,
+        "opened": 100,
+        "registered": 70,
+        "verified": 60,
+        "verify_rate": 0.4
+      }
+    ],
+    "kols": [
+      {
+        "code": "KOL-TIK",
+        "name": "TikTok",
+        "sent": 10000,
+        "opened": 8500,
+        "registered": 6500,
+        "verified": 5250,
+        "verify_rate": 0.525
+      },
+      {
+        "code": "KOL-INS",
+        "name": "Instagram",
+        "sent": 6000,
+        "opened": 5040,
+        "registered": 3900,
+        "verified": 3150,
+        "verify_rate": 0.525
+      },
+      {
+        "code": "KOL-YT",
+        "name": "YouTube",
+        "sent": 4000,
+        "opened": 3260,
+        "registered": 2600,
+        "verified": 2100,
+        "verify_rate": 0.525
+      }
+    ]
+  },
+  "regions": {
+    "advertisers": [
+      {"region": "广东", "count": 156, "percentage": 0.3},
+      {"region": "浙江", "count": 125, "percentage": 0.24},
+      {"region": "江苏", "count": 104, "percentage": 0.2},
+      {"region": "福建", "count": 83, "percentage": 0.16},
+      {"region": "其他", "count": 52, "percentage": 0.1}
+    ],
+    "kols": [
+      {"region": "USA", "count": 4200, "percentage": 0.4},
+      {"region": "Europe", "count": 3150, "percentage": 0.3},
+      {"region": "Southeast Asia", "count": 2100, "percentage": 0.2},
+      {"region": "Other", "count": 1050, "percentage": 0.1}
+    ]
+  },
+  "referral_program": {
+    "total_invitations_sent": 22560,
+    "successful_referrals": 1180,
+    "referral_conversion_rate": 0.052,
+    "total_rewards_paid": 118000,
+    "top_referrers": {
+      "advertisers": [
+        {"user": "深圳 XX 科技", "referrals": 12, "rewards": 1200},
+        {"user": "广州 XX 贸易", "referrals": 10, "rewards": 1000},
+        {"user": "杭州 XX 电商", "referrals": 8, "rewards": 800},
+        {"user": "宁波 XX 实业", "referrals": 7, "rewards": 700},
+        {"user": "厦门 XX 工贸", "referrals": 6, "rewards": 600}
+      ],
+      "kols": [
+        {"user": "@FashionGirl", "platform": "TikTok", "referrals": 25, "rewards": 2500},
+        {"user": "@TechReviewer", "platform": "YouTube", "referrals": 20, "rewards": 2000},
+        {"user": "@BeautyTips", "platform": "Instagram", "referrals": 18, "rewards": 1800},
+        {"user": "@LifeHacks", "platform": "TikTok", "referrals": 15, "rewards": 1500},
+        {"user": "@GadgetGuru", "platform": "YouTube", "referrals": 12, "rewards": 1200}
+      ]
+    }
+  },
+  "budget": {
+    "total_budget": 430000,
+    "spent": 118000,
+    "remaining": 312000,
+    "breakdown": {
+      "channel_promotion": 50000,
+      "referral_rewards": 118000,
+      "first_order_subsidy": 0,
+      "event_costs": 30000
+    }
+  },
+  "acceptance_criteria": {
+    "advertisers_registered": {
+      "target": 500,
+      "actual": 520,
+      "status": "passed"
+    },
+    "kols_registered": {
+      "target": 10000,
+      "actual": 10500,
+      "status": "passed"
+    },
+    "delivery_rate": {
+      "target": 0.95,
+      "actual": 0.845,
+      "status": "in_progress"
+    },
+    "verification_rate": {
+      "target": 0.9,
+      "actual": 0.522,
+      "status": "in_progress"
+    },
+    "data_tracking": {
+      "target": "complete",
+      "actual": "complete",
+      "status": "passed"
+    }
+  },
+  "issues": [
+    {
+      "issue": "部分渠道验证率偏低",
+      "impact": "high",
+      "status": "identifying"
+    },
+    {
+      "issue": "KOL 审核排队时间长",
+      "impact": "medium",
+      "status": "identifying"
+    },
+    {
+      "issue": "推荐奖励发放延迟",
+      "impact": "medium",
+      "status": "identifying"
+    },
+    {
+      "issue": "部分邀请码使用率低",
+      "impact": "low",
+      "status": "identifying"
+    }
+  ],
+  "next_day_plan": {
+    "advertisers_new_verified": 50,
+    "kols_new_verified": 500,
+    "active_user_increase": 0.1,
+    "key_tasks": [
+      "跟进未验证用户",
+      "优化审核流程",
+      "推进推荐计划",
+      "数据分析与复盘"
+    ]
+  }
+}

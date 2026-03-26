@@ -1,0 +1,746 @@
+// Prisma schema for AIAds Platform
+// Based on DATABASE_SCHEMA.md
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Enums
+enum UserRole {
+  advertiser
+  kol
+  admin
+  super_admin
+}
+
+enum UserStatus {
+  pending
+  active
+  suspended
+  banned
+  deleted
+}
+
+enum VerificationStatus {
+  pending
+  submitted
+  approved
+  rejected
+}
+
+enum KolPlatform {
+  tiktok
+  youtube
+  instagram
+  xiaohongshu
+  weibo
+}
+
+enum KolStatus {
+  pending
+  active
+  verified
+  rejected
+  suspended
+  banned
+}
+
+enum CampaignStatus {
+  draft
+  pending_review
+  active
+  paused
+  completed
+  cancelled
+  rejected
+}
+
+enum CampaignObjective {
+  awareness
+  engagement
+  traffic
+  conversion
+  sales
+}
+
+enum OrderStatus {
+  pending
+  accepted
+  rejected
+  in_progress
+  submitted
+  approved
+  revision
+  published
+  completed
+  cancelled
+  disputed
+}
+
+enum TransactionType {
+  recharge
+  order_payment
+  order_income
+  withdrawal
+  refund
+  platform_fee
+  commission
+  adjustment
+  bonus
+}
+
+enum TransactionStatus {
+  pending
+  processing
+  completed
+  failed
+  cancelled
+}
+
+enum PaymentMethod {
+  alipay
+  wechat_pay
+  stripe
+  paypal
+  bank_transfer
+  wallet
+}
+
+enum NotificationType {
+  system
+  order
+  payment
+  campaign
+  message
+  reminder
+}
+
+enum AuditAction {
+  create
+  update
+  delete
+  login
+  logout
+  export
+  import
+  approve
+  reject
+}
+
+// Models
+model User {
+  id                  String     @id @default(uuid())
+  email               String     @unique
+  phone               String?    @unique
+  passwordHash        String     @map("password_hash")
+  nickname            String?
+  avatarUrl           String?    @map("avatar_url")
+  realName            String?    @map("real_name")
+  role                UserRole   @default(advertiser)
+  status              UserStatus @default(pending)
+  emailVerified       Boolean    @default(false) @map("email_verified")
+  emailVerifiedAt     DateTime?  @map("email_verified_at")
+  phoneVerified       Boolean    @default(false) @map("phone_verified")
+  phoneVerifiedAt     DateTime?  @map("phone_verified_at")
+  lastLoginAt         DateTime?  @map("last_login_at")
+  lastLoginIp         String?    @map("last_login_ip")
+  failedLoginAttempts Int        @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime?  @map("locked_until")
+  language            String     @default("zh-CN")
+  timezone            String     @default("Asia/Shanghai")
+  currency            String     @default("CNY")
+  mfaEnabled          Boolean    @default(false) @map("mfa_enabled")
+  mfaSecret           String?    @map("mfa_secret")
+  mfaBackupCodes      String[]   @map("mfa_backup_codes")
+  metadata            Json       @default("{}")
+  createdAt           DateTime   @default(now()) @map("created_at")
+  updatedAt           DateTime   @updatedAt @map("updated_at")
+  deletedAt           DateTime?  @map("deleted_at")
+
+  advertiser    Advertiser?
+  kol           Kol?
+  notifications Notification[]
+  auditLogs     AuditLog[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([role])
+  @@index([status])
+  @@index([role, status])
+  @@index([createdAt])
+  @@index([email, status])
+  @@map("users")
+}
+
+model Advertiser {
+  id                    String             @id @default(uuid())
+  userId                String             @unique @map("user_id")
+  companyName           String             @map("company_name")
+  companyNameEn         String?            @map("company_name_en")
+  businessLicense       String?            @map("business_license")
+  businessLicenseUrl    String?            @map("business_license_url")
+  legalRepresentative   String?            @map("legal_representative")
+  contactPerson         String?            @map("contact_person")
+  contactPhone          String?            @map("contact_phone")
+  contactEmail          String?            @map("contact_email")
+  contactAddress        String?            @map("contact_address")
+  industry              String?
+  companySize           String?            @map("company_size")
+  website               String?
+  verificationStatus    VerificationStatus @default(pending) @map("verification_status")
+  verifiedAt            DateTime?          @map("verified_at")
+  verifiedBy            String?            @map("verified_by")
+  rejectionReason       String?            @map("rejection_reason")
+  walletBalance         Decimal            @default(0) @map("wallet_balance")
+  frozenBalance         Decimal            @default(0) @map("frozen_balance")
+  totalRecharged        Decimal            @default(0) @map("total_recharged")
+  totalSpent            Decimal            @default(0) @map("total_spent")
+  subscriptionPlan      String             @default("free") @map("subscription_plan")
+  subscriptionExpiresAt DateTime?          @map("subscription_expires_at")
+  totalCampaigns        Int                @default(0) @map("total_campaigns")
+  activeCampaigns       Int                @default(0) @map("active_campaigns")
+  totalOrders           Int                @default(0) @map("total_orders")
+  metadata              Json               @default("{}")
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaigns    Campaign[]
+  orders       Order[]
+  transactions Transaction[]
+
+  @@index([userId])
+  @@index([verificationStatus])
+  @@map("advertisers")
+}
+
+model Kol {
+  id                  String      @id @default(uuid())
+  userId              String      @unique @map("user_id")
+  platform            KolPlatform
+  platformId          String      @map("platform_id")
+  platformUsername    String      @map("platform_username")
+  platformDisplayName String?     @map("platform_display_name")
+  platformAvatarUrl   String?     @map("platform_avatar_url")
+  bio                 String?
+  category            String?
+  subcategory         String?
+  country             String?
+  region              String?
+  city                String?
+  followers           Int         @default(0)
+  following           Int         @default(0)
+  totalVideos         Int         @default(0) @map("total_videos")
+  totalLikes          Int         @default(0) @map("total_likes")
+  avgViews            Int         @default(0) @map("avg_views")
+  avgLikes            Int         @default(0) @map("avg_likes")
+  avgComments         Int         @default(0) @map("avg_comments")
+  avgShares           Int         @default(0) @map("avg_shares")
+  engagementRate      Decimal     @default(0) @map("engagement_rate")
+  status              KolStatus   @default(pending)
+  verified            Boolean     @default(false)
+  verifiedAt          DateTime?   @map("verified_at")
+  verifiedBy          String?     @map("verified_by")
+  basePrice           Decimal?    @map("base_price")
+  pricePerVideo       Decimal?    @map("price_per_video")
+  currency            String      @default("USD")
+  totalEarnings       Decimal     @default(0) @map("total_earnings")
+  availableBalance    Decimal     @default(0) @map("available_balance")
+  pendingBalance      Decimal     @default(0) @map("pending_balance")
+  totalOrders         Int         @default(0) @map("total_orders")
+  completedOrders     Int         @default(0) @map("completed_orders")
+  avgRating           Decimal     @default(0) @map("avg_rating")
+  tags                String[]
+  metadata            Json        @default("{}")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
+  lastSyncedAt        DateTime?   @map("last_synced_at")
+
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders       Order[]
+  transactions Transaction[]
+  statsHistory KolStatsHistory[]
+  kolAccounts  KolAccount[]
+  withdrawals  Withdrawal[]
+
+  @@index([userId])
+  @@index([platform, platformId])
+  @@index([platform])
+  @@index([status])
+  @@index([category])
+  @@index([country])
+  @@index([followers])
+  @@index([platform, status])
+  @@index([followers, engagementRate])
+  @@index([status, category])
+  @@index([country, followers])
+  @@map("kols")
+}
+
+model KolStatsHistory {
+  id             String   @id @default(uuid())
+  kolId          String   @map("kol_id")
+  followers      Int
+  following      Int?
+  totalVideos    Int?     @map("total_videos")
+  totalLikes     Int?     @map("total_likes")
+  avgViews       Int?     @map("avg_views")
+  avgLikes       Int?     @map("avg_likes")
+  avgComments    Int?     @map("avg_comments")
+  avgShares      Int?     @map("avg_shares")
+  engagementRate Decimal? @map("engagement_rate")
+  snapshotDate   DateTime @map("snapshot_date")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  kol Kol @relation(fields: [kolId], references: [id], onDelete: Cascade)
+
+  @@unique([kolId, snapshotDate])
+  @@index([kolId])
+  @@index([snapshotDate])
+  @@map("kol_stats_history")
+}
+
+model KolAccount {
+  id                  String      @id @default(uuid())
+  kolId               String      @map("kol_id")
+  platform            KolPlatform
+  platformId          String      @map("platform_id")
+  platformUsername    String      @map("platform_username")
+  platformDisplayName String?     @map("platform_display_name")
+  platformAvatarUrl   String?     @map("platform_avatar_url")
+  followers           Int         @default(0)
+  following           Int?        @map("following")
+  totalVideos         Int?        @map("total_videos")
+  totalLikes          Int?        @map("total_likes")
+  avgViews            Int?        @map("avg_views")
+  avgLikes            Int?        @map("avg_likes")
+  avgComments         Int?        @map("avg_comments")
+  avgShares           Int?        @map("avg_shares")
+  engagementRate      Decimal?    @map("engagement_rate")
+  isPrimary           Boolean     @default(false) @map("is_primary")
+  isVerified          Boolean     @default(false) @map("is_verified")
+  accessToken         String?     @map("access_token")
+  refreshToken        String?     @map("refresh_token")
+  expiresAt           DateTime?   @map("expires_at")
+  refreshExpiresAt    DateTime?   @map("refresh_expires_at")
+  lastSyncedAt        DateTime?   @map("last_synced_at")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
+
+  kol Kol @relation(fields: [kolId], references: [id], onDelete: Cascade)
+
+  @@unique([kolId, platform])
+  @@index([kolId])
+  @@index([platform])
+  @@map("kol_accounts")
+}
+
+model Withdrawal {
+  id            String    @id @default(uuid())
+  kolId         String    @map("kol_id")
+  withdrawalNo  String    @unique @map("withdrawal_no")
+  amount        Decimal
+  fee           Decimal
+  actualAmount  Decimal   @map("actual_amount")
+  currency      String    @default("CNY")
+  paymentMethod String    @map("payment_method")
+  accountName   String    @map("account_name")
+  accountNumber String    @map("account_number")
+  bankName      String?   @map("bank_name")
+  status        String    @default("pending")
+  description   String?
+  failureReason String?   @map("failure_reason")
+  processedAt   DateTime? @map("processed_at")
+  metadata      Json      @default("{}")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  kol          Kol           @relation(fields: [kolId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([kolId])
+  @@index([status])
+  @@index([withdrawalNo])
+  @@index([createdAt])
+  @@map("withdrawals")
+}
+
+model Campaign {
+  id                  String            @id @default(uuid())
+  advertiserId        String            @map("advertiser_id")
+  title               String
+  description         String?
+  objective           CampaignObjective @default(awareness)
+  budget              Decimal
+  budgetType          String            @default("fixed") @map("budget_type")
+  spentAmount         Decimal           @default(0) @map("spent_amount")
+  targetAudience      Json?             @map("target_audience")
+  targetPlatforms     KolPlatform[]     @map("target_platforms")
+  minFollowers        Int?              @map("min_followers")
+  maxFollowers        Int?              @map("max_followers")
+  minEngagementRate   Decimal?          @map("min_engagement_rate")
+  requiredCategories  String[]          @map("required_categories")
+  excludedCategories  String[]          @map("excluded_categories")
+  targetCountries     String[]          @map("target_countries")
+  contentRequirements String?           @map("content_requirements")
+  contentGuidelines   String?           @map("content_guidelines")
+  requiredHashtags    String[]          @map("required_hashtags")
+  requiredMentions    String[]          @map("required_mentions")
+  startDate           DateTime?         @map("start_date")
+  endDate             DateTime?         @map("end_date")
+  deadline            DateTime?
+  status              CampaignStatus    @default(draft)
+  totalKols           Int               @default(0) @map("total_kols")
+  appliedKols         Int               @default(0) @map("applied_kols")
+  selectedKols        Int               @default(0) @map("selected_kols")
+  publishedVideos     Int               @default(0) @map("published_videos")
+  totalViews          Int               @default(0) @map("total_views")
+  totalLikes          Int               @default(0) @map("total_likes")
+  totalComments       Int               @default(0) @map("total_comments")
+  reviewedBy          String?           @map("reviewed_by")
+  reviewedAt          DateTime?         @map("reviewed_at")
+  reviewNotes         String?           @map("review_notes")
+  metadata            Json              @default("{}")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  advertiser Advertiser      @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+  orders     Order[]
+  assets     CampaignAsset[]
+
+  @@index([advertiserId])
+  @@index([status])
+  @@index([objective])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([advertiserId, status])
+  @@index([status, createdAt])
+  @@index([status, startDate, endDate])
+  @@map("campaigns")
+}
+
+model CampaignAsset {
+  id          String   @id @default(uuid())
+  campaignId  String   @map("campaign_id")
+  type        String
+  name        String
+  description String?
+  fileUrl     String   @map("file_url")
+  fileType    String?  @map("file_type")
+  fileSize    Int?     @map("file_size")
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+  createdBy   String?  @map("created_by")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([type])
+  @@map("campaign_assets")
+}
+
+model Order {
+  id                 String      @id @default(uuid())
+  campaignId         String      @map("campaign_id")
+  kolId              String      @map("kol_id")
+  advertiserId       String      @map("advertiser_id")
+  orderNo            String      @unique @map("order_no")
+  price              Decimal
+  platformFee        Decimal     @map("platform_fee")
+  kolEarning         Decimal     @map("kol_earning")
+  contentType        String      @default("video") @map("content_type")
+  contentCount       Int         @default(1) @map("content_count")
+  contentDescription String?     @map("content_description")
+  draftUrls          String[]    @map("draft_urls")
+  publishedUrls      String[]    @map("published_urls")
+  acceptedAt         DateTime?   @map("accepted_at")
+  deadline           DateTime?
+  submittedAt        DateTime?   @map("submitted_at")
+  approvedAt         DateTime?   @map("approved_at")
+  publishedAt        DateTime?   @map("published_at")
+  completedAt        DateTime?   @map("completed_at")
+  status             OrderStatus @default(pending)
+  reviewNotes        String?     @map("review_notes")
+  revisionCount      Int         @default(0) @map("revision_count")
+  advertiserRating   Int?        @map("advertiser_rating")
+  advertiserReview   String?     @map("advertiser_review")
+  kolRating          Int?        @map("kol_rating")
+  kolReview          String?     @map("kol_review")
+  views              Int         @default(0)
+  likes              Int         @default(0)
+  comments           Int         @default(0)
+  shares             Int         @default(0)
+  metadata           Json        @default("{}")
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+
+  campaign       Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  kol            Kol             @relation(fields: [kolId], references: [id], onDelete: Cascade)
+  advertiser     Advertiser      @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+  transactions   Transaction[]
+  trackingEvents TrackingEvent[]
+  dispute        OrderDispute?
+
+  @@index([campaignId])
+  @@index([kolId])
+  @@index([advertiserId])
+  @@index([status])
+  @@index([orderNo])
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([advertiserId, status])
+  @@index([kolId, status])
+  @@map("orders")
+}
+
+model OrderDispute {
+  id           String    @id @default(uuid())
+  orderId      String    @unique @map("order_id")
+  raisedBy     String    @map("raised_by")
+  reason       String
+  evidenceUrls String?   @map("evidence_urls")
+  status       String    @default("open")
+  assignedTo   String?   @map("assigned_to")
+  resolution   String?
+  resolvedAt   DateTime? @map("resolved_at")
+  resolvedBy   String?   @map("resolved_by")
+  ruling       String?
+  refundAmount Decimal?  @map("refund_amount")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status])
+  @@map("order_disputes")
+}
+
+model Transaction {
+  id            String            @id @default(uuid())
+  orderId       String?           @map("order_id")
+  advertiserId  String?           @map("advertiser_id")
+  kolId         String?           @map("kol_id")
+  withdrawalId  String?           @map("withdrawal_id")
+  transactionNo String            @unique @map("transaction_no")
+  type          TransactionType
+  amount        Decimal
+  currency      String            @default("CNY")
+  paymentMethod PaymentMethod?    @map("payment_method")
+  paymentRef    String?           @map("payment_ref")
+  status        TransactionStatus @default(pending)
+  balanceBefore Decimal?          @map("balance_before")
+  balanceAfter  Decimal?          @map("balance_after")
+  description   String?
+  metadata      Json              @default("{}")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  completedAt   DateTime?         @map("completed_at")
+  failedAt      DateTime?         @map("failed_at")
+  failureReason String?           @map("failure_reason")
+
+  order      Order?      @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  advertiser Advertiser? @relation(fields: [advertiserId], references: [id], onDelete: SetNull)
+  kol        Kol?        @relation(fields: [kolId], references: [id], onDelete: SetNull)
+  withdrawal Withdrawal? @relation(fields: [withdrawalId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([advertiserId])
+  @@index([kolId])
+  @@index([withdrawalId])
+  @@index([type])
+  @@index([status])
+  @@index([transactionNo])
+  @@index([createdAt])
+  @@index([type, status])
+  @@index([advertiserId, type, createdAt])
+  @@index([kolId, type, createdAt])
+  @@map("transactions")
+}
+
+model TrackingEvent {
+  id             String   @id @default(uuid())
+  orderId        String   @map("order_id")
+  eventType      String   @map("event_type")
+  eventData      Json?    @map("event_data")
+  eventValue     Int      @default(1) @map("event_value")
+  eventRevenue   Decimal? @map("event_revenue")
+  sourceUrl      String?  @map("source_url")
+  sourcePlatform String?  @map("source_platform")
+  userId         String?  @map("user_id")
+  sessionId      String?  @map("session_id")
+  deviceType     String?  @map("device_type")
+  os             String?
+  browser        String?
+  country        String?
+  region         String?
+  city           String?
+  eventTime      DateTime @default(now()) @map("event_time")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([eventType])
+  @@index([eventTime])
+  @@index([sourcePlatform])
+  @@index([country])
+  @@map("tracking_events")
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String           @map("user_id")
+  type        NotificationType
+  title       String
+  content     String
+  relatedType String?          @map("related_type")
+  relatedId   String?          @map("related_id")
+  isRead      Boolean          @default(false) @map("is_read")
+  readAt      DateTime?        @map("read_at")
+  actionUrl   String?          @map("action_url")
+  actionText  String?          @map("action_text")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id           String      @id @default(uuid())
+  action       AuditAction
+  resourceType String      @map("resource_type")
+  resourceId   String?     @map("resource_id")
+  userId       String?     @map("user_id")
+  userEmail    String?     @map("user_email")
+  userIp       String?     @map("user_ip")
+  userAgent    String?     @map("user_agent")
+  oldValues    Json?       @map("old_values")
+  newValues    Json?       @map("new_values")
+  changes      Json?
+  description  String?
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// Admin models for management backend
+model Admin {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  passwordHash   String    @map("password_hash")
+  name           String
+  avatarUrl      String?   @map("avatar_url")
+  roleId         String    @map("role_id")
+  status         String    @default("active")
+  lastLoginAt    DateTime? @map("last_login_at")
+  lastLoginIp    String?   @map("last_login_ip")
+  mfaEnabled     Boolean   @default(false) @map("mfa_enabled")
+  mfaSecret      String?   @map("mfa_secret")
+  mfaBackupCodes String[]  @map("mfa_backup_codes")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  adminRole AdminRole       @relation(fields: [roleId], references: [id])
+  auditLogs AdminAuditLog[]
+
+  @@index([email])
+  @@index([roleId])
+  @@index([status])
+  @@map("admins")
+}
+
+model AdminRole {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  permissions Json     @default("[]")
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  admins Admin[]
+
+  @@map("admin_roles")
+}
+
+model AdminAuditLog {
+  id             String   @id @default(uuid())
+  adminId        String   @map("admin_id")
+  adminEmail     String   @map("admin_email")
+  adminName      String   @map("admin_name")
+  action         String
+  resourceType   String   @map("resource_type")
+  resourceId     String?  @map("resource_id")
+  resourceName   String?  @map("resource_name")
+  requestMethod  String   @map("request_method")
+  requestPath    String   @map("request_path")
+  requestBody    Json?    @map("request_body")
+  responseStatus Int?     @map("response_status")
+  responseBody   Json?    @map("response_body")
+  oldValues      Json?    @map("old_values")
+  newValues      Json?    @map("new_values")
+  ipAddress      String?  @map("ip_address")
+  userAgent      String?  @map("user_agent")
+  geoLocation    Json?    @map("geo_location")
+  status         String   @default("success")
+  errorMessage   String?  @map("error_message")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  admin Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+  @@index([ipAddress])
+  @@map("admin_audit_logs")
+}
+
+// Content moderation model
+model ContentModeration {
+  id              String    @id @default(uuid())
+  contentType     String    @map("content_type")
+  sourceType      String    @map("source_type")
+  title           String
+  description     String?
+  thumbnailUrl    String?   @map("thumbnail_url")
+  contentUrl      String    @map("content_url")
+  duration        Int?
+  submitterId     String    @map("submitter_id")
+  submitterName   String    @map("submitter_name")
+  relatedOrderId  String?   @map("related_order_id")
+  priority        String    @default("normal")
+  status          String    @default("pending")
+  aiScore         Int?      @map("ai_score")
+  aiFlags         String[]  @map("ai_flags")
+  reviewNotes     String?   @map("review_notes")
+  rejectionReason String?   @map("rejection_reason")
+  reviewedBy      String?   @map("reviewed_by")
+  reviewedAt      DateTime? @map("reviewed_at")
+  submittedAt     DateTime  @default(now()) @map("submitted_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([contentType])
+  @@index([sourceType])
+  @@index([submittedAt])
+  @@map("content_moderations")
+}

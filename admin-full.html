@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIAds 管理后台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .navbar {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        .navbar h1 {
+            font-size: 24px;
+            color: #667eea;
+        }
+        .navbar-nav {
+            display: flex;
+            gap: 8px;
+        }
+        .navbar-nav a {
+            padding: 8px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #666;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        .navbar-nav a:hover,
+        .navbar-nav a.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .user-info span {
+            font-size: 14px;
+            color: #666;
+        }
+        .logout-btn {
+            padding: 8px 16px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px 24px;
+        }
+        .tab-content {
+            display: none;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .tab-content h2 {
+            font-size: 28px;
+            margin-bottom: 24px;
+            color: #333;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 16px;
+            padding: 24px;
+            color: white;
+        }
+        .stat-card.green {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+        .stat-card.blue {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        }
+        .stat-card.orange {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        }
+        .stat-number {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .data-table th,
+        .data-table td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .data-table th {
+            background: #f9fafb;
+            font-weight: 600;
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .data-table tr:hover {
+            background: #f9fafb;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .badge-success {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .badge-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .badge-error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .badge-info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        .btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+        }
+        .toolbar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+        .search-input {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .filter-select {
+            padding: 10px 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+        }
+    </style>
+</head>
+<body>
+    <!-- 登录页面 -->
+    <div id="login-page" style="display: none;">
+        <div style="max-width: 420px; margin: 100px auto; background: rgba(255,255,255,0.95); padding: 40px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+            <h1 style="text-align: center; color: #667eea; margin-bottom: 8px;">🛡️ AIAds 管理后台</h1>
+            <p style="text-align: center; color: #666; margin-bottom: 32px;">管理员登录</p>
+            <form id="login-form">
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">用户名</label>
+                    <input type="text" id="username" placeholder="请输入用户名" style="width: 100%; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">密码</label>
+                    <input type="password" id="password" placeholder="请输入密码" style="width: 100%; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 16px;">登录</button>
+            </form>
+            <div id="login-error" style="display: none; margin-top: 16px; padding: 12px; background: #fee2e2; color: #991b1b; border-radius: 8px; text-align: center;"></div>
+            <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e5e7eb; text-align: center;">
+                <p style="color: #666; font-size: 14px; margin-bottom: 8px;">默认管理员账号：</p>
+                <code style="background: #f3f4f6; padding: 8px 16px; border-radius: 8px; font-size: 14px;">admin / admin123</code>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主界面 -->
+    <div id="main-interface" style="display: none;">
+        <!-- 导航栏 -->
+        <nav class="navbar">
+            <h1>🛡️ AIAds 管理后台</h1>
+            <div class="navbar-nav">
+                <a href="#" class="active" onclick="switchTab('overview'); return false;">总览</a>
+                <a href="#" onclick="switchTab('users'); return false;">用户管理</a>
+                <a href="#" onclick="switchTab('advertisers'); return false;">广告主</a>
+                <a href="#" onclick="switchTab('kols'); return false;">KOL</a>
+                <a href="#" onclick="switchTab('content'); return false;">内容审核</a>
+                <a href="#" onclick="switchTab('campaigns'); return false;">活动</a>
+                <a href="#" onclick="switchTab('orders'); return false;">订单</a>
+                <a href="#" onclick="switchTab('finance'); return false;">财务</a>
+                <a href="#" onclick="switchTab('stats'); return false;">统计</a>
+                <a href="#" onclick="switchTab('settings'); return false;">设置</a>
+            </div>
+            <div class="user-info">
+                <span id="current-user">admin</span>
+                <button class="logout-btn" onclick="logout()">退出</button>
+            </div>
+        </nav>
+
+        <!-- 主容器 -->
+        <div class="container">
+            <!-- 总览页面 -->
+            <div id="tab-overview" class="tab-content active">
+                <h2>📊 数据总览</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">10,520</div>
+                        <div class="stat-label">总用户数</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-number">2,150</div>
+                        <div class="stat-label">广告主数量</div>
+                    </div>
+                    <div class="stat-card blue">
+                        <div class="stat-number">8,200</div>
+                        <div class="stat-label">KOL 数量</div>
+                    </div>
+                    <div class="stat-card orange">
+                        <div class="stat-number">1,580</div>
+                        <div class="stat-label">活动总数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">¥528 万</div>
+                        <div class="stat-label">总 GMV</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-number">¥79.2 万</div>
+                        <div class="stat-label">平台收入</div>
+                    </div>
+                </div>
+
+                <h3 style="margin: 32px 0 16px;">最近活动</h3>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>用户</th>
+                            <th>操作</th>
+                            <th>类型</th>
+                            <th>状态</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>2026-03-25 10:30</td>
+                            <td>深圳科技有限公司</td>
+                            <td>创建了新活动</td>
+                            <td><span class="badge badge-info">活动</span></td>
+                            <td><span class="badge badge-success">成功</span></td>
+                        </tr>
+                        <tr>
+                            <td>2026-03-25 10:25</td>
+                            <td>@fashion_guru</td>
+                            <td>提交了作品</td>
+                            <td><span class="badge badge-warning">KOL</span></td>
+                            <td><span class="badge badge-success">成功</span></td>
+                        </tr>
+                        <tr>
+                            <td>2026-03-25 10:20</td>
+                            <td>admin</td>
+                            <td>审核通过了 KOL</td>
+                            <td><span class="badge badge-warning">审核</span></td>
+                            <td><span class="badge badge-success">成功</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 用户管理页面 -->
+            <div id="tab-users" class="tab-content">
+                <h2>👥 用户管理</h2>
+                <div class="toolbar">
+                    <input type="text" class="search-input" placeholder="搜索用户...">
+                    <select class="filter-select">
+                        <option value="">所有角色</option>
+                        <option value="advertiser">广告主</option>
+                        <option value="kol">KOL</option>
+                        <option value="admin">管理员</option>
+                    </select>
+                    <select class="filter-select">
+                        <option value="">所有状态</option>
+                        <option value="active">活跃</option>
+                        <option value="inactive">未激活</option>
+                        <option value="banned">已封禁</option>
+                    </select>
+                    <button class="btn btn-primary">搜索</button>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>用户名</th>
+                            <th>邮箱</th>
+                            <th>角色</th>
+                            <th>状态</th>
+                            <th>注册时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>1</td>
+                            <td>admin</td>
+                            <td>admin@aiads.com</td>
+                            <td><span class="badge badge-warning">管理员</span></td>
+                            <td><span class="badge badge-success">活跃</span></td>
+                            <td>2026-01-01</td>
+                            <td><button class="btn btn-secondary">查看</button></td>
+                        </tr>
+                        <tr>
+                            <td>2</td>
+                            <td>深圳科技有限公司</td>
+                            <td>contact@sztech.com</td>
+                            <td><span class="badge badge-info">广告主</span></td>
+                            <td><span class="badge badge-success">活跃</span></td>
+                            <td>2026-02-15</td>
+                            <td><button class="btn btn-secondary">查看</button></td>
+                        </tr>
+                        <tr>
+                            <td>3</td>
+                            <td>@fashion_guru</td>
+                            <td>fashion@example.com</td>
+                            <td><span class="badge badge-warning">KOL</span></td>
+                            <td><span class="badge badge-success">活跃</span></td>
+                            <td>2026-02-20</td>
+                            <td><button class="btn btn-secondary">查看</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 广告主管理页面 -->
+            <div id="tab-advertisers" class="tab-content">
+                <h2>🏢 广告主管理</h2>
+                <div class="toolbar">
+                    <input type="text" class="search-input" placeholder="搜索公司名称...">
+                    <select class="filter-select">
+                        <option value="">认证状态</option>
+                        <option value="verified">已认证</option>
+                        <option value="pending">待审核</option>
+                        <option value="rejected">已拒绝</option>
+                    </select>
+                    <button class="btn btn-primary">搜索</button>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>公司名称</th>
+                            <th>联系人</th>
+                            <th>邮箱</th>
+                            <th>行业</th>
+                            <th>余额</th>
+                            <th>认证状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>深圳科技有限公司</td>
+                            <td>张三</td>
+                            <td>contact@sztech.com</td>
+                            <td>科技</td>
+                            <td>¥50,000</td>
+                            <td><span class="badge badge-success">已认证</span></td>
+                            <td><button class="btn btn-secondary">详情</button></td>
+                        </tr>
+                        <tr>
+                            <td>广州贸易公司</td>
+                            <td>李四</td>
+                            <td>info@gztrade.com</td>
+                            <td>贸易</td>
+                            <td>¥30,000</td>
+                            <td><span class="badge badge-success">已认证</span></td>
+                            <td><button class="btn btn-secondary">详情</button></td>
+                        </tr>
+                        <tr>
+                            <td>北京文化传媒</td>
+                            <td>王五</td>
+                            <td>hello@bjmedia.com</td>
+                            <td>文化传媒</td>
+                            <td>¥80,000</td>
+                            <td><span class="badge badge-warning">待审核</span></td>
+                            <td><button class="btn btn-primary">审核</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- KOL 管理页面 -->
+            <div id="tab-kols" class="tab-content">
+                <h2>🌟 KOL 管理</h2>
+                <div class="toolbar">
+                    <input type="text" class="search-input" placeholder="搜索 KOL...">
+                    <select class="filter-select">
+                        <option value="">平台</option>
+                        <option value="tiktok">TikTok</option>
+                        <option value="youtube">YouTube</option>
+                        <option value="instagram">Instagram</option>
+                    </select>
+                    <button class="btn btn-primary">搜索</button>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>KOL</th>
+                            <th>平台</th>
+                            <th>粉丝数</th>
+                            <th>评级</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>@fashion_guru</td>
+                            <td>🎵 TikTok</td>
+                            <td>125,000</td>
+                            <td><span class="badge badge-success">A 级</span></td>
+                            <td><span class="badge badge-success">已认证</span></td>
+                            <td><button class="btn btn-secondary">详情</button></td>
+                        </tr>
+                        <tr>
+                            <td>@tech_reviewer</td>
+                            <td>📺 YouTube</td>
+                            <td>58,000</td>
+                            <td><span class="badge badge-warning">B 级</span></td>
+                            <td><span class="badge badge-warning">待审核</span></td>
+                            <td><button class="btn btn-primary">审核</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 内容审核页面 -->
+            <div id="tab-content" class="tab-content">
+                <h2>📢 内容审核</h2>
+                <div class="toolbar">
+                    <input type="text" class="search-input" placeholder="搜索内容...">
+                    <select class="filter-select">
+                        <option value="">审核状态</option>
+                        <option value="pending">待审核</option>
+                        <option value="approved">已通过</option>
+                        <option value="rejected">已拒绝</option>
+                    </select>
+                    <button class="btn btn-primary">搜索</button>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>内容</th>
+                            <th>作者</th>
+                            <th>平台</th>
+                            <th>AI 评分</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>夏季促销视频</td>
+                            <td>@fashion_guru</td>
+                            <td>🎵 TikTok</td>
+                            <td>95 分</td>
+                            <td><span class="badge badge-warning">待审核</span></td>
+                            <td>
+                                <button class="btn btn-primary">通过</button>
+                                <button class="btn btn-secondary">拒绝</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 活动管理页面 -->
+            <div id="tab-campaigns" class="tab-content">
+                <h2>📣 活动管理</h2>
+                <div class="toolbar">
+                    <input type="text" class="search-input" placeholder="搜索活动...">
+                    <select class="filter-select">
+                        <option value="">状态</option>
+                        <option value="active">进行中</option>
+                        <option value="pending">待审核</option>
+                        <option value="completed">已完成</option>
+                    </select>
+                    <button class="btn btn-primary">搜索</button>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>活动名称</th>
+                            <th>广告主</th>
+                            <th>预算</th>
+                            <th>KOL 数量</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>夏季促销活动</td>
+                            <td>深圳科技有限公司</td>
+                            <td>¥5,000</td>
+                            <td>10</td>
+                            <td><span class="badge badge-success">进行中</span></td>
+                            <td><button class="btn btn-secondary">详情</button></td>
+                        </tr>
+                        <tr>
+                            <td>新品发布推广</td>
+                            <td>广州贸易公司</td>
+                            <td>¥8,000</td>
+                            <td>15</td>
+                            <td><span class="badge badge-warning">待审核</span></td>
+                            <td><button class="btn btn-primary">审核</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 订单管理页面 -->
+            <div id="tab-orders" class="tab-content">
+                <h2>📝 订单管理</h2>
+                <div class="toolbar">
+                    <input type="text" class="search-input" placeholder="搜索订单...">
+                    <select class="filter-select">
+                        <option value="">状态</option>
+                        <option value="completed">已完成</option>
+                        <option value="in_progress">进行中</option>
+                        <option value="pending">待支付</option>
+                    </select>
+                    <button class="btn btn-primary">搜索</button>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>订单号</th>
+                            <th>活动</th>
+                            <th>KOL</th>
+                            <th>金额</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>ORD-20260320-001</td>
+                            <td>夏季促销活动</td>
+                            <td>@fashion_guru</td>
+                            <td>¥500</td>
+                            <td><span class="badge badge-success">已完成</span></td>
+                            <td><button class="btn btn-secondary">详情</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 财务管理页面 -->
+            <div id="tab-finance" class="tab-content">
+                <h2>💰 财务管理</h2>
+                <div class="stats-grid" style="margin-top: 24px;">
+                    <div class="stat-card">
+                        <div class="stat-number">¥79.2 万</div>
+                        <div class="stat-label">本月收入</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-number">¥12.5 万</div>
+                        <div class="stat-label">待审核提现</div>
+                    </div>
+                    <div class="stat-card blue">
+                        <div class="stat-number">1,256</div>
+                        <div class="stat-label">交易笔数</div>
+                    </div>
+                </div>
+                <h3 style="margin: 32px 0 16px;">提现审核</h3>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>用户</th>
+                            <th>金额</th>
+                            <th>申请时间</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>@fashion_guru</td>
+                            <td>¥5,000</td>
+                            <td>2026-03-25</td>
+                            <td><span class="badge badge-warning">待审核</span></td>
+                            <td>
+                                <button class="btn btn-primary">通过</button>
+                                <button class="btn btn-secondary">拒绝</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 数据统计页面 -->
+            <div id="tab-stats" class="tab-content">
+                <h2>📈 数据统计</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">10,520</div>
+                        <div class="stat-label">总用户数</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-number">2,150</div>
+                        <div class="stat-label">广告主</div>
+                    </div>
+                    <div class="stat-card blue">
+                        <div class="stat-number">8,200</div>
+                        <div class="stat-label">KOL</div>
+                    </div>
+                    <div class="stat-card orange">
+                        <div class="stat-number">¥528 万</div>
+                        <div class="stat-label">总 GMV</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 系统设置页面 -->
+            <div id="tab-settings" class="tab-content">
+                <h2>⚙️ 系统设置</h2>
+                <div style="padding: 24px; background: #f9fafb; border-radius: 12px; margin-bottom: 24px;">
+                    <h3 style="margin-bottom: 16px;">系统配置</h3>
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-weight: 500;">平台名称</label>
+                            <input type="text" value="AIAds" style="width: 100%; max-width: 400px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-weight: 500;">平台佣金比例 (%)</label>
+                            <input type="number" value="15" style="width: 100%; max-width: 400px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                        </div>
+                        <button class="btn btn-primary" style="width: auto; padding: 10px 24px;">保存配置</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 检查登录状态
+        function checkAuth() {
+            const session = sessionStorage.getItem('aiads_admin_session');
+            if (session) {
+                showMainInterface();
+            } else {
+                showLoginPage();
+            }
+        }
+
+        // 显示登录页面
+        function showLoginPage() {
+            document.getElementById('login-page').style.display = 'block';
+            document.getElementById('main-interface').style.display = 'none';
+        }
+
+        // 显示主界面
+        function showMainInterface() {
+            document.getElementById('login-page').style.display = 'none';
+            document.getElementById('main-interface').style.display = 'block';
+        }
+
+        // 登录处理
+        document.getElementById('login-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            if (username === 'admin' && password === 'admin123') {
+                sessionStorage.setItem('aiads_admin_session', JSON.stringify({ username: 'admin', role: 'super_admin' }));
+                document.getElementById('login-error').style.display = 'none';
+                showMainInterface();
+            } else {
+                document.getElementById('login-error').textContent = '用户名或密码错误';
+                document.getElementById('login-error').style.display = 'block';
+            }
+        });
+
+        // 登出
+        function logout() {
+            if (confirm('确定要退出登录吗？')) {
+                sessionStorage.removeItem('aiads_admin_session');
+                location.reload();
+            }
+        }
+
+        // 切换标签页
+        function switchTab(tabName) {
+            // 隐藏所有标签页
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // 显示目标标签页
+            const targetTab = document.getElementById('tab-' + tabName);
+            if (targetTab) {
+                targetTab.classList.add('active');
+            }
+
+            // 更新导航栏激活状态
+            document.querySelectorAll('.navbar-nav a').forEach(link => {
+                link.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+
+        // 初始化
+        checkAuth();
+    </script>
+</body>
+</html>

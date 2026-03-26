@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIAds Platform - 完整应用</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; }
+        
+        /* 导航栏 */
+        .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .navbar h1 { color: white; font-size: 24px; }
+        .navbar-nav { display: flex; gap: 24px; }
+        .navbar-nav a { color: white; text-decoration: none; padding: 8px 16px; border-radius: 8px; transition: background 0.3s; }
+        .navbar-nav a:hover { background: rgba(255,255,255,0.2); }
+        
+        /* 主容器 */
+        .container { max-width: 1400px; margin: 0 auto; padding: 40px 20px; }
+        
+        /* 统计卡片 */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 24px; margin-bottom: 40px; }
+        .stat-card { background: white; border-radius: 16px; padding: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .stat-number { font-size: 42px; font-weight: bold; color: #667eea; margin-bottom: 8px; }
+        .stat-label { font-size: 16px; color: #666; }
+        
+        /* 功能区域 */
+        .section { background: white; border-radius: 16px; padding: 32px; margin-bottom: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .section h2 { font-size: 28px; margin-bottom: 24px; color: #333; }
+        
+        /* 表格样式 */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 16px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; font-weight: 600; color: #333; }
+        tr:hover { background: #f8f9fa; }
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 14px; }
+        .status-active { background: #d1fae5; color: #065f46; }
+        .status-draft { background: #fef3c7; color: #92400e; }
+        
+        /* 按钮 */
+        .btn { display: inline-block; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; cursor: pointer; border: none; transition: all 0.3s; }
+        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102,126,234,0.4); }
+        
+        /* 表单 */
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: #333; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.1); }
+        
+        /* 标签页 */
+        .tabs { display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 2px solid #eee; padding-bottom: 16px; }
+        .tab { padding: 12px 24px; border-radius: 8px 8px 0 0; cursor: pointer; transition: all 0.3s; }
+        .tab.active { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        
+        /* 通知 */
+        .alert { padding: 16px 20px; border-radius: 8px; margin-bottom: 20px; }
+        .alert-info { background: #dbeafe; color: #1e40af; border-left: 4px solid #3b82f6; }
+        .alert-success { background: #d1fae5; color: #065f46; border-left: 4px solid #10b981; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <h1>🚀 AIAds Platform</h1>
+        <div class="navbar-nav">
+            <a href="#" onclick="showTab('dashboard')">仪表盘</a>
+            <a href="#" onclick="showTab('advertisers')">广告主</a>
+            <a href="#" onclick="showTab('kols')">KOL</a>
+            <a href="#" onclick="showTab('campaigns')">活动</a>
+            <a href="#" onclick="showTab('settings')">设置</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- 欢迎通知 -->
+        <div class="alert alert-info">
+            💡 这是 AIAds 平台的完整应用演示版本。所有数据都是演示数据。
+        </div>
+
+        <!-- 仪表盘 -->
+        <div id="dashboard" class="tab-content">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number">2,000</div>
+                    <div class="stat-label">广告主数量</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">100,000+</div>
+                    <div class="stat-label">KOL 数量</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">$22M</div>
+                    <div class="stat-label">月 GMV</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">1,885</div>
+                    <div class="stat-label">总订单数</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>📊 最近活动</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>活动名称</th>
+                            <th>广告主</th>
+                            <th>预算</th>
+                            <th>KOL 数量</th>
+                            <th>状态</th>
+                            <th>创建时间</th>
+                        </tr>
+                    </thead>
+                    <tbody id="campaigns-table">
+                        <tr>
+                            <td>夏季促销活动</td>
+                            <td>深圳科技有限公司</td>
+                            <td>$5,000</td>
+                            <td>25</td>
+                            <td><span class="status-badge status-active">进行中</span></td>
+                            <td>2026-05-08</td>
+                        </tr>
+                        <tr>
+                            <td>新品发布推广</td>
+                            <td>广州贸易公司</td>
+                            <td>$8,000</td>
+                            <td>40</td>
+                            <td><span class="status-badge status-active">进行中</span></td>
+                            <td>2026-05-07</td>
+                        </tr>
+                        <tr>
+                            <td>品牌知名度提升</td>
+                            <td>北京品牌管理</td>
+                            <td>$12,000</td>
+                            <td>60</td>
+                            <td><span class="status-badge status-draft">草稿</span></td>
+                            <td>2026-05-06</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 广告主管理 -->
+        <div id="advertisers" class="tab-content" style="display:none;">
+            <div class="section">
+                <h2>🏢 广告主管理</h2>
+                <div style="margin-bottom: 20px;">
+                    <button class="btn btn-primary" onclick="alert('添加广告主功能')">+ 新增广告主</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>公司名称</th>
+                            <th>联系人</th>
+                            <th>邮箱</th>
+                            <th>余额</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>深圳科技有限公司</td>
+                            <td>张三</td>
+                            <td>zhang@company.com</td>
+                            <td>$15,000</td>
+                            <td><span class="status-badge status-active">活跃</span></td>
+                            <td><button class="btn btn-primary" onclick="alert('查看')">查看</button></td>
+                        </tr>
+                        <tr>
+                            <td>广州贸易公司</td>
+                            <td>李四</td>
+                            <td>li@trade.com</td>
+                            <td>$8,500</td>
+                            <td><span class="status-badge status-active">活跃</span></td>
+                            <td><button class="btn btn-primary" onclick="alert('查看')">查看</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- KOL 管理 -->
+        <div id="kols" class="tab-content" style="display:none;">
+            <div class="section">
+                <h2>🌟 KOL 管理</h2>
+                <div class="alert alert-success">
+                    ✅ 已接入 TikTok、YouTube、Instagram 三大平台
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>KOL 名称</th>
+                            <th>平台</th>
+                            <th>粉丝数</th>
+                            <th>互动率</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>@fashion_guru</td>
+                            <td>TikTok</td>
+                            <td>25,000</td>
+                            <td>4.5%</td>
+                            <td><span class="status-badge status-active">活跃</span></td>
+                            <td><button class="btn btn-primary" onclick="alert('查看')">查看</button></td>
+                        </tr>
+                        <tr>
+                            <td>@tech_reviewer</td>
+                            <td>YouTube</td>
+                            <td>48,000</td>
+                            <td>3.8%</td>
+                            <td><span class="status-badge status-active">活跃</span></td>
+                            <td><button class="btn btn-primary" onclick="alert('查看')">查看</button></td>
+                        </tr>
+                        <tr>
+                            <td>@lifestyle_blog</td>
+                            <td>Instagram</td>
+                            <td>32,000</td>
+                            <td>5.2%</td>
+                            <td><span class="status-badge status-active">活跃</span></td>
+                            <td><button class="btn btn-primary" onclick="alert('查看')">查看</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 活动管理 -->
+        <div id="campaigns" class="tab-content" style="display:none;">
+            <div class="section">
+                <h2>📢 活动管理</h2>
+                <button class="btn btn-primary" onclick="alert('创建活动功能')">+ 创建新活动</button>
+            </div>
+        </div>
+
+        <!-- 设置 -->
+        <div id="settings" class="tab-content" style="display:none;">
+            <div class="section">
+                <h2>⚙️ 系统设置</h2>
+                <div class="form-group">
+                    <label>平台名称</label>
+                    <input type="text" value="AIAds Platform" />
+                </div>
+                <div class="form-group">
+                    <label>客服邮箱</label>
+                    <input type="email" value="support@aiads.com" />
+                </div>
+                <button class="btn btn-primary" onclick="alert('设置已保存')">保存设置</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 标签页切换
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+            document.getElementById(tabId).style.display = 'block';
+        }
+
+        // 模拟实时数据更新
+        setInterval(() => {
+            const gmvEl = document.querySelector('.stat-card:nth-child(3) .stat-number');
+            if (gmvEl) {
+                const current = parseFloat(gmvEl.textContent.replace('$', '').replace('M', ''));
+                const updated = (current + 0.001).toFixed(3);
+                gmvEl.textContent = '$' + updated + 'M';
+            }
+        }, 3000);
+    </script>
+</body>
+</html>

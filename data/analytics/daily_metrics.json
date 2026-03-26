@@ -1,0 +1,459 @@
+{
+  "report_date": "2026-03-24",
+  "canary_version": "v1.1.0",
+  "stable_version": "v1.0.0",
+  "traffic_split": {
+    "canary": 10.2,
+    "stable": 89.8
+  },
+  "generated_at": "2026-03-24T23:59:59Z",
+  "traffic": {
+    "page_views": {
+      "canary": 45230,
+      "stable": 412580,
+      "total": 457810
+    },
+    "unique_visitors": {
+      "canary": 1268,
+      "stable": 11182,
+      "total": 12450
+    },
+    "sessions": {
+      "canary": 1845,
+      "stable": 16320,
+      "total": 18165
+    },
+    "avg_session_duration_seconds": {
+      "canary": 512,
+      "stable": 495,
+      "total": 497
+    },
+    "pages_per_session": {
+      "canary": 5.2,
+      "stable": 4.9,
+      "total": 4.9
+    },
+    "bounce_rate": {
+      "canary": 0.31,
+      "stable": 0.34,
+      "total": 0.337
+    },
+    "new_users": {
+      "advertisers": {
+        "canary": 89,
+        "stable": 812,
+        "total": 901
+      },
+      "kols": {
+        "canary": 67,
+        "stable": 598,
+        "total": 665
+      }
+    },
+    "dau": {
+      "canary": 1268,
+      "stable": 11182,
+      "total": 12450
+    },
+    "mau": {
+      "canary": 8450,
+      "stable": 74280,
+      "total": 82730
+    },
+    "stickiness_ratio": {
+      "canary": 0.15,
+      "stable": 0.15,
+      "total": 0.15
+    }
+  },
+  "conversion": {
+    "registration_rate": {
+      "canary": 0.028,
+      "stable": 0.025,
+      "total": 0.0255
+    },
+    "email_verification_rate": {
+      "canary": 0.903,
+      "stable": 0.895,
+      "total": 0.897
+    },
+    "profile_completion_rate": {
+      "advertisers": {
+        "canary": 0.704,
+        "stable": 0.692,
+        "total": 0.695
+      },
+      "kols": {
+        "canary": 0.618,
+        "stable": 0.645,
+        "total": 0.638
+      }
+    },
+    "campaign_creation_rate": {
+      "canary": 0.599,
+      "stable": 0.578,
+      "total": 0.582
+    },
+    "kol_search_rate": {
+      "canary": 0.772,
+      "stable": 0.765,
+      "total": 0.767
+    },
+    "order_creation_rate": {
+      "canary": 0.723,
+      "stable": 0.712,
+      "total": 0.715
+    },
+    "payment_completion_rate": {
+      "canary": 0.859,
+      "stable": 0.848,
+      "total": 0.851
+    },
+    "overall_conversion_rate": {
+      "canary": 0.0057,
+      "stable": 0.0054,
+      "total": 0.0055
+    }
+  },
+  "performance": {
+    "api_response_time_ms": {
+      "p50": {
+        "canary": 42,
+        "stable": 45,
+        "threshold": 100
+      },
+      "p75": {
+        "canary": 89,
+        "stable": 92,
+        "threshold": 150
+      },
+      "p90": {
+        "canary": 145,
+        "stable": 152,
+        "threshold": 250
+      },
+      "p95": {
+        "canary": 178,
+        "stable": 185,
+        "threshold": 300
+      },
+      "p99": {
+        "canary": 425,
+        "stable": 458,
+        "threshold": 500
+      }
+    },
+    "page_load_time_ms": {
+      "home": {
+        "canary": 1200,
+        "stable": 1300,
+        "threshold": 2000
+      },
+      "advertiser_dashboard": {
+        "canary": 1800,
+        "stable": 1900,
+        "threshold": 3000
+      },
+      "kol_dashboard": {
+        "canary": 1600,
+        "stable": 1700,
+        "threshold": 3000
+      },
+      "campaign_creation": {
+        "canary": 2100,
+        "stable": 2200,
+        "threshold": 3000
+      },
+      "kol_search": {
+        "canary": 2400,
+        "stable": 2500,
+        "threshold": 3000
+      }
+    },
+    "error_rates": {
+      "4xx": {
+        "canary": 0.021,
+        "stable": 0.019,
+        "threshold": 0.05
+      },
+      "5xx": {
+        "canary": 0.003,
+        "stable": 0.002,
+        "threshold": 0.01
+      },
+      "application": {
+        "canary": 0.005,
+        "stable": 0.004,
+        "threshold": 0.01
+      }
+    },
+    "availability": {
+      "canary": 0.9985,
+      "stable": 0.9992,
+      "threshold": 0.99
+    },
+    "resource_utilization": {
+      "cpu_percent": {
+        "canary_avg": 35,
+        "canary_peak": 65,
+        "stable_avg": 42,
+        "stable_peak": 72,
+        "threshold": 80
+      },
+      "memory_mb": {
+        "canary_avg": 512,
+        "canary_peak": 768,
+        "stable_avg": 1200,
+        "stable_peak": 1600,
+        "canary_limit": 1024,
+        "stable_limit": 2048
+      }
+    }
+  },
+  "business": {
+    "gmv": {
+      "canary": 4650.00,
+      "stable": 40630.00,
+      "total": 45280.00,
+      "currency": "USD"
+    },
+    "revenue": {
+      "canary": 697.50,
+      "stable": 6094.50,
+      "total": 6792.00,
+      "currency": "USD",
+      "commission_rate": 0.15
+    },
+    "orders": {
+      "canary": 30,
+      "stable": 267,
+      "total": 297
+    },
+    "average_order_value": {
+      "canary": 155.00,
+      "stable": 152.17,
+      "total": 152.46,
+      "currency": "USD"
+    },
+    "campaigns": {
+      "active": {
+        "canary": 45,
+        "stable": 412,
+        "total": 457
+      },
+      "pending": {
+        "canary": 8,
+        "stable": 67,
+        "total": 75
+      },
+      "completed": {
+        "canary": 23,
+        "stable": 198,
+        "total": 221
+      },
+      "paused": {
+        "canary": 3,
+        "stable": 28,
+        "total": 31
+      }
+    },
+    "gmv_by_campaign_type": {
+      "brand_awareness": {
+        "canary": 1890.00,
+        "stable": 16450.00,
+        "total": 18340.00
+      },
+      "conversion": {
+        "canary": 1560.00,
+        "stable": 13890.00,
+        "total": 15450.00
+      },
+      "engagement": {
+        "canary": 890.00,
+        "stable": 7890.00,
+        "total": 8780.00
+      },
+      "app_install": {
+        "canary": 310.00,
+        "stable": 2400.00,
+        "total": 2710.00
+      }
+    },
+    "gmv_by_platform": {
+      "instagram": {
+        "canary": 2120.00,
+        "stable": 18560.00,
+        "total": 20680.00
+      },
+      "tiktok": {
+        "canary": 1450.00,
+        "stable": 12890.00,
+        "total": 14340.00
+      },
+      "youtube": {
+        "canary": 780.00,
+        "stable": 6780.00,
+        "total": 7560.00
+      },
+      "twitter": {
+        "canary": 300.00,
+        "stable": 2400.00,
+        "total": 2700.00
+      }
+    }
+  },
+  "user_retention": {
+    "day_1": {
+      "advertisers": 0.52,
+      "kols": 0.38,
+      "overall": 0.435
+    },
+    "day_7": {
+      "advertisers": 0.18,
+      "kols": 0.10,
+      "overall": 0.128
+    },
+    "day_14": {
+      "advertisers": 0.12,
+      "kols": 0.06,
+      "overall": 0.083
+    },
+    "day_30": {
+      "advertisers": 0.10,
+      "kols": 0.05,
+      "overall": 0.065
+    }
+  },
+  "feature_usage": {
+    "ai_kol_matching": {
+      "adoption_rate": 0.67,
+      "usage_count": 892,
+      "satisfaction": 4.3
+    },
+    "campaign_templates": {
+      "adoption_rate": 0.45,
+      "usage_count": 534,
+      "satisfaction": 4.1
+    },
+    "analytics_dashboard": {
+      "adoption_rate": 0.78,
+      "usage_count": 1245,
+      "satisfaction": 4.5
+    },
+    "auto_bidding": {
+      "adoption_rate": 0.23,
+      "usage_count": 156,
+      "satisfaction": 3.8
+    },
+    "content_review_tool": {
+      "adoption_rate": 0.56,
+      "usage_count": 412,
+      "satisfaction": 4.2
+    }
+  },
+  "user_feedback": {
+    "total": 124,
+    "positive": 67,
+    "neutral": 33,
+    "negative": 24,
+    "sentiment_score": 0.54,
+    "by_channel": {
+      "in_app": {
+        "total": 89,
+        "positive": 52,
+        "neutral": 28,
+        "negative": 9
+      },
+      "support_tickets": {
+        "total": 12,
+        "positive": 0,
+        "neutral": 0,
+        "negative": 12
+      },
+      "email": {
+        "total": 8,
+        "positive": 5,
+        "neutral": 2,
+        "negative": 1
+      },
+      "social_media": {
+        "total": 15,
+        "positive": 10,
+        "neutral": 3,
+        "negative": 2
+      }
+    }
+  },
+  "incidents": [
+    {
+      "id": "INC-001",
+      "timestamp": "2026-03-24T10:30:00Z",
+      "resolved_at": "2026-03-24T10:45:00Z",
+      "severity": "P3",
+      "title": "Latency spike on KOL search",
+      "duration_minutes": 15,
+      "affected_users": 500,
+      "root_cause": "Database connection pool exhaustion",
+      "resolution": "Increased connection pool size",
+      "status": "resolved"
+    },
+    {
+      "id": "INC-002",
+      "timestamp": "2026-03-24T14:45:00Z",
+      "resolved_at": "2026-03-24T15:05:00Z",
+      "severity": "P3",
+      "title": "Payment timeout errors",
+      "duration_minutes": 20,
+      "affected_users": 23,
+      "root_cause": "Third-party payment provider rate limiting",
+      "resolution": "Implemented exponential backoff retry logic",
+      "status": "resolved"
+    },
+    {
+      "id": "INC-003",
+      "timestamp": "2026-03-24T18:20:00Z",
+      "resolved_at": null,
+      "severity": "P4",
+      "title": "UI rendering issue on mobile Safari",
+      "duration_minutes": null,
+      "affected_users": 150,
+      "root_cause": "CSS flexbox compatibility issue",
+      "resolution": "In progress",
+      "status": "investigating"
+    }
+  ],
+  "ab_tests": {
+    "new_dashboard": {
+      "status": "running",
+      "variant": "canary",
+      "results": {
+        "session_duration_change": 0.034,
+        "pages_per_session_change": 0.061,
+        "bounce_rate_change": -0.088,
+        "campaign_creation_change": 0.143,
+        "statistically_significant": true
+      },
+      "recommendation": "rollout"
+    },
+    "ai_matching_v2": {
+      "status": "running",
+      "variant": "canary",
+      "results": {
+        "kol_search_to_order_change": 0.136,
+        "order_value_change": 0.086,
+        "satisfaction_change": 0.049,
+        "statistically_significant": true
+      },
+      "recommendation": "continue_test"
+    }
+  },
+  "health_status": {
+    "overall": "healthy",
+    "traffic": "normal",
+    "performance": "normal",
+    "errors": "normal",
+    "conversion": "normal",
+    "business": "normal",
+    "rollout_recommendation": "proceed"
+  }
+}

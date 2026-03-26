@@ -1,0 +1,473 @@
+{
+  "report_date": "2026-03-24",
+  "analysis_type": "conversion_funnel",
+  "canary_version": "v1.1.0",
+  "stable_version": "v1.0.0",
+  "generated_at": "2026-03-24T23:59:59Z",
+  "funnels": {
+    "advertiser_funnel": {
+      "name": "Advertiser Conversion Funnel",
+      "description": "Tracks advertiser journey from first visit to payment completion",
+      "environment": "canary",
+      "period": {
+        "start": "2026-03-24T00:00:00Z",
+        "end": "2026-03-24T23:59:59Z"
+      },
+      "steps": [
+        {
+          "step_number": 1,
+          "name": "Page View",
+          "event_name": "page_view",
+          "users": 45230,
+          "conversion_rate": 1.0,
+          "drop_off_rate": 0.0,
+          "avg_time_to_next_step_seconds": null
+        },
+        {
+          "step_number": 2,
+          "name": "Registration",
+          "event_name": "advertiser_registered",
+          "users": 1268,
+          "conversion_rate": 0.028,
+          "drop_off_rate": 0.972,
+          "avg_time_to_next_step_seconds": 342
+        },
+        {
+          "step_number": 3,
+          "name": "Email Verified",
+          "event_name": "email_verified",
+          "users": 1145,
+          "conversion_rate": 0.0253,
+          "drop_off_rate": 0.097,
+          "avg_time_to_next_step_seconds": 185
+        },
+        {
+          "step_number": 4,
+          "name": "Profile Complete",
+          "event_name": "profile_completed",
+          "users": 892,
+          "conversion_rate": 0.0197,
+          "drop_off_rate": 0.221,
+          "avg_time_to_next_step_seconds": 456
+        },
+        {
+          "step_number": 5,
+          "name": "Campaign Created",
+          "event_name": "campaign_created",
+          "users": 534,
+          "conversion_rate": 0.0118,
+          "drop_off_rate": 0.401,
+          "avg_time_to_next_step_seconds": 623
+        },
+        {
+          "step_number": 6,
+          "name": "KOL Searched",
+          "event_name": "kol_searched",
+          "users": 412,
+          "conversion_rate": 0.0091,
+          "drop_off_rate": 0.228,
+          "avg_time_to_next_step_seconds": 287
+        },
+        {
+          "step_number": 7,
+          "name": "Order Created",
+          "event_name": "order_created",
+          "users": 298,
+          "conversion_rate": 0.0066,
+          "drop_off_rate": 0.277,
+          "avg_time_to_next_step_seconds": 534
+        },
+        {
+          "step_number": 8,
+          "name": "Payment Completed",
+          "event_name": "payment_completed",
+          "users": 256,
+          "conversion_rate": 0.0057,
+          "drop_off_rate": 0.141,
+          "avg_time_to_next_step_seconds": null
+        }
+      ],
+      "summary": {
+        "total_users_entered": 45230,
+        "total_users_converted": 256,
+        "overall_conversion_rate": 0.0057,
+        "avg_time_to_convert_seconds": 2827,
+        "biggest_drop_off_step": {
+          "step_number": 5,
+          "name": "Campaign Created",
+          "drop_off_rate": 0.401
+        }
+      },
+      "comparison_with_stable": {
+        "registration_rate_diff": 0.003,
+        "overall_conversion_rate_diff": 0.0003,
+        "steps_improved": [2, 3, 4, 5, 7, 8],
+        "steps_declined": [],
+        "steps_unchanged": [6]
+      }
+    },
+    "kol_funnel": {
+      "name": "KOL Conversion Funnel",
+      "description": "Tracks KOL journey from first visit to first payment received",
+      "environment": "canary",
+      "period": {
+        "start": "2026-03-24T00:00:00Z",
+        "end": "2026-03-24T23:59:59Z"
+      },
+      "steps": [
+        {
+          "step_number": 1,
+          "name": "Page View",
+          "event_name": "page_view",
+          "users": 38450,
+          "conversion_rate": 1.0,
+          "drop_off_rate": 0.0,
+          "avg_time_to_next_step_seconds": null
+        },
+        {
+          "step_number": 2,
+          "name": "Registration",
+          "event_name": "kol_registered",
+          "users": 665,
+          "conversion_rate": 0.0173,
+          "drop_off_rate": 0.9827,
+          "avg_time_to_next_step_seconds": 298
+        },
+        {
+          "step_number": 3,
+          "name": "Email Verified",
+          "event_name": "email_verified",
+          "users": 598,
+          "conversion_rate": 0.0156,
+          "drop_off_rate": 0.101,
+          "avg_time_to_next_step_seconds": 156
+        },
+        {
+          "step_number": 4,
+          "name": "Account Connected",
+          "event_name": "account_connected",
+          "users": 412,
+          "conversion_rate": 0.0107,
+          "drop_off_rate": 0.311,
+          "avg_time_to_next_step_seconds": 523
+        },
+        {
+          "step_number": 5,
+          "name": "Profile Complete",
+          "event_name": "profile_completed",
+          "users": 356,
+          "conversion_rate": 0.0093,
+          "drop_off_rate": 0.136,
+          "avg_time_to_next_step_seconds": 312
+        },
+        {
+          "step_number": 6,
+          "name": "Task Applied",
+          "event_name": "task_applied",
+          "users": 198,
+          "conversion_rate": 0.0051,
+          "drop_off_rate": 0.444,
+          "avg_time_to_next_step_seconds": 845
+        },
+        {
+          "step_number": 7,
+          "name": "Content Submitted",
+          "event_name": "content_submitted",
+          "users": 134,
+          "conversion_rate": 0.0035,
+          "drop_off_rate": 0.323,
+          "avg_time_to_next_step_seconds": 1256
+        },
+        {
+          "step_number": 8,
+          "name": "Payment Received",
+          "event_name": "payment_received",
+          "users": 89,
+          "conversion_rate": 0.0023,
+          "drop_off_rate": 0.336,
+          "avg_time_to_next_step_seconds": null
+        }
+      ],
+      "summary": {
+        "total_users_entered": 38450,
+        "total_users_converted": 89,
+        "overall_conversion_rate": 0.0023,
+        "avg_time_to_convert_seconds": 3390,
+        "biggest_drop_off_step": {
+          "step_number": 6,
+          "name": "Task Applied",
+          "drop_off_rate": 0.444
+        }
+      },
+      "comparison_with_stable": {
+        "registration_rate_diff": 0.002,
+        "overall_conversion_rate_diff": 0.0001,
+        "steps_improved": [2, 3, 5, 6, 7, 8],
+        "steps_declined": [4],
+        "steps_unchanged": []
+      }
+    },
+    "payment_funnel": {
+      "name": "Payment Conversion Funnel",
+      "description": "Tracks payment flow from order creation to completion",
+      "environment": "canary",
+      "period": {
+        "start": "2026-03-24T00:00:00Z",
+        "end": "2026-03-24T23:59:59Z"
+      },
+      "steps": [
+        {
+          "step_number": 1,
+          "name": "Order Created",
+          "event_name": "order_created",
+          "users": 298,
+          "conversion_rate": 1.0,
+          "drop_off_rate": 0.0,
+          "avg_time_to_next_step_seconds": null
+        },
+        {
+          "step_number": 2,
+          "name": "Payment Initiated",
+          "event_name": "payment_initiated",
+          "users": 285,
+          "conversion_rate": 0.956,
+          "drop_off_rate": 0.044,
+          "avg_time_to_next_step_seconds": 45
+        },
+        {
+          "step_number": 3,
+          "name": "Payment Details Entered",
+          "event_name": "payment_details_entered",
+          "users": 272,
+          "conversion_rate": 0.913,
+          "drop_off_rate": 0.046,
+          "avg_time_to_next_step_seconds": 125
+        },
+        {
+          "step_number": 4,
+          "name": "Payment Completed",
+          "event_name": "payment_completed",
+          "users": 256,
+          "conversion_rate": 0.859,
+          "drop_off_rate": 0.059,
+          "avg_time_to_next_step_seconds": null
+        }
+      ],
+      "summary": {
+        "total_users_entered": 298,
+        "total_users_converted": 256,
+        "overall_conversion_rate": 0.859,
+        "avg_time_to_convert_seconds": 170,
+        "biggest_drop_off_step": {
+          "step_number": 4,
+          "name": "Payment Completed",
+          "drop_off_rate": 0.059
+        }
+      },
+      "comparison_with_stable": {
+        "overall_conversion_rate_diff": 0.011,
+        "steps_improved": [2, 3, 4],
+        "steps_declined": [],
+        "steps_unchanged": []
+      }
+    }
+  },
+  "segment_analysis": {
+    "by_device": {
+      "desktop": {
+        "advertiser_conversion_rate": 0.0062,
+        "kol_conversion_rate": 0.0025,
+        "payment_conversion_rate": 0.872
+      },
+      "mobile": {
+        "advertiser_conversion_rate": 0.0051,
+        "kol_conversion_rate": 0.0021,
+        "payment_conversion_rate": 0.845
+      },
+      "tablet": {
+        "advertiser_conversion_rate": 0.0055,
+        "kol_conversion_rate": 0.0022,
+        "payment_conversion_rate": 0.856
+      }
+    },
+    "by_traffic_source": {
+      "organic_search": {
+        "advertiser_conversion_rate": 0.0065,
+        "kol_conversion_rate": 0.0028,
+        "users": 13750
+      },
+      "paid_search": {
+        "advertiser_conversion_rate": 0.0072,
+        "kol_conversion_rate": 0.0024,
+        "users": 8210
+      },
+      "social_media": {
+        "advertiser_conversion_rate": 0.0048,
+        "kol_conversion_rate": 0.0031,
+        "users": 9950
+      },
+      "direct": {
+        "advertiser_conversion_rate": 0.0058,
+        "kol_conversion_rate": 0.0018,
+        "users": 7240
+      },
+      "referral": {
+        "advertiser_conversion_rate": 0.0052,
+        "kol_conversion_rate": 0.0022,
+        "users": 3660
+      }
+    },
+    "by_country": {
+      "US": {
+        "advertiser_conversion_rate": 0.0068,
+        "kol_conversion_rate": 0.0025,
+        "users": 3860
+      },
+      "UK": {
+        "advertiser_conversion_rate": 0.0055,
+        "kol_conversion_rate": 0.0022,
+        "users": 1370
+      },
+      "CA": {
+        "advertiser_conversion_rate": 0.0052,
+        "kol_conversion_rate": 0.0021,
+        "users": 870
+      },
+      "DE": {
+        "advertiser_conversion_rate": 0.0048,
+        "kol_conversion_rate": 0.0019,
+        "users": 620
+      },
+      "other": {
+        "advertiser_conversion_rate": 0.0051,
+        "kol_conversion_rate": 0.0023,
+        "users": 5730
+      }
+    }
+  },
+  "time_analysis": {
+    "hourly_conversion_rates": [
+      {"hour": 0, "advertiser_rate": 0.0052, "kol_rate": 0.0021},
+      {"hour": 1, "advertiser_rate": 0.0048, "kol_rate": 0.0019},
+      {"hour": 2, "advertiser_rate": 0.0045, "kol_rate": 0.0018},
+      {"hour": 3, "advertiser_rate": 0.0042, "kol_rate": 0.0017},
+      {"hour": 4, "advertiser_rate": 0.0041, "kol_rate": 0.0016},
+      {"hour": 5, "advertiser_rate": 0.0044, "kol_rate": 0.0018},
+      {"hour": 6, "advertiser_rate": 0.0051, "kol_rate": 0.0021},
+      {"hour": 7, "advertiser_rate": 0.0058, "kol_rate": 0.0024},
+      {"hour": 8, "advertiser_rate": 0.0062, "kol_rate": 0.0026},
+      {"hour": 9, "advertiser_rate": 0.0065, "kol_rate": 0.0028},
+      {"hour": 10, "advertiser_rate": 0.0068, "kol_rate": 0.0029},
+      {"hour": 11, "advertiser_rate": 0.0069, "kol_rate": 0.0030},
+      {"hour": 12, "advertiser_rate": 0.0067, "kol_rate": 0.0028},
+      {"hour": 13, "advertiser_rate": 0.0064, "kol_rate": 0.0027},
+      {"hour": 14, "advertiser_rate": 0.0066, "kol_rate": 0.0028},
+      {"hour": 15, "advertiser_rate": 0.0063, "kol_rate": 0.0026},
+      {"hour": 16, "advertiser_rate": 0.0059, "kol_rate": 0.0025},
+      {"hour": 17, "advertiser_rate": 0.0056, "kol_rate": 0.0024},
+      {"hour": 18, "advertiser_rate": 0.0054, "kol_rate": 0.0023},
+      {"hour": 19, "advertiser_rate": 0.0052, "kol_rate": 0.0022},
+      {"hour": 20, "advertiser_rate": 0.0051, "kol_rate": 0.0021},
+      {"hour": 21, "advertiser_rate": 0.0049, "kol_rate": 0.0020},
+      {"hour": 22, "advertiser_rate": 0.0048, "kol_rate": 0.0019},
+      {"hour": 23, "advertiser_rate": 0.0050, "kol_rate": 0.0020}
+    ],
+    "peak_conversion_hour": 11,
+    "lowest_conversion_hour": 4
+  },
+  "insights": [
+    {
+      "type": "positive",
+      "category": "advertiser_funnel",
+      "title": "Registration Rate Improvement",
+      "description": "Advertiser registration rate is 0.3% higher than stable environment",
+      "impact": "high",
+      "recommendation": "Continue monitoring to ensure sustained improvement"
+    },
+    {
+      "type": "positive",
+      "category": "payment_funnel",
+      "title": "Payment Conversion Improvement",
+      "description": "Payment completion rate increased by 1.1% compared to stable",
+      "impact": "high",
+      "recommendation": "Analyze what changes contributed to this improvement"
+    },
+    {
+      "type": "warning",
+      "category": "advertiser_funnel",
+      "title": "Campaign Creation Drop-off",
+      "description": "40.1% drop-off at campaign creation step is the biggest friction point",
+      "impact": "high",
+      "recommendation": "Simplify campaign creation flow, add progress indicators"
+    },
+    {
+      "type": "warning",
+      "category": "kol_funnel",
+      "title": "Task Application Drop-off",
+      "description": "44.4% drop-off at task application step needs attention",
+      "impact": "high",
+      "recommendation": "Review task application requirements, reduce friction"
+    },
+    {
+      "type": "warning",
+      "category": "kol_funnel",
+      "title": "Account Connection Decline",
+      "description": "Account connection rate is 0.3% lower than stable environment",
+      "impact": "medium",
+      "recommendation": "Investigate TikTok connection issues reported by users"
+    },
+    {
+      "type": "insight",
+      "category": "segment_analysis",
+      "title": "Mobile Conversion Gap",
+      "description": "Mobile conversion rates are 17.7% lower than desktop",
+      "impact": "medium",
+      "recommendation": "Optimize mobile experience, especially payment flow"
+    },
+    {
+      "type": "insight",
+      "category": "time_analysis",
+      "title": "Peak Conversion Time",
+      "description": "Highest conversion rates occur between 10:00-12:00 UTC",
+      "impact": "low",
+      "recommendation": "Schedule marketing campaigns and support during peak hours"
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": "high",
+      "action": "Simplify campaign creation flow",
+      "expected_impact": "Reduce drop-off by 15-20%",
+      "effort": "medium",
+      "owner": "product_team"
+    },
+    {
+      "priority": "high",
+      "action": "Fix TikTok business account connection issues",
+      "expected_impact": "Improve KOL account connection rate by 5-10%",
+      "effort": "medium",
+      "owner": "backend_team"
+    },
+    {
+      "priority": "medium",
+      "action": "Optimize mobile payment experience",
+      "expected_impact": "Increase mobile conversion by 10-15%",
+      "effort": "medium",
+      "owner": "frontend_team"
+    },
+    {
+      "priority": "medium",
+      "action": "Add task application guidance for KOLs",
+      "expected_impact": "Reduce task application drop-off by 10%",
+      "effort": "low",
+      "owner": "product_team"
+    },
+    {
+      "priority": "low",
+      "action": "Implement progress indicators in multi-step flows",
+      "expected_impact": "Improve overall completion rates by 5%",
+      "effort": "low",
+      "owner": "frontend_team"
+    }
+  ]
+}

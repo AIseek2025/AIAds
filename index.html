@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIAds - 登录中心</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 1200px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        .header-logo {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 24px;
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 56px;
+            box-shadow: 0 12px 40px rgba(99, 102, 241, 0.4);
+        }
+        .header h1 {
+            font-size: 42px;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 12px;
+        }
+        .header p {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        .login-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 32px;
+            margin-bottom: 40px;
+        }
+        .login-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+        }
+        .login-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        .card-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 24px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+        }
+        .card-icon.admin {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+        }
+        .card-icon.advertiser {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+        }
+        .card-icon.kol {
+            background: linear-gradient(135deg, #ec4899 0%, #f43f5e 100%);
+            box-shadow: 0 8px 20px rgba(236, 72, 153, 0.3);
+        }
+        .card-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 8px;
+        }
+        .card-description {
+            font-size: 14px;
+            color: #64748b;
+            margin-bottom: 24px;
+        }
+        .card-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #6366f1;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: gap 0.2s ease;
+        }
+        .login-card:hover .card-link {
+            gap: 12px;
+        }
+        .credentials-section {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .credentials-section h2 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #0f172a;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+        .credentials-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+        .credential-item {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 16px;
+            border: 2px solid #e2e8f0;
+        }
+        .credential-role {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .credential-role-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+        .credential-role-icon.admin {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+        }
+        .credential-role-icon.advertiser {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+        .credential-role-icon.kol {
+            background: linear-gradient(135deg, #ec4899 0%, #f43f5e 100%);
+        }
+        .credential-role-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        .credential-details {
+            margin-left: 52px;
+        }
+        .credential-details p {
+            font-size: 13px;
+            color: #64748b;
+            margin: 6px 0;
+        }
+        .credential-details code {
+            background: white;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-family: 'SF Mono', Monaco, monospace;
+            color: #6366f1;
+            font-size: 12px;
+            margin-left: 6px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-logo">🛡️</div>
+            <h1>AIAds</h1>
+            <p>全球中小 KOL 广告投放平台</p>
+        </div>
+
+        <div class="login-cards">
+            <!-- 管理后台 -->
+            <a href="admin-pro.html" class="login-card">
+                <div class="card-icon admin">🛡️</div>
+                <h3 class="card-title">管理后台</h3>
+                <p class="card-description">平台管理员使用</p>
+                <span class="card-link">立即登录 →</span>
+            </a>
+
+            <!-- 广告主 -->
+            <a href="advertiser-login.html" class="login-card">
+                <div class="card-icon advertiser">🏢</div>
+                <h3 class="card-title">广告主</h3>
+                <p class="card-description">管理广告活动</p>
+                <span class="card-link">立即登录 →</span>
+            </a>
+
+            <!-- KOL -->
+            <a href="kol-login.html" class="login-card">
+                <div class="card-icon kol">🌟</div>
+                <h3 class="card-title">KOL</h3>
+                <p class="card-description">管理创作内容</p>
+                <span class="card-link">立即登录 →</span>
+            </a>
+        </div>
+
+        <div class="credentials-section">
+            <h2>🔐 测试账号</h2>
+            <div class="credentials-grid">
+                <div class="credential-item">
+                    <div class="credential-role">
+                        <div class="credential-role-icon admin">🛡️</div>
+                        <span class="credential-role-name">管理员</span>
+                    </div>
+                    <div class="credential-details">
+                        <p>用户名：<code>admin</code></p>
+                        <p>密码：<code>admin123</code></p>
+                    </div>
+                </div>
+
+                <div class="credential-item">
+                    <div class="credential-role">
+                        <div class="credential-role-icon advertiser">🏢</div>
+                        <span class="credential-role-name">广告主</span>
+                    </div>
+                    <div class="credential-details">
+                        <p>邮箱：<code>advertiser@aiads.com</code></p>
+                        <p>密码：<code>password123</code></p>
+                    </div>
+                </div>
+
+                <div class="credential-item">
+                    <div class="credential-role">
+                        <div class="credential-role-icon kol">🌟</div>
+                        <span class="credential-role-name">KOL</span>
+                    </div>
+                    <div class="credential-details">
+                        <p>用户名：<code>@fashion_guru</code></p>
+                        <p>密码：<code>password123</code></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

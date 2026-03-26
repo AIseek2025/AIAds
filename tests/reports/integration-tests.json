@@ -1,0 +1,155 @@
+{
+  "testSuite": "Integration Tests",
+  "timestamp": "2026-03-24T10:00:00.000Z",
+  "status": "PENDING",
+  "summary": {
+    "total": 89,
+    "passed": 0,
+    "failed": 0,
+    "skipped": 89
+  },
+  "endpoints": {
+    "authentication": {
+      "base": "/api/v1/auth",
+      "endpoints": [
+        { "path": "/register", "method": "POST", "status": "PENDING" },
+        { "path": "/login", "method": "POST", "status": "PENDING" },
+        { "path": "/refresh", "method": "POST", "status": "PENDING" },
+        { "path": "/me", "method": "GET", "status": "PENDING" },
+        { "path": "/logout", "method": "POST", "status": "PENDING" },
+        { "path": "/verification-code", "method": "POST", "status": "PENDING" },
+        { "path": "/verify-code", "method": "POST", "status": "PENDING" },
+        { "path": "/reset-password", "method": "POST", "status": "PENDING" }
+      ]
+    },
+    "users": {
+      "base": "/api/v1/users",
+      "endpoints": [
+        { "path": "/:id", "method": "GET", "status": "PENDING" },
+        { "path": "/:id", "method": "PUT", "status": "PENDING" },
+        { "path": "/:id/password", "method": "PUT", "status": "PENDING" },
+        { "path": "/:id/avatar", "method": "PUT", "status": "PENDING" },
+        { "path": "/:id/suspend", "method": "POST", "status": "PENDING" },
+        { "path": "/:id/ban", "method": "POST", "status": "PENDING" }
+      ]
+    },
+    "advertisers": {
+      "base": "/api/v1/advertisers",
+      "endpoints": [
+        { "path": "/", "method": "POST", "status": "PENDING" },
+        { "path": "/:id", "method": "GET", "status": "PENDING" },
+        { "path": "/:id", "method": "PUT", "status": "PENDING" },
+        { "path": "/:id/verify", "method": "POST", "status": "PENDING" },
+        { "path": "/:id/wallet", "method": "GET", "status": "PENDING" },
+        { "path": "/:id/wallet/recharge", "method": "POST", "status": "PENDING" }
+      ]
+    },
+    "campaigns": {
+      "base": "/api/v1/campaigns",
+      "endpoints": [
+        { "path": "/", "method": "POST", "status": "PENDING" },
+        { "path": "/", "method": "GET", "status": "PENDING" },
+        { "path": "/:id", "method": "GET", "status": "PENDING" },
+        { "path": "/:id", "method": "PUT", "status": "PENDING" },
+        { "path": "/:id/submit-review", "method": "POST", "status": "PENDING" }
+      ]
+    },
+    "kols": {
+      "base": "/api/v1/kols",
+      "endpoints": [
+        { "path": "/", "method": "GET", "status": "PENDING" },
+        { "path": "/:id", "method": "GET", "status": "PENDING" },
+        { "path": "/bind", "method": "POST", "status": "PENDING" },
+        { "path": "/:id/verify", "method": "POST", "status": "PENDING" },
+        { "path": "/:id/wallet/withdraw", "method": "POST", "status": "PENDING" }
+      ]
+    },
+    "orders": {
+      "base": "/api/v1/orders",
+      "endpoints": [
+        { "path": "/", "method": "POST", "status": "PENDING" },
+        { "path": "/", "method": "GET", "status": "PENDING" },
+        { "path": "/:id", "method": "GET", "status": "PENDING" },
+        { "path": "/:id/accept", "method": "PUT", "status": "PENDING" },
+        { "path": "/:id/reject", "method": "PUT", "status": "PENDING" },
+        { "path": "/:id/submit", "method": "PUT", "status": "PENDING" },
+        { "path": "/:id/complete", "method": "PUT", "status": "PENDING" },
+        { "path": "/:id/revise", "method": "PUT", "status": "PENDING" },
+        { "path": "/:id/cancel", "method": "DELETE", "status": "PENDING" },
+        { "path": "/:id/dispute", "method": "POST", "status": "PENDING" },
+        { "path": "/:id/rating", "method": "POST", "status": "PENDING" }
+      ]
+    },
+    "admin": {
+      "base": "/api/v1/admin",
+      "endpoints": [
+        { "path": "/auth/login", "method": "POST", "status": "PENDING" },
+        { "path": "/dashboard/stats", "method": "GET", "status": "PENDING" },
+        { "path": "/dashboard/activity", "method": "GET", "status": "PENDING" },
+        { "path": "/users", "method": "GET", "status": "PENDING" },
+        { "path": "/users/:id", "method": "GET", "status": "PENDING" },
+        { "path": "/users/:id/suspend", "method": "POST", "status": "PENDING" },
+        { "path": "/users/:id/ban", "method": "POST", "status": "PENDING" },
+        { "path": "/kols/pending", "method": "GET", "status": "PENDING" },
+        { "path": "/kols/:id/verify", "method": "POST", "status": "PENDING" },
+        { "path": "/kols/:id/reject", "method": "POST", "status": "PENDING" },
+        { "path": "/campaigns/pending-review", "method": "GET", "status": "PENDING" },
+        { "path": "/campaigns/:id/review", "method": "POST", "status": "PENDING" },
+        { "path": "/orders", "method": "GET", "status": "PENDING" },
+        { "path": "/orders/:id", "method": "GET", "status": "PENDING" },
+        { "path": "/finance/transactions", "method": "GET", "status": "PENDING" },
+        { "path": "/finance/withdrawals/pending", "method": "GET", "status": "PENDING" },
+        { "path": "/finance/withdrawals/:id/approve", "method": "POST", "status": "PENDING" },
+        { "path": "/finance/withdrawals/:id/reject", "method": "POST", "status": "PENDING" },
+        { "path": "/moderation/pending", "method": "GET", "status": "PENDING" },
+        { "path": "/moderation/:id/approve", "method": "POST", "status": "PENDING" },
+        { "path": "/moderation/:id/reject", "method": "POST", "status": "PENDING" },
+        { "path": "/reports", "method": "GET", "status": "PENDING" },
+        { "path": "/reports/export", "method": "POST", "status": "PENDING" },
+        { "path": "/settings", "method": "GET", "status": "PENDING" },
+        { "path": "/settings", "method": "PUT", "status": "PENDING" },
+        { "path": "/admins", "method": "GET", "status": "PENDING" },
+        { "path": "/admins", "method": "POST", "status": "PENDING" },
+        { "path": "/roles", "method": "GET", "status": "PENDING" },
+        { "path": "/roles", "method": "POST", "status": "PENDING" },
+        { "path": "/audit-logs", "method": "GET", "status": "PENDING" }
+      ]
+    },
+    "integrations": {
+      "base": "/api/v1/integrations",
+      "endpoints": [
+        { "path": "/tiktok", "method": "GET", "status": "PENDING" },
+        { "path": "/tiktok/callback", "method": "GET", "status": "PENDING" },
+        { "path": "/tiktok/sync", "method": "POST", "status": "PENDING" },
+        { "path": "/youtube", "method": "GET", "status": "PENDING" },
+        { "path": "/youtube/callback", "method": "GET", "status": "PENDING" },
+        { "path": "/youtube/sync", "method": "POST", "status": "PENDING" },
+        { "path": "/instagram", "method": "GET", "status": "PENDING" },
+        { "path": "/instagram/callback", "method": "GET", "status": "PENDING" },
+        { "path": "/instagram/sync", "method": "POST", "status": "PENDING" },
+        { "path": "/xiaohongshu", "method": "GET", "status": "PENDING" },
+        { "path": "/xiaohongshu/sync", "method": "POST", "status": "PENDING" },
+        { "path": "/weibo", "method": "GET", "status": "PENDING" },
+        { "path": "/weibo/sync", "method": "POST", "status": "PENDING" },
+        { "path": "/status", "method": "GET", "status": "PENDING" },
+        { "path": "/disconnect/:platform", "method": "POST", "status": "PENDING" },
+        { "path": "/batch-sync", "method": "POST", "status": "PENDING" },
+        { "path": "/analytics", "method": "GET", "status": "PENDING" },
+        { "path": "/webhooks", "method": "POST", "status": "PENDING" }
+      ]
+    }
+  },
+  "prerequisites": [
+    "Docker services running (PostgreSQL, Redis)",
+    "Database migrations applied",
+    "Test data seeded",
+    "Backend server running on port 3000"
+  ],
+  "commands": {
+    "startServices": "docker-compose up -d postgres redis",
+    "migrate": "cd src/backend && npx prisma migrate dev",
+    "seed": "cd src/backend && npx prisma db seed",
+    "startServer": "cd src/backend && npm run dev",
+    "runTests": "cd src/backend && npm run test:integration"
+  }
+}

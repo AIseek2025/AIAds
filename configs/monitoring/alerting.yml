@@ -1,0 +1,366 @@
+# AIAds Platform - Alerting Rules Configuration
+# Version: 1.3.0
+# Last Updated: 2026-05-06
+# Environment: Production (100% Traffic) - Stricter thresholds for production
+
+groups:
+  # ============================================
+  # Production Environment Alerts (Primary)
+  # ============================================
+  - name: production-alerts
+    interval: 30s
+    rules:
+    # High Error Rate in Production (Stricter threshold)
+    - alert: ProductionHighErrorRate
+      expr: |
+        sum(rate(http_requests_total{environment="production", status=~"5.."}[5m]))
+        /
+        sum(rate(http_requests_total{environment="production"}[5m])) > 0.01
+      for: 2m
+      labels:
+        severity: critical
+        team: platform
+        environment: production
+      annotations:
+        summary: "生产环境错误率过高"
+        description: "生产环境的 5xx 错误率超过 1% (当前值：{{ $value | humanizePercentage }})"
+        runbook_url: "https://wiki.aiads.com/runbooks/production-high-error-rate"
+        dashboard: "https://grafana.aiads.com/d/production-overview"
+
+    # High Latency in Production P95 (Stricter threshold)
+    - alert: ProductionHighLatencyP95
+      expr: |
+        histogram_quantile(0.95,
+          sum(rate(http_request_duration_seconds_bucket{environment="production"}[5m])) by (le)
+        ) > 0.15
+      for: 5m
+      labels:
+        severity: warning
+        team: platform
+        environment: production
+      annotations:
+        summary: "生产环境 P95 延迟过高"
+        description: "生产环境的 P95 延迟超过 150ms (当前值：{{ $value | humanizeDuration }})"
+        runbook_url: "https://wiki.aiads.com/runbooks/production-high-latency"
+
+    # High Latency in Production P99
+    - alert: ProductionHighLatencyP99
+      expr: |
+        histogram_quantile(0.99,
+          sum(rate(http_request_duration_seconds_bucket{environment="production"}[5m])) by (le)
+        ) > 0.3
+      for: 5m
+      labels:
+        severity: critical
+        team: platform
+        environment: production
+      annotations:
+        summary: "生产环境 P99 延迟过高"
+        description: "生产环境的 P99 延迟超过 300ms (当前值：{{ $value | humanizeDuration }})"
+
+    # Production Pod Restart Loop
+    - alert: ProductionPodRestartLoop
+      expr: |
+        increase(kube_pod_container_status_restarts_total{namespace="aiads", environment="production"}[1h]) > 3
+      for: 5m
+      labels:
+        severity: warning
+        team: platform
+        environment: production
+      annotations:
+        summary: "生产环境 Pod 频繁重启"
+        description: "生产环境的 Pod 在过去 1 小时内重启超过 3 次 (Pod: {{ $labels.pod }})"
+
+    # Production Memory Pressure
+    - alert: ProductionMemoryPressure
+      expr: |
+        container_memory_usage_bytes{namespace="aiads", environment="production"}
+        /
+        container_spec_memory_limit_bytes{namespace="aiads", environment="production"} > 0.85
+      for: 5m
+      labels:
+        severity: warning
+        team: platform
+        environment: production
+      annotations:
+        summary: "生产环境 Pod 内存使用率过高"
+        description: "生产环境 Pod 内存使用率超过 85% (Pod: {{ $labels.pod }}, 当前值：{{ $value | humanizePercentage }})"
+
+    # Production CPU Pressure
+    - alert: ProductionCPUPressure
+      expr: |
+        rate(container_cpu_usage_seconds_total{namespace="aiads", environment="production"}[5m])
+        /
+        container_spec_cpu_quota{namespace="aiads", environment="production"} * 100000 > 0.85
+      for: 5m
+      labels:
+        severity: warning
+        team: platform
+        environment: production
+      annotations:
+        summary: "生产环境 Pod CPU 使用率过高"
+        description: "生产环境 Pod CPU 使用率超过 85% (Pod: {{ $labels.pod }})"
+
+    # Production Database Connection Errors
+    - alert: ProductionDatabaseConnectionErrors
+      expr: |
+        rate(database_connection_errors_total{environment="production"}[5m]) > 0.05
+      for: 2m
+      labels:
+        severity: critical
+        team: platform
+        environment: production
+      annotations:
+        summary: "生产环境数据库连接错误"
+        description: "生产环境数据库连接错误率过高 (当前值：{{ $value }}/s)"
+
+    # Production Redis Connection Errors
+    - alert: ProductionRedisConnectionErrors
+      expr: |
+        rate(redis_connection_errors_total{environment="production"}[5m]) > 0.05
+      for: 2m
+      labels:
+        severity: warning
+        team: platform
+        environment: production
+      annotations:
+        summary: "生产环境 Redis 连接错误"
+        description: "生产环境 Redis 连接错误率过高 (当前值：{{ $value }}/s)"
+
+    # Production Low Available Replicas
+    - alert: ProductionLowReplicas
+      expr: |
+        kube_deployment_status_replicas_available{namespace="aiads", deployment="aiads-production"}
+        <
+        kube_deployment_spec_replicas{namespace="aiads", deployment="aiads-production"} * 0.9
+      for: 5m
+      labels:
+        severity: critical
+        team: platform
+        environment: production
+      annotations:
+        summary: "生产环境可用副本数不足"
+        description: "生产环境可用副本数低于期望值的 90%"
+
+  # ============================================
+  # Stable Environment Alerts (Backup/Rollback)
+  # ============================================
+  - name: stable-alerts
+    interval: 30s
+    rules:
+    # High Error Rate in Stable
+    - alert: StableHighErrorRate
+      expr: |
+        sum(rate(http_requests_total{environment="stable", status=~"5.."}[5m]))
+        /
+        sum(rate(http_requests_total{environment="stable"}[5m])) > 0.01
+      for: 5m
+      labels:
+        severity: critical
+        team: platform
+        environment: stable
+      annotations:
+        summary: "Stable 环境错误率过高"
+        description: "Stable 环境的 5xx 错误率超过 1% (当前值：{{ $value | humanizePercentage }})"
+        runbook_url: "https://wiki.aiads.com/runbooks/stable-high-error-rate"
+
+    # High Latency in Stable (P95)
+    - alert: StableHighLatencyP95
+      expr: |
+        histogram_quantile(0.95,
+          sum(rate(http_request_duration_seconds_bucket{environment="stable"}[5m])) by (le)
+        ) > 0.3
+      for: 5m
+      labels:
+        severity: warning
+        team: platform
+        environment: stable
+      annotations:
+        summary: "Stable 环境 P95 延迟过高"
+        description: "Stable 环境的 P95 延迟超过 300ms (当前值：{{ $value | humanizeDuration }})"
+
+  # ============================================
+  # Infrastructure Alerts
+  # ============================================
+  - name: infrastructure-alerts
+    interval: 30s
+    rules:
+    # Node CPU Pressure
+    - alert: NodeCPUHigh
+      expr: |
+        100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+      for: 10m
+      labels:
+        severity: warning
+        team: infrastructure
+      annotations:
+        summary: "节点 CPU 使用率过高"
+        description: "节点 {{ $labels.instance }} 的 CPU 使用率超过 80%"
+
+    # Node Memory Pressure
+    - alert: NodeMemoryHigh
+      expr: |
+        (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+      for: 10m
+      labels:
+        severity: warning
+        team: infrastructure
+      annotations:
+        summary: "节点内存使用率过高"
+        description: "节点 {{ $labels.instance }} 的内存使用率超过 85%"
+
+    # Node Disk Space Low
+    - alert: NodeDiskSpaceLow
+      expr: |
+        (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+      for: 10m
+      labels:
+        severity: warning
+        team: infrastructure
+      annotations:
+        summary: "节点磁盘空间不足"
+        description: "节点 {{ $labels.instance }} 的磁盘可用空间低于 15%"
+
+    # Node Not Ready
+    - alert: NodeNotReady
+      expr: |
+        kube_node_status_condition{condition="Ready", status="true"} == 0
+      for: 5m
+      labels:
+        severity: critical
+        team: infrastructure
+      annotations:
+        summary: "节点未就绪"
+        description: "节点 {{ $labels.node }} 未就绪"
+
+    # Kubernetes Pod Pending
+    - alert: PodPendingTooLong
+      expr: |
+        kube_pod_status_phase{phase="Pending"} == 1
+      for: 10m
+      labels:
+        severity: warning
+        team: infrastructure
+      annotations:
+        summary: "Pod 长时间处于 Pending 状态"
+        description: "Pod {{ $labels.pod }} 在命名空间 {{ $labels.namespace }} 中处于 Pending 状态超过 10 分钟"
+
+  # ============================================
+  # Database Alerts
+  # ============================================
+  - name: database-alerts
+    interval: 30s
+    rules:
+    # PostgreSQL High Connection Usage
+    - alert: PostgresHighConnections
+      expr: |
+        pg_stat_activity_count / pg_settings_max_connections > 0.8
+      for: 5m
+      labels:
+        severity: warning
+        team: database
+      annotations:
+        summary: "PostgreSQL 连接数过高"
+        description: "PostgreSQL 连接数使用率超过 80%"
+
+    # PostgreSQL Slow Queries
+    - alert: PostgresSlowQueries
+      expr: |
+        rate(pg_stat_statements_seconds_total[5m]) / rate(pg_stat_statements_calls_total[5m]) > 1
+      for: 5m
+      labels:
+        severity: warning
+        team: database
+      annotations:
+        summary: "PostgreSQL 慢查询增多"
+        description: "PostgreSQL 平均查询时间超过 1 秒"
+
+    # PostgreSQL Replication Lag
+    - alert: PostgresReplicationLag
+      expr: |
+        pg_replication_lag_seconds > 30
+      for: 5m
+      labels:
+        severity: critical
+        team: database
+      annotations:
+        summary: "PostgreSQL 复制延迟过高"
+        description: "PostgreSQL 复制延迟超过 30 秒"
+
+  # ============================================
+  # Business Metrics Alerts
+  # ============================================
+  - name: business-alerts
+    interval: 60s
+    rules:
+    # Low Conversion Rate
+    - alert: LowConversionRate
+      expr: |
+        sum(rate(conversion_events_total[1h])) / sum(rate(page_views_total[1h])) < 0.01
+      for: 30m
+      labels:
+        severity: warning
+        team: product
+      annotations:
+        summary: "转化率过低"
+        description: "当前转化率低于 1% (当前值：{{ $value | humanizePercentage }})"
+
+    # High User Complaint Rate
+    - alert: HighComplaintRate
+      expr: |
+        sum(rate(user_complaints_total[1h])) > 10
+      for: 15m
+      labels:
+        severity: critical
+        team: support
+      annotations:
+        summary: "用户投诉率过高"
+        description: "每小时用户投诉超过 10 起"
+
+  # ============================================
+  # Canary Comparison Alerts
+  # ============================================
+  - name: canary-comparison-alerts
+    interval: 60s
+    rules:
+    # Canary Error Rate vs Stable
+    - alert: CanaryErrorRateHigherThanStable
+      expr: |
+        (
+          sum(rate(http_requests_total{environment="canary", status=~"5.."}[5m])) 
+          / 
+          sum(rate(http_requests_total{environment="canary"}[5m]))
+        )
+        >
+        (
+          sum(rate(http_requests_total{environment="stable", status=~"5.."}[5m])) 
+          / 
+          sum(rate(http_requests_total{environment="stable"}[5m]))
+        ) * 2
+      for: 5m
+      labels:
+        severity: warning
+        team: platform
+        environment: canary
+      annotations:
+        summary: "Canary 错误率显著高于 Stable"
+        description: "Canary 环境的错误率是 Stable 环境的 2 倍以上"
+
+    # Canary Latency vs Stable
+    - alert: CanaryLatencyHigherThanStable
+      expr: |
+        histogram_quantile(0.95, 
+          sum(rate(http_request_duration_seconds_bucket{environment="canary"}[5m])) by (le)
+        )
+        >
+        histogram_quantile(0.95, 
+          sum(rate(http_request_duration_seconds_bucket{environment="stable"}[5m])) by (le)
+        ) * 1.5
+      for: 5m
+      labels:
+        severity: warning
+        team: platform
+        environment: canary
+      annotations:
+        summary: "Canary 延迟显著高于 Stable"
+        description: "Canary 环境的 P95 延迟是 Stable 环境的 1.5 倍以上"

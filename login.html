@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIAds - 登录</title>
+    <link rel="stylesheet" href="css/app.css?v=20260325-v16">
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="login-left">
+            <h1>AIAds Platform</h1>
+            <p class="subtitle">全球中小 KOL 广告投放平台</p>
+
+            <div id="alert-box" class="alert"></div>
+
+            <div class="user-type-selector">
+                <button class="user-type-btn active" onclick="switchUserType('advertiser', event)">
+                     广告主
+                </button>
+                <button class="user-type-btn" onclick="switchUserType('kol', event)">
+                     KOL
+                </button>
+            </div>
+            
+            <form id="login-form" onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label>邮箱</label>
+                    <input type="email" id="email" placeholder="your@email.com" required />
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" id="password" placeholder="请输入密码" required />
+                </div>
+                <button type="submit" class="btn btn-primary login-btn">登录</button>
+            </form>
+            
+            <div class="divider"><span>或</span></div>
+            
+            <div class="register-link">
+                还没有账号？<a href="#" onclick="showRegister()">立即注册</a>
+            </div>
+        </div>
+        
+        <div class="login-right">
+            <h2 id="right-title">广告主登录</h2>
+            <p id="right-desc">
+                连接全球 100,000+ 中小 KOL，以最低成本实现品牌曝光和销售增长
+            </p>
+            
+            <ul class="feature-list">
+                <!-- 由 JS 动态生成 -->
+            </ul>
+            
+            <div class="stats-row">
+                <div class="stat-item">
+                    <div class="stat-value">2,000+</div>
+                    <div class="stat-label">广告主</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">100,000+</div>
+                    <div class="stat-label">KOL</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">$22M</div>
+                    <div class="stat-label">月 GMV</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUserType = 'advertiser';
+        
+        // 用户数据（模拟数据库）
+        const users = {
+            advertiser: [
+                { email: 'advertiser@demo.com', password: '123456', name: '深圳科技有限公司', balance: 15000 }
+            ],
+            kol: [
+                { email: 'kol@demo.com', password: '123456', name: '@fashion_guru', platform: 'TikTok', followers: 25000 }
+            ]
+        };
+
+        function switchUserType(type, event) {
+            currentUserType = type;
+            document.querySelectorAll('.user-type-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
+
+            const titles = {
+                advertiser: {
+                    title: '广告主登录',
+                    desc: '连接全球 100,000+ 中小 KOL，以最低成本实现品牌曝光和销售增长',
+                    features: [
+                        'AI 智能匹配，精准找到目标 KOL',
+                        '实时数据追踪，ROI 清晰可见',
+                        '成本降低 70-90%，¥100 起投',
+                        '覆盖 TikTok/YouTube/Instagram'
+                    ]
+                },
+                kol: {
+                    title: 'KOL 登录',
+                    desc: '接广告赚钱，稳定收入来源，让创作更有价值',
+                    features: [
+                        '单条广告¥500-5,000，收入可观',
+                        '持续任务来源，收入稳定',
+                        '快速提现，T+1 到账',
+                        '自由创作，保持内容风格'
+                    ]
+                }
+            };
+            
+            document.getElementById('right-title').textContent = titles[type].title;
+            document.getElementById('right-desc').textContent = titles[type].desc;
+            
+            const featureList = document.querySelector('.feature-list');
+            featureList.innerHTML = titles[type].features
+                .map(f => `<li><span class="feature-icon">${f.split(' ')[0]}</span><span>${f.split(' ').slice(1).join(' ')}</span></li>`)
+                .join('');
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const alertBox = document.getElementById('alert-box');
+            
+            // 模拟登录验证
+            const user = users[currentUserType].find(u => u.email === email && u.password === password);
+            
+            if (user) {
+                alertBox.className = 'alert alert-success';
+                alertBox.textContent = '登录成功！正在跳转...';
+                alertBox.style.display = 'block';
+                
+                // 保存登录状态
+                localStorage.setItem('currentUser', JSON.stringify({
+                    ...user,
+                    userType: currentUserType
+                }));
+                
+                // 跳转到对应后台
+                setTimeout(() => {
+                    if (currentUserType === 'advertiser') {
+                        window.location.href = 'advertiser-dashboard.html';
+                    } else {
+                        window.location.href = 'kol-dashboard.html';
+                    }
+                }, 1000);
+            } else {
+                alertBox.className = 'alert alert-error';
+                alertBox.textContent = '邮箱或密码错误。提示：使用 advertiser@demo.com 或 kol@demo.com，密码 123456';
+                alertBox.style.display = 'block';
+            }
+        }
+
+        function showRegister() {
+            alert('注册功能演示：\n\n广告主注册请访问 advertiser-dashboard.html\nKOL 注册请访问 kol-dashboard.html\n\n演示账号：\n广告主：advertiser@demo.com / 123456\nKOL: kol@demo.com / 123456');
+        }
+
+        // 初始化显示广告主登录
+        switchUserType('advertiser');
+    </script>
+</body>
+</html>

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIAds - KOL 后台</title>
+    <link rel="stylesheet" href="public/css/app.css?v=20260325-v16">
+    <link rel="stylesheet" href="css/theme-picker.css">
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="navbar-left">
+            <h1> AIAds KOL</h1>
+            <div class="navbar-nav">
+                <a href="#" class="active" onclick="switchTab('dashboard'); return false;">仪表盘</a>
+                <a href="#" onclick="switchTab('tasks'); return false;">任务广场</a>
+                <a href="#" onclick="switchTab('my-tasks'); return false;">我的任务</a>
+                <a href="#" onclick="switchTab('earnings'); return false;">收益</a>
+            </div>
+        </div>
+        <div class="user-info">
+            <div class="balance"> 可提现：<span id="available-balance">$2,500</span></div>
+            <div id="kol-name">@fashion_guru</div>
+            <button class="logout-btn" onclick="logout()">退出</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- 仪表盘 -->
+        <div id="dashboard" class="tab-pane active">
+            <div class="alert alert-success">
+                🎉 欢迎回来！您本月已完成 <strong id="completed-tasks">3</strong> 个任务，收益 <strong id="month-earnings">$1,850</strong>
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="total-tasks">15</div>
+                    <div class="stat-label">总任务数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="active-tasks">2</div>
+                    <div class="stat-label">进行中</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="total-earnings">$8,500</div>
+                    <div class="stat-label">累计收益</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="completion-rate">95%</div>
+                    <div class="stat-label">完成率</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2> 账号数据</h2>
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--spacing-6); margin-bottom: var(--spacing-8);">
+                    <div style="text-align: center;">
+                        <div style="font-size: var(--fs-3xl); font-weight: bold; color: var(--accent);">25,000</div>
+                        <div style="color: var(--text-muted);">粉丝数</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: var(--fs-3xl); font-weight: bold; color: var(--success);">4.5%</div>
+                        <div style="color: var(--text-muted);">互动率</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: var(--fs-3xl); font-weight: bold; color: var(--warning);">15,000</div>
+                        <div style="color: var(--text-muted);">平均播放</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: var(--fs-3xl); font-weight: bold; color: var(--info);">$500</div>
+                        <div style="color: var(--text-muted);">单次报价</div>
+                    </div>
+                </div>
+                
+                <h3 style="margin-bottom: var(--spacing-4);">平台连接状态</h3>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--spacing-4);">
+                    <div style="padding: var(--spacing-5); background: rgba(34, 197, 94, 0.1); border-radius: var(--radius-lg); text-align: center;">
+                        <div style="font-size: 32px; margin-bottom: var(--spacing-2);"></div>
+                        <div style="font-weight: 600;">TikTok</div>
+                        <div style="color: var(--success); font-size: var(--fs-sm);">✅ 已连接</div>
+                    </div>
+                    <div style="padding: var(--spacing-5); background: var(--bg-surface); border-radius: var(--radius-lg); text-align: center; opacity: 0.5;">
+                        <div style="font-size: 32px; margin-bottom: var(--spacing-2);"></div>
+                        <div style="font-weight: 600;">YouTube</div>
+                        <div style="color: var(--text-muted); font-size: var(--fs-sm);">未连接</div>
+                    </div>
+                    <div style="padding: var(--spacing-5); background: var(--bg-surface); border-radius: var(--radius-lg); text-align: center; opacity: 0.5;">
+                        <div style="font-size: 32px; margin-bottom: var(--spacing-2);"></div>
+                        <div style="font-weight: 600;">Instagram</div>
+                        <div style="color: var(--text-muted); font-size: var(--fs-sm);">未连接</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>🔔 最新通知</h2>
+                <div style="display: flex; flex-direction: column; gap: var(--spacing-4);">
+                    <div class="alert alert-info">
+                        💡 您有 2 个新任务匹配，快去任务广场看看吧！
+                    </div>
+                    <div class="alert alert-success">
+                        ✅ 您的"夏季促销"任务已完成审核，收益$500 已到账
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 任务广场 -->
+        <div id="tasks" class="tab-pane">
+            <div class="section">
+                <h2> 任务广场</h2>
+                <div class="alert alert-info">
+                    💡 根据您的账号特征，为您智能推荐以下任务
+                </div>
+                
+                <div class="task-grid" id="task-grid">
+                    <!-- 任务卡片由 JS 生成 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 我的任务 -->
+        <div id="my-tasks" class="tab-pane">
+            <div class="section">
+                <h2> 我的任务</h2>
+                <div class="filters">
+                    <select class="filter-select">
+                        <option value="">所有状态</option>
+                        <option value="pending">待开始</option>
+                        <option value="active">进行中</option>
+                        <option value="review">审核中</option>
+                        <option value="completed">已完成</option>
+                    </select>
+                </div>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>任务名称</th>
+                            <th>广告主</th>
+                            <th>报酬</th>
+                            <th>截止日期</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="my-tasks-table">
+                        <!-- 任务数据由 JS 生成 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 收益 -->
+        <div id="earnings" class="tab-pane">
+            <div class="section">
+                <h2> 收益管理</h2>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number" id="available-balance-large">$2,500</div>
+                        <div class="stat-label">可提现余额</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="pending-balance">$800</div>
+                        <div class="stat-label">审核中</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="month-income">$1,850</div>
+                        <div class="stat-label">本月收入</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="total-income">$8,500</div>
+                        <div class="stat-label">累计收入</div>
+                    </div>
+                </div>
+
+                <div style="background: linear-gradient(135deg, var(--accent) 0%, var(--text-secondary) 100%); padding: var(--spacing-8); border-radius: var(--radius-2xl); color: var(--accent-fg); margin-bottom: var(--spacing-8);">
+                    <h3 style="margin-bottom: var(--spacing-4);">💸 提现</h3>
+                    <p style="margin-bottom: var(--spacing-5); opacity: 0.9;">可提现金额：$2,500 | 最低提现：$100 | T+1 到账</p>
+                    <div class="form-group" style="max-width: 400px;">
+                        <label style="color: var(--accent-fg);">提现金额</label>
+                        <input type="number" id="withdraw-amount" placeholder="输入金额" min="100" max="2500" style="border: none;" />
+                    </div>
+                    <div style="background: rgba(9, 9, 11, 0.2); border-radius: var(--radius-full); height: 10px; overflow: hidden; margin: var(--spacing-4) 0;">
+                        <div style="background: var(--accent-fg); width: 50%; height: 100%; border-radius: var(--radius-full);"></div>
+                    </div>
+                    <p style="font-size: var(--fs-sm); margin-top: var(--spacing-2); opacity: 0.8;">本周已提现 $2,500 / 周限额 $5,000</p>
+                    <button class="btn btn-secondary" style="margin-top: var(--spacing-5);" onclick="withdraw()">申请提现</button>
+                </div>
+
+                <h3 style="margin-bottom: var(--spacing-4);">提现记录</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>申请时间</th>
+                            <th>金额</th>
+                            <th>手续费</th>
+                            <th>实收</th>
+                            <th>状态</th>
+                            <th>到账时间</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>2026-05-08</td>
+                            <td>$1,500</td>
+                            <td>$30</td>
+                            <td>$1,470</td>
+                            <td><span class="status-badge status-completed">已到账</span></td>
+                            <td>2026-05-09</td>
+                        </tr>
+                        <tr>
+                            <td>2026-05-05</td>
+                            <td>$1,000</td>
+                            <td>$20</td>
+                            <td>$980</td>
+                            <td><span class="status-badge status-completed">已到账</span></td>
+                            <td>2026-05-06</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 任务详情模态框 -->
+    <div id="task-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>任务详情</h2>
+                <button class="modal-close" onclick="closeModal('task-modal')">&times;</button>
+            </div>
+            <div class="modal-body" id="task-modal-body">
+                <!-- 任务详情内容 -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('task-modal')">取消</button>
+                <button class="btn btn-primary" onclick="applyTask()">申请任务</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 申请成功模态框 -->
+    <div id="success-modal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>✅ 申请成功</h2>
+                <button class="modal-close" onclick="closeModal('success-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>您已成功申请此任务！</p>
+                <ol style="margin: var(--spacing-5) 0; padding-left: var(--spacing-6); line-height: 2;">
+                    <li>等待广告主确认（通常 1-2 个工作日）</li>
+                    <li>确认后接收详细 brief 和素材</li>
+                    <li>按要求创作并发布内容</li>
+                    <li>提交审核，等待收益到账</li>
+                </ol>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('success-modal')">知道了</button>
+                <button class="btn btn-primary" onclick="switchTab('my-tasks'); closeModal('success-modal')">查看我的任务</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/kol-dashboard.js"></script>
+    <!-- 主题切换 -->
+    <script src="js/theme-manager.js"></script>
+</body>
+</html>

@@ -1,0 +1,1002 @@
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { adminCampaignAPI } from '../../services/adminApi';
+import type { CampaignListItem, CampaignDetail, CampaignListParams, CampaignStats } from '../../types';
+
+// MUI Components
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import CardHeader from '@mui/material/CardHeader';
+import Table from '@mui/material/Table';
+import TableBody from '@mui/material/TableBody';
+import TableCell from '@mui/material/TableCell';
+import TableContainer from '@mui/material/TableContainer';
+import TableHead from '@mui/material/TableHead';
+import TablePagination from '@mui/material/TablePagination';
+import TableRow from '@mui/material/TableRow';
+import TextField from '@mui/material/TextField';
+import InputAdornment from '@mui/material/InputAdornment';
+import IconButton from '@mui/material/IconButton';
+import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
+import Select, { SelectChangeEvent } from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
+import FormControl from '@mui/material/FormControl';
+import InputLabel from '@mui/material/InputLabel';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Avatar from '@mui/material/Avatar';
+import Tooltip from '@mui/material/Tooltip';
+import CircularProgress from '@mui/material/CircularProgress';
+import Alert from '@mui/material/Alert';
+import Snackbar from '@mui/material/Snackbar';
+import Stack from '@mui/material/Stack';
+import Paper from '@mui/material/Paper';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
+import Grid from '@mui/material/Grid';
+import Divider from '@mui/material/Divider';
+import LinearProgress from '@mui/material/LinearProgress';
+import TableSortLabel from '@mui/material/TableSortLabel';
+import Badge from '@mui/material/Badge';
+import IconButton as MuiIconButton from '@mui/material/IconButton';
+
+// Icons
+import SearchIcon from '@mui/icons-material/Search';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import DownloadIcon from '@mui/icons-material/Download';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import TrendingDownIcon from '@mui/icons-material/TrendingDown';
+import PeopleIcon from '@mui/icons-material/People';
+import RemoveRedEyeIcon from '@mui/icons-material/RemoveRedEye';
+import TouchAppIcon from '@mui/icons-material/TouchApp';
+import ShareIcon from '@mui/icons-material/Share';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import PauseIcon from '@mui/icons-material/Pause';
+import StopIcon from '@mui/icons-material/Stop';
+import WarningIcon from '@mui/icons-material/Warning';
+
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+const TabPanel: React.FC<TabPanelProps> = ({ children, value, index, ...other }) => {
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`campaign-tabpanel-${index}`}
+      {...other}
+    >
+      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
+    </div>
+  );
+};
+
+const CampaignsPage: React.FC = () => {
+  const queryClient = useQueryClient();
+
+  // State
+  const [tabValue, setTabValue] = useState(0);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+  const [keyword, setKeyword] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [industryFilter, setIndustryFilter] = useState<string>('');
+  const [budgetFilter, setBudgetFilter] = useState<string>('');
+  const [selectedCampaign, setSelectedCampaign] = useState<CampaignListItem | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [reviewAction, setReviewAction] = useState<'approve' | 'reject'>('approve');
+  const [reviewReason, setReviewReason] = useState('');
+  const [reviewNote, setReviewNote] = useState('');
+  const [newStatus, setNewStatus] = useState<string>('');
+  const [statusReason, setStatusReason] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [sortField, setSortField] = useState<string>('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
+
+  // Build query params
+  const queryParams: CampaignListParams = {
+    page: page + 1,
+    page_size: pageSize,
+    sort: sortField,
+    order: sortOrder,
+  };
+
+  if (keyword) queryParams.keyword = keyword;
+  if (statusFilter) queryParams.status = statusFilter as any;
+  if (industryFilter) queryParams.industry = industryFilter;
+  if (budgetFilter) {
+    if (budgetFilter === 'low') {
+      queryParams.max_budget = 5000;
+    } else if (budgetFilter === 'medium') {
+      queryParams.min_budget = 5000;
+      queryParams.max_budget = 20000;
+    } else if (budgetFilter === 'high') {
+      queryParams.min_budget = 20000;
+    }
+  }
+
+  // Fetch campaigns
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['adminCampaigns', queryParams],
+    queryFn: () => adminCampaignAPI.getCampaigns(queryParams),
+  });
+
+  // Fetch campaign detail
+  const { data: campaignDetail } = useQuery({
+    queryKey: ['adminCampaignDetail', selectedCampaign?.id],
+    queryFn: () => selectedCampaign?.id ? adminCampaignAPI.getCampaign(selectedCampaign.id) : null,
+    enabled: detailDialogOpen && !!selectedCampaign?.id,
+  });
+
+  // Fetch campaign stats
+  const { data: campaignStats } = useQuery({
+    queryKey: ['adminCampaignStats', selectedCampaign?.id],
+    queryFn: () => selectedCampaign?.id ? adminCampaignAPI.getCampaignStats(selectedCampaign.id) : null,
+    enabled: detailDialogOpen && !!selectedCampaign?.id,
+  });
+
+  // Verify campaign mutation
+  const verifyCampaignMutation = useMutation({
+    mutationFn: (data: { id: string; action: 'approve' | 'reject'; note?: string; rejection_reason?: string }) =>
+      adminCampaignAPI.verifyCampaign(data.id, { action: data.action, note: data.note, rejection_reason: data.rejection_reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminCampaigns'] });
+      setSnackbar({ open: true, message: reviewAction === 'approve' ? '活动审核通过' : '活动审核拒绝', severity: 'success' });
+      setReviewDialogOpen(false);
+      setReviewReason('');
+      setReviewNote('');
+      setSelectedCampaign(null);
+    },
+    onError: (err: any) => {
+      setSnackbar({ open: true, message: err.response?.data?.error?.message || '操作失败', severity: 'error' });
+    },
+  });
+
+  // Update campaign status mutation
+  const updateCampaignStatusMutation = useMutation({
+    mutationFn: (data: { id: string; status: string; reason?: string }) =>
+      adminCampaignAPI.updateCampaignStatus(data.id, { status: data.status, reason: data.reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminCampaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['adminCampaignDetail'] });
+      setSnackbar({ open: true, message: '活动状态已更新', severity: 'success' });
+      setStatusDialogOpen(false);
+      setNewStatus('');
+      setStatusReason('');
+      setSelectedCampaign(null);
+    },
+    onError: (err: any) => {
+      setSnackbar({ open: true, message: err.response?.data?.error?.message || '操作失败', severity: 'error' });
+    },
+  });
+
+  // Handlers
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+    setPage(0);
+  };
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setKeyword(e.target.value);
+    setPage(0);
+  };
+
+  const handleStatusFilterChange = (e: SelectChangeEvent<string>) => {
+    setStatusFilter(e.target.value);
+    setPage(0);
+  };
+
+  const handleIndustryFilterChange = (e: SelectChangeEvent<string>) => {
+    setIndustryFilter(e.target.value);
+    setPage(0);
+  };
+
+  const handleBudgetFilterChange = (e: SelectChangeEvent<string>) => {
+    setBudgetFilter(e.target.value);
+    setPage(0);
+  };
+
+  const handlePageChange = (event: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handlePageSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPageSize(parseInt(e.target.value, 10));
+    setPage(0);
+  };
+
+  const handleViewDetail = (campaign: CampaignListItem) => {
+    setSelectedCampaign(campaign);
+    setDetailDialogOpen(true);
+  };
+
+  const handleApproveClick = (campaign: CampaignListItem) => {
+    setSelectedCampaign(campaign);
+    setReviewAction('approve');
+    setReviewDialogOpen(true);
+  };
+
+  const handleRejectClick = (campaign: CampaignListItem) => {
+    setSelectedCampaign(campaign);
+    setReviewAction('reject');
+    setReviewDialogOpen(true);
+  };
+
+  const handleStatusClick = (campaign: CampaignListItem) => {
+    setSelectedCampaign(campaign);
+    setStatusDialogOpen(true);
+  };
+
+  const handleReviewSubmit = () => {
+    if (!selectedCampaign) return;
+    if (reviewAction === 'reject' && !reviewReason) {
+      setSnackbar({ open: true, message: '请填写拒绝原因', severity: 'error' });
+      return;
+    }
+    verifyCampaignMutation.mutate({
+      id: selectedCampaign.id,
+      action: reviewAction,
+      note: reviewNote,
+      rejection_reason: reviewAction === 'reject' ? reviewReason : undefined,
+    });
+  };
+
+  const handleStatusSubmit = () => {
+    if (!selectedCampaign || !newStatus) {
+      setSnackbar({ open: true, message: '请选择新状态', severity: 'error' });
+      return;
+    }
+    updateCampaignStatusMutation.mutate({
+      id: selectedCampaign.id,
+      status: newStatus,
+      reason: statusReason,
+    });
+  };
+
+  const handleCloseDetail = () => {
+    setDetailDialogOpen(false);
+    setSelectedCampaign(null);
+  };
+
+  const handleCloseReviewDialog = () => {
+    setReviewDialogOpen(false);
+    setReviewReason('');
+    setReviewNote('');
+    setSelectedCampaign(null);
+  };
+
+  const handleCloseStatusDialog = () => {
+    setStatusDialogOpen(false);
+    setNewStatus('');
+    setStatusReason('');
+    setSelectedCampaign(null);
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.checked && data?.items) {
+      setSelectedIds(data.items.map(item => item.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleSelectRow = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(sid => sid !== id) : [...prev, id]);
+  };
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('desc');
+    }
+  };
+
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    return `¥${amount.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  // Format number
+  const formatNumber = (num: number) => {
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+    return num.toString();
+  };
+
+  // Status badge
+  const StatusBadge = ({ status }: { status: string }) => {
+    const config: Record<string, { color: 'success' | 'warning' | 'error' | 'info' | 'default'; label: string }> = {
+      draft: { color: 'default', label: '草稿' },
+      pending_review: { color: 'warning', label: '待审核' },
+      approved: { color: 'success', label: '已审核' },
+      rejected: { color: 'error', label: '已拒绝' },
+      active: { color: 'success', label: '进行中' },
+      paused: { color: 'warning', label: '已暂停' },
+      completed: { color: 'success', label: '已完成' },
+      cancelled: { color: 'error', label: '已取消' },
+    };
+    const conf = config[status] || { color: 'default', label: status };
+    return <Chip label={conf.label} color={conf.color} size="small" sx={{ fontWeight: 500 }} />;
+  };
+
+  // Performance score badge
+  const PerformanceBadge = ({ score }: { score: string }) => {
+    const config: Record<string, { color: 'success' | 'info' | 'warning' | 'error'; label: string }> = {
+      excellent: { color: 'success', label: '优' },
+      good: { color: 'success', label: '良' },
+      average: { color: 'warning', label: '中' },
+      poor: { color: 'error', label: '差' },
+    };
+    const conf = config[score] || { color: 'default', label: score };
+    return <Chip label={conf.label} color={conf.color} size="small" variant="outlined" />;
+  };
+
+  // Industry options
+  const industryOptions = ['互联网科技', '文化传媒', '电商贸易', '教育培训', '游戏娱乐', '其他'];
+
+  return (
+    <Box>
+      {/* Page Header */}
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box>
+          <Typography variant="h4" fontWeight="bold" gutterBottom>
+            活动管理
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            管理活动全生命周期，包括审核、状态监控和效果分析
+          </Typography>
+        </Box>
+        <Stack direction="row" spacing={2}>
+          <Button variant="outlined" startIcon={<DownloadIcon />} disabled={!data?.items?.length}>
+            导出
+          </Button>
+          {selectedIds.length > 0 && (
+            <Button
+              variant="contained"
+              color="success"
+              onClick={() => selectedIds.forEach(id => {
+                const camp = data?.items.find(i => i.id === id);
+                if (camp && camp.status === 'pending_review') handleApproveClick(camp);
+              })}
+            >
+              批量审核通过 ({selectedIds.length})
+            </Button>
+          )}
+        </Stack>
+      </Box>
+
+      {/* Tabs */}
+      <Paper sx={{ mb: 3 }}>
+        <Tabs value={tabValue} onChange={handleTabChange} variant="scrollable" scrollButtons="auto">
+          <Tab label={`全部活动 (${data?.pagination.total || 0})`} />
+          <Tab label="待审核" />
+          <Tab label="进行中" />
+          <Tab label="异常监控" />
+        </Tabs>
+      </Paper>
+
+      {/* Tab Panel 0 - All Campaigns */}
+      <TabPanel value={tabValue} index={0}>
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', gap: 2 }}>
+              <TextField
+                placeholder="搜索活动名称/广告主..."
+                value={keyword}
+                onChange={handleSearch}
+                size="small"
+                sx={{ minWidth: 240 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <InputLabel>状态</InputLabel>
+                <Select
+                  value={statusFilter}
+                  label="状态"
+                  onChange={handleStatusFilterChange}
+                >
+                  <MenuItem value="">全部</MenuItem>
+                  <MenuItem value="draft">草稿</MenuItem>
+                  <MenuItem value="pending_review">待审核</MenuItem>
+                  <MenuItem value="active">进行中</MenuItem>
+                  <MenuItem value="paused">已暂停</MenuItem>
+                  <MenuItem value="completed">已完成</MenuItem>
+                  <MenuItem value="cancelled">已取消</MenuItem>
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <InputLabel>行业</InputLabel>
+                <Select
+                  value={industryFilter}
+                  label="行业"
+                  onChange={handleIndustryFilterChange}
+                >
+                  <MenuItem value="">全部</MenuItem>
+                  {industryOptions.map(ind => (
+                    <MenuItem key={ind} value={ind}>{ind}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <InputLabel>预算</InputLabel>
+                <Select
+                  value={budgetFilter}
+                  label="预算"
+                  onChange={handleBudgetFilterChange}
+                >
+                  <MenuItem value="">全部</MenuItem>
+                  <MenuItem value="low">低预算 (&lt;5K)</MenuItem>
+                  <MenuItem value="medium">中预算 (5K-20K)</MenuItem>
+                  <MenuItem value="high">高预算 (&gt;20K)</MenuItem>
+                </Select>
+              </FormControl>
+              <IconButton onClick={() => queryClient.invalidateQueries({ queryKey: ['adminCampaigns'] })}>
+                <RefreshIcon />
+              </IconButton>
+            </Stack>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell padding="checkbox" sx={{ width: 50 }}>
+                    <Checkbox
+                      checked={selectedIds.length === (data?.items?.length || 0) && data?.items?.length! > 0}
+                      onChange={handleSelectAll}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <TableSortLabel active={sortField === 'title'} direction={sortOrder} onClick={() => handleSort('title')}>
+                      活动名称
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>广告主</TableCell>
+                  <TableCell>
+                    <TableSortLabel active={sortField === 'budget'} direction={sortOrder} onClick={() => handleSort('budget')}>
+                      预算
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>状态</TableCell>
+                  <TableCell>
+                    <TableSortLabel active={sortField === 'total_orders'} direction={sortOrder} onClick={() => handleSort('total_orders')}>
+                      订单数
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>效果</TableCell>
+                  <TableCell>
+                    <TableSortLabel active={sortField === 'start_date'} direction={sortOrder} onClick={() => handleSort('start_date')}>
+                      开始日期
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell align="right">操作</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {isLoading ? (
+                  Array.from({ length: 5 }).map((_, index) => (
+                    <TableRow key={index}>
+                      <TableCell><CircularProgress size={20} /></TableCell>
+                      <TableCell><CircularProgress size={20} /></TableCell>
+                      <TableCell><CircularProgress size={20} /></TableCell>
+                      <TableCell><CircularProgress size={20} /></TableCell>
+                      <TableCell><CircularProgress size={20} /></TableCell>
+                      <TableCell><CircularProgress size={20} /></TableCell>
+                      <TableCell><CircularProgress size={20} /></TableCell>
+                      <TableCell><CircularProgress size={20} /></TableCell>
+                      <TableCell><CircularProgress size={20} /></TableCell>
+                    </TableRow>
+                  ))
+                ) : error ? (
+                  <TableRow>
+                    <TableCell colSpan={9} align="center">
+                      <Alert severity="error">加载失败：{(error as Error).message}</Alert>
+                    </TableCell>
+                  </TableRow>
+                ) : data?.items.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} align="center">
+                      <Typography color="text.secondary" py={4}>暂无数据</Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  data?.items.map((campaign) => (
+                    <TableRow key={campaign.id} hover selected={selectedIds.includes(campaign.id)}>
+                      <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.includes(campaign.id)}
+                          onChange={() => handleSelectRow(campaign.id)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Box>
+                          <Typography variant="body2" fontWeight="500">
+                            {campaign.title}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 200 }}>
+                            {campaign.description}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">{campaign.advertiserName}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight="bold">
+                          {formatCurrency(campaign.budget)}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          已消耗：{formatCurrency(campaign.spentAmount)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={campaign.status} />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {campaign.completedOrders} / {campaign.totalOrders}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        {campaign.status !== 'draft' && campaign.status !== 'pending_review' && campaign.status !== 'rejected' && campaign.status !== 'cancelled' ? (
+                          <PerformanceBadge score={campaign.performanceScore} />
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">-</Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {new Date(campaign.startDate).toLocaleDateString('zh-CN')}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Tooltip title="查看详情">
+                          <IconButton size="small" onClick={() => handleViewDetail(campaign)}>
+                            <VisibilityIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        {campaign.status === 'pending_review' && (
+                          <>
+                            <Tooltip title="通过审核">
+                              <IconButton size="small" color="success" onClick={() => handleApproveClick(campaign)}>
+                                <CheckCircleIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="拒绝审核">
+                              <IconButton size="small" color="error" onClick={() => handleRejectClick(campaign)}>
+                                <CancelIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </>
+                        )}
+                        {campaign.status === 'active' && (
+                          <Tooltip title="管理状态">
+                            <IconButton size="small" color="primary" onClick={() => handleStatusClick(campaign)}>
+                              <PlayArrowIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <TablePagination
+            component="div"
+            count={data?.pagination.total || 0}
+            page={page}
+            onPageChange={handlePageChange}
+            rowsPerPage={pageSize}
+            onRowsPerPageChange={handlePageSizeChange}
+            rowsPerPageOptions={[10, 20, 50, 100]}
+          />
+        </Card>
+      </TabPanel>
+
+      {/* Tab Panel 1 - Pending Reviews */}
+      <TabPanel value={tabValue} index={1}>
+        <Alert severity="info" sx={{ mb: 3 }}>
+          待审核活动将显示在这里，请及时处理审核申请
+        </Alert>
+      </TabPanel>
+
+      {/* Tab Panel 2 - Active Campaigns */}
+      <TabPanel value={tabValue} index={2}>
+        <Alert severity="success" sx={{ mb: 3 }}>
+          进行中的活动，实时监控效果和状态
+        </Alert>
+      </TabPanel>
+
+      {/* Tab Panel 3 - Abnormal Monitoring */}
+      <TabPanel value={tabValue} index={3}>
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          异常活动监控，AI 自动检测数据造假等异常行为
+        </Alert>
+      </TabPanel>
+
+      {/* Campaign Detail Dialog */}
+      <Dialog open={detailDialogOpen} onClose={handleCloseDetail} maxWidth="lg" fullWidth>
+        {campaignDetail && (
+          <>
+            <DialogTitle>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="h6" fontWeight="bold">
+                  {campaignDetail.title}
+                </Typography>
+                <StatusBadge status={campaignDetail.status} />
+              </Box>
+            </DialogTitle>
+            <DialogContent dividers>
+              <Grid container spacing={3}>
+                {/* Basic Info */}
+                <Grid size={12}>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                        基本信息
+                      </Typography>
+                      <Divider sx={{ mb: 2 }} />
+                      <Grid container spacing={2}>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                          <Stack spacing={2}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Typography variant="body2" color="text.secondary">活动名称</Typography>
+                              <Typography variant="body2">{campaignDetail.title}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Typography variant="body2" color="text.secondary">广告主</Typography>
+                              <Typography variant="body2">{campaignDetail.advertiserName}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Typography variant="body2" color="text.secondary">活动目标</Typography>
+                              <Typography variant="body2">{campaignDetail.objective}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Typography variant="body2" color="text.secondary">状态</Typography>
+                              <StatusBadge status={campaignDetail.status} />
+                            </Box>
+                          </Stack>
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                          <Stack spacing={2}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Typography variant="body2" color="text.secondary">开始日期</Typography>
+                              <Typography variant="body2">{campaignDetail.startDate}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Typography variant="body2" color="text.secondary">结束日期</Typography>
+                              <Typography variant="body2">{campaignDetail.endDate}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Typography variant="body2" color="text.secondary">计价方式</Typography>
+                              <Typography variant="body2">{campaignDetail.pricingModel.toUpperCase()}</Typography>
+                            </Box>
+                          </Stack>
+                        </Grid>
+                      </Grid>
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* Budget */}
+                <Grid size={12}>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                        预算和执行
+                      </Typography>
+                      <Divider sx={{ mb: 2 }} />
+                      <Grid container spacing={2}>
+                        <Grid size={{ xs: 12, sm: 4 }}>
+                          <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'info.lighter', borderRadius: 2 }}>
+                            <Typography variant="body2" color="text.secondary">总预算</Typography>
+                            <Typography variant="h5" fontWeight="bold" color="info.main">
+                              {formatCurrency(campaignDetail.budget)}
+                            </Typography>
+                          </Box>
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 4 }}>
+                          <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'warning.lighter', borderRadius: 2 }}>
+                            <Typography variant="body2" color="text.secondary">已消耗</Typography>
+                            <Typography variant="h5" fontWeight="bold" color="warning.main">
+                              {formatCurrency(campaignDetail.spentAmount)}
+                            </Typography>
+                            <LinearProgress
+                              variant="determinate"
+                              value={(campaignDetail.spentAmount / campaignDetail.budget) * 100}
+                              sx={{ mt: 1, borderRadius: 1 }}
+                            />
+                          </Box>
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 4 }}>
+                          <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'success.lighter', borderRadius: 2 }}>
+                            <Typography variant="body2" color="text.secondary">剩余预算</Typography>
+                            <Typography variant="h5" fontWeight="bold" color="success.main">
+                              {formatCurrency(campaignDetail.budget - campaignDetail.spentAmount)}
+                            </Typography>
+                          </Box>
+                        </Grid>
+                      </Grid>
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* Statistics */}
+                {campaignStats && (
+                  <>
+                    <Grid size={12}>
+                      <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                        效果数据
+                      </Typography>
+                      <Grid container spacing={2}>
+                        <Grid size={{ xs: 6, sm: 3 }}>
+                          <Card variant="outlined">
+                            <CardContent sx={{ textAlign: 'center' }}>
+                              <Typography variant="h4" fontWeight="bold">
+                                {formatNumber(campaignStats.overview.totalImpressions)}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">总曝光</Typography>
+                              <Typography variant="caption" color="success.main">
+                                <TrendingUpIcon fontSize="small" /> +15.2%
+                              </Typography>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                        <Grid size={{ xs: 6, sm: 3 }}>
+                          <Card variant="outlined">
+                            <CardContent sx={{ textAlign: 'center' }}>
+                              <Typography variant="h4" fontWeight="bold">
+                                {formatNumber(campaignStats.overview.totalClicks)}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">总点击</Typography>
+                              <Typography variant="caption" color="success.main">
+                                <TrendingUpIcon fontSize="small" /> +12.8%
+                              </Typography>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                        <Grid size={{ xs: 6, sm: 3 }}>
+                          <Card variant="outlined">
+                            <CardContent sx={{ textAlign: 'center' }}>
+                              <Typography variant="h4" fontWeight="bold">
+                                {formatNumber(campaignStats.overview.totalEngagements)}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">总互动</Typography>
+                              <Typography variant="caption" color="success.main">
+                                <TrendingUpIcon fontSize="small" /> +18.5%
+                              </Typography>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                        <Grid size={{ xs: 6, sm: 3 }}>
+                          <Card variant="outlined">
+                            <CardContent sx={{ textAlign: 'center' }}>
+                              <Typography variant="h4" fontWeight="bold">
+                                {(campaignStats.overview.conversionRate * 100).toFixed(2)}%
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">转化率</Typography>
+                              <Typography variant="caption" color="success.main">
+                                <TrendingUpIcon fontSize="small" /> +1.2%
+                              </Typography>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      </Grid>
+                    </Grid>
+
+                    {/* KOL Performance */}
+                    {campaignStats.kolPerformance && campaignStats.kolPerformance.length > 0 && (
+                      <Grid size={12}>
+                        <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                          KOL 表现
+                        </Typography>
+                        <TableContainer>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>KOL</TableCell>
+                                <TableCell align="right">曝光</TableCell>
+                                <TableCell align="right">点击</TableCell>
+                                <TableCell align="right">互动</TableCell>
+                                <TableCell align="right">转化</TableCell>
+                                <TableCell align="right">得分</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {campaignStats.kolPerformance.slice(0, 5).map((kol) => (
+                                <TableRow key={kol.kolId}>
+                                  <TableCell>
+                                    <Typography variant="body2">{kol.kolName}</Typography>
+                                  </TableCell>
+                                  <TableCell align="right">{formatNumber(kol.impressions)}</TableCell>
+                                  <TableCell align="right">{formatNumber(kol.clicks)}</TableCell>
+                                  <TableCell align="right">{formatNumber(kol.engagements)}</TableCell>
+                                  <TableCell align="right">{formatNumber(kol.conversions)}</TableCell>
+                                  <TableCell align="right">
+                                    <Chip
+                                      label={kol.performanceScore}
+                                      size="small"
+                                      color={kol.performanceScore >= 90 ? 'success' : kol.performanceScore >= 70 ? 'info' : 'warning'}
+                                    />
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </Grid>
+                    )}
+                  </>
+                )}
+              </Grid>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleCloseDetail}>关闭</Button>
+              {campaignDetail.status === 'pending_review' && (
+                <>
+                  <Button color="error" onClick={() => { setReviewAction('reject'); setReviewDialogOpen(true); }}>
+                    拒绝
+                  </Button>
+                  <Button color="success" onClick={() => { setReviewAction('approve'); setReviewDialogOpen(true); }}>
+                    通过
+                  </Button>
+                </>
+              )}
+              {campaignDetail.status === 'active' && (
+                <Button onClick={() => setStatusDialogOpen(true)}>管理状态</Button>
+              )}
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
+
+      {/* Review Dialog */}
+      <Dialog open={reviewDialogOpen} onClose={handleCloseReviewDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>{reviewAction === 'approve' ? '审核通过' : '审核拒绝'}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <Stack spacing={3}>
+              {selectedCampaign && (
+                <Alert severity={reviewAction === 'approve' ? 'success' : 'warning'}>
+                  正在审核：{selectedCampaign.title}
+                </Alert>
+              )}
+              {reviewAction === 'reject' && (
+                <FormControl fullWidth>
+                  <InputLabel>拒绝原因</InputLabel>
+                  <Select
+                    value={reviewReason}
+                    label="拒绝原因"
+                    onChange={(e) => setReviewReason(e.target.value)}
+                  >
+                    <MenuItem value="预算过低">预算过低</MenuItem>
+                    <MenuItem value="目标不明确">目标不明确</MenuItem>
+                    <MenuItem value="内容违规">内容违规</MenuItem>
+                    <MenuItem value="资质不符">资质不符</MenuItem>
+                    <MenuItem value="其他">其他</MenuItem>
+                  </Select>
+                </FormControl>
+              )}
+              <TextField
+                fullWidth
+                label="审核备注"
+                multiline
+                rows={3}
+                value={reviewNote}
+                onChange={(e) => setReviewNote(e.target.value)}
+                placeholder="填写审核备注信息（选填）"
+              />
+            </Stack>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseReviewDialog}>取消</Button>
+          <Button
+            variant={reviewAction === 'approve' ? 'contained' : 'outlined'}
+            color={reviewAction === 'approve' ? 'success' : 'error'}
+            onClick={handleReviewSubmit}
+            disabled={verifyCampaignMutation.isPending}
+          >
+            {verifyCampaignMutation.isPending ? <CircularProgress size={24} /> : (reviewAction === 'approve' ? '通过审核' : '拒绝审核')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Status Dialog */}
+      <Dialog open={statusDialogOpen} onClose={handleCloseStatusDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>管理活动状态</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <Stack spacing={3}>
+              {selectedCampaign && (
+                <Alert severity="info">
+                  活动：{selectedCampaign.title}<br />
+                  当前状态：<StatusBadge status={selectedCampaign.status} />
+                </Alert>
+              )}
+              <FormControl fullWidth>
+                <InputLabel>新状态</InputLabel>
+                <Select
+                  value={newStatus}
+                  label="新状态"
+                  onChange={(e) => setNewStatus(e.target.value)}
+                >
+                  <MenuItem value="active">进行中</MenuItem>
+                  <MenuItem value="paused">已暂停</MenuItem>
+                  <MenuItem value="completed">已完成</MenuItem>
+                  <MenuItem value="cancelled">已取消</MenuItem>
+                </Select>
+              </FormControl>
+              <TextField
+                fullWidth
+                label="状态变更原因"
+                multiline
+                rows={3}
+                value={statusReason}
+                onChange={(e) => setStatusReason(e.target.value)}
+                placeholder="说明状态变更原因（选填）"
+              />
+            </Stack>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseStatusDialog}>取消</Button>
+          <Button
+            variant="contained"
+            onClick={handleStatusSubmit}
+            disabled={updateCampaignStatusMutation.isPending || !newStatus}
+          >
+            {updateCampaignStatusMutation.isPending ? <CircularProgress size={24} /> : '确认变更'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
+};
+
+export default CampaignsPage;

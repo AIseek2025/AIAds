@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIAds - 广告主登录</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .login-container {
+            width: 100%;
+            max-width: 440px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 48px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .login-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .login-logo {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 24px;
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+        }
+        .login-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 8px;
+        }
+        .login-subtitle {
+            font-size: 14px;
+            color: #64748b;
+        }
+        .form-group {
+            margin-bottom: 24px;
+        }
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        .form-input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 16px;
+            color: #1e293b;
+            background: #ffffff;
+            transition: all 0.2s ease;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+        }
+        .form-input::placeholder {
+            color: #94a3b8;
+        }
+        .btn-login {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+        }
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+        }
+        .btn-login:active {
+            transform: translateY(0);
+        }
+        .login-error {
+            display: none;
+            margin-top: 16px;
+            padding: 14px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
+            color: #dc2626;
+            text-align: center;
+            font-size: 14px;
+        }
+        .login-footer {
+            margin-top: 32px;
+            padding-top: 32px;
+            border-top: 1px solid #e2e8f0;
+            text-align: center;
+        }
+        .login-footer p {
+            font-size: 14px;
+            color: #64748b;
+            margin-bottom: 12px;
+        }
+        .login-credentials {
+            display: inline-block;
+            background: #f8fafc;
+            padding: 16px 20px;
+            border-radius: 12px;
+            text-align: left;
+        }
+        .login-credentials p {
+            font-size: 13px;
+            color: #475569;
+            margin: 6px 0;
+            text-align: left;
+        }
+        .login-credentials code {
+            background: white;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-family: 'SF Mono', Monaco, monospace;
+            color: #6366f1;
+            font-size: 12px;
+            margin-left: 4px;
+        }
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 20px;
+            color: #64748b;
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.2s ease;
+        }
+        .back-link:hover {
+            color: #6366f1;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <div class="login-logo">🏢</div>
+            <h1 class="login-title">AIAds 广告主</h1>
+            <p class="login-subtitle">登录管理您的广告活动</p>
+        </div>
+
+        <form id="login-form">
+            <div class="form-group">
+                <label class="form-label" for="email">邮箱</label>
+                <input type="email" id="email" class="form-input" placeholder="请输入邮箱" autocomplete="email">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="password">密码</label>
+                <input type="password" id="password" class="form-input" placeholder="请输入密码" autocomplete="current-password">
+            </div>
+
+            <button type="submit" class="btn-login">登录</button>
+        </form>
+
+        <div id="login-error" class="login-error"></div>
+
+        <div class="login-footer">
+            <p>测试账号</p>
+            <div class="login-credentials">
+                <p>邮箱：<code>advertiser@aiads.com</code></p>
+                <p>密码：<code>password123</code></p>
+            </div>
+            <br>
+            <a href="admin-pro.html" class="back-link">← 返回管理后台</a>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('login-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            if (email === 'advertiser@aiads.com' && password === 'password123') {
+                sessionStorage.setItem('aiads_advertiser_session', JSON.stringify({
+                    email: email,
+                    role: 'advertiser',
+                    companyName: '深圳科技有限公司'
+                }));
+                window.location.href = 'advertiser-dashboard.html';
+            } else {
+                const errorEl = document.getElementById('login-error');
+                errorEl.textContent = '邮箱或密码错误';
+                errorEl.style.display = 'block';
+            }
+        });
+
+        // 检查是否已登录
+        const session = sessionStorage.getItem('aiads_advertiser_session');
+        if (session) {
+            window.location.href = 'advertiser-dashboard.html';
+        }
+    </script>
+</body>
+</html>

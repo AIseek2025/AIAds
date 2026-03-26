@@ -1,0 +1,168 @@
+{
+  "testSuite": "Unit Tests",
+  "timestamp": "2026-03-24T10:00:00.000Z",
+  "status": "BLOCKED",
+  "summary": {
+    "total": 159,
+    "passed": 0,
+    "failed": 0,
+    "skipped": 0,
+    "blocked": 159
+  },
+  "suites": [
+    {
+      "name": "Auth API Tests",
+      "file": "tests/auth.test.ts",
+      "tests": 24,
+      "passed": 0,
+      "failed": 0,
+      "blocked": 24,
+      "blockReason": "Database connection unavailable"
+    },
+    {
+      "name": "Users API Tests",
+      "file": "tests/users.test.ts",
+      "tests": 8,
+      "passed": 0,
+      "failed": 0,
+      "blocked": 8,
+      "blockReason": "Database connection unavailable"
+    },
+    {
+      "name": "Advertisers API Tests",
+      "file": "tests/advertisers.test.ts",
+      "tests": 6,
+      "passed": 0,
+      "failed": 0,
+      "blocked": 6,
+      "blockReason": "Database connection unavailable"
+    },
+    {
+      "name": "Campaigns API Tests",
+      "file": "tests/campaigns.test.ts",
+      "tests": 10,
+      "passed": 0,
+      "failed": 0,
+      "blocked": 10,
+      "blockReason": "Database connection unavailable"
+    },
+    {
+      "name": "KOLs API Tests",
+      "file": "tests/kols.test.ts",
+      "tests": 12,
+      "passed": 0,
+      "failed": 0,
+      "blocked": 12,
+      "blockReason": "Database connection unavailable"
+    },
+    {
+      "name": "Orders API Tests",
+      "file": "tests/orders.test.ts",
+      "tests": 14,
+      "passed": 0,
+      "failed": 0,
+      "blocked": 14,
+      "blockReason": "Database connection unavailable"
+    },
+    {
+      "name": "Tasks Module API Tests",
+      "file": "tests/tasks.test.ts",
+      "tests": 22,
+      "passed": 0,
+      "failed": 0,
+      "blocked": 22,
+      "blockReason": "Database connection unavailable"
+    },
+    {
+      "name": "Security Tests",
+      "file": "tests/security.test.ts",
+      "tests": 8,
+      "passed": 0,
+      "failed": 0,
+      "blocked": 8,
+      "blockReason": "Database connection unavailable"
+    },
+    {
+      "name": "Admin Auth Tests",
+      "file": "tests/admin/auth.test.ts",
+      "tests": 10,
+      "passed": 0,
+      "failed": 0,
+      "blocked": 10,
+      "blockReason": "Database connection unavailable"
+    },
+    {
+      "name": "Admin Users Tests",
+      "file": "tests/admin/users.test.ts",
+      "tests": 8,
+      "passed": 0,
+      "failed": 0,
+      "blocked": 8,
+      "blockReason": "Database connection unavailable"
+    },
+    {
+      "name": "Admin KOLs Tests",
+      "file": "tests/admin/kols.test.ts",
+      "tests": 12,
+      "passed": 0,
+      "failed": 0,
+      "blocked": 12,
+      "blockReason": "Database connection unavailable"
+    },
+    {
+      "name": "Admin Finance Tests",
+      "file": "tests/admin/finance.test.ts",
+      "tests": 15,
+      "passed": 0,
+      "failed": 0,
+      "blocked": 15,
+      "blockReason": "Database connection unavailable"
+    },
+    {
+      "name": "Admin Dashboard Tests",
+      "file": "tests/admin/dashboard.test.ts",
+      "tests": 10,
+      "passed": 0,
+      "failed": 0,
+      "blocked": 10,
+      "blockReason": "Database connection unavailable"
+    }
+  ],
+  "coverage": {
+    "statements": 0,
+    "branches": 0,
+    "functions": 0,
+    "lines": 0
+  },
+  "issues": [
+    {
+      "id": "BUG-001",
+      "title": "Prisma 7.x Adapter Not Configured",
+      "status": "FIXED",
+      "severity": "Critical"
+    },
+    {
+      "id": "BUG-002",
+      "title": "Test Files Using Vitest Syntax",
+      "status": "FIXED",
+      "severity": "Critical"
+    },
+    {
+      "id": "BUG-003",
+      "title": "Missing Test Environment Configuration",
+      "status": "FIXED",
+      "severity": "High"
+    },
+    {
+      "id": "BUG-005",
+      "title": "Database Connection Unavailable",
+      "status": "OPEN",
+      "severity": "High"
+    }
+  ],
+  "recommendations": [
+    "Start Docker services: docker-compose up -d postgres redis",
+    "Run database migrations: npx prisma migrate dev",
+    "Re-run test suite after database is available"
+  ]
+}

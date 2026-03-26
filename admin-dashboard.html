@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIAds 管理后台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+        .header h1 {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        .header p {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+        .modules-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+        .module-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            padding: 32px;
+            text-decoration: none;
+            color: #333;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(10px);
+        }
+        .module-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+        }
+        .module-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        .module-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .module-description {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.5;
+        }
+        .module-status {
+            display: inline-block;
+            margin-top: 12px;
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status-available {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .status-demo {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .login-info {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            padding: 32px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+        .login-info h2 {
+            font-size: 24px;
+            margin-bottom: 16px;
+            color: #333;
+        }
+        .login-credentials {
+            display: inline-block;
+            background: #f3f4f6;
+            padding: 16px 24px;
+            border-radius: 12px;
+            text-align: left;
+            margin-top: 16px;
+        }
+        .login-credentials p {
+            margin: 8px 0;
+            font-size: 14px;
+        }
+        .login-credentials code {
+            background: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: "Courier New", monospace;
+            color: #667eea;
+        }
+        .actions {
+            margin-top: 24px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            margin: 0 8px;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛡️ AIAds 管理后台</h1>
+            <p>完整的广告主 - KOL 广告投放管理平台</p>
+        </div>
+
+        <div class="modules-grid">
+            <a href="admin.html" class="module-card">
+                <div class="module-icon">📊</div>
+                <div class="module-title">数据看板</div>
+                <div class="module-description">查看平台核心数据统计和趋势分析</div>
+                <span class="module-status status-available">✅ 可用</span>
+            </a>
+
+            <a href="admin.html" class="module-card">
+                <div class="module-icon">👥</div>
+                <div class="module-title">用户管理</div>
+                <div class="module-description">管理用户列表、搜索、筛选和状态</div>
+                <span class="module-status status-available">✅ 可用</span>
+            </a>
+
+            <a href="admin.html" class="module-card">
+                <div class="module-icon">🏢</div>
+                <div class="module-title">广告主管理</div>
+                <div class="module-description">广告主列表、审核、充值和余额管理</div>
+                <span class="module-status status-demo">🔶 演示版</span>
+            </a>
+
+            <a href="admin.html" class="module-card">
+                <div class="module-icon">🌟</div>
+                <div class="module-title">KOL 审核</div>
+                <div class="module-description">KOL 认证审核、评级和黑名单管理</div>
+                <span class="module-status status-available">✅ 可用</span>
+            </a>
+
+            <a href="admin.html" class="module-card">
+                <div class="module-icon">📢</div>
+                <div class="module-title">内容审核</div>
+                <div class="module-description">内容审核、批量处理和审核历史</div>
+                <span class="module-status status-available">✅ 可用</span>
+            </a>
+
+            <a href="admin.html" class="module-card">
+                <div class="module-icon">📣</div>
+                <div class="module-title">活动管理</div>
+                <div class="module-description">活动列表、审核、状态和统计</div>
+                <span class="module-status status-demo">🔶 演示版</span>
+            </a>
+
+            <a href="admin.html" class="module-card">
+                <div class="module-icon">📝</div>
+                <div class="module-title">订单管理</div>
+                <div class="module-description">订单列表、详情、纠纷处理和导出</div>
+                <span class="module-status status-demo">🔶 演示版</span>
+            </a>
+
+            <a href="admin.html" class="module-card">
+                <div class="module-icon">💰</div>
+                <div class="module-title">财务管理</div>
+                <div class="module-description">充值、提现审核和交易记录</div>
+                <span class="module-status status-available">✅ 可用</span>
+            </a>
+
+            <a href="admin.html" class="module-card">
+                <div class="module-icon">📈</div>
+                <div class="module-title">数据统计</div>
+                <div class="module-description">用户、活动、收入和 KOL 统计分析</div>
+                <span class="module-status status-demo">🔶 演示版</span>
+            </a>
+
+            <a href="admin.html" class="module-card">
+                <div class="module-icon">⚙️</div>
+                <div class="module-title">系统设置</div>
+                <div class="module-description">系统配置、管理员和角色权限管理</div>
+                <span class="module-status status-available">✅ 可用</span>
+            </a>
+        </div>
+
+        <div class="login-info">
+            <h2>🔐 管理员登录</h2>
+            <p>点击下方按钮进入管理后台登录页面</p>
+            <div class="actions">
+                <a href="admin-full.html" class="btn">进入管理后台</a>
+            </div>
+            <div class="login-credentials">
+                <p><strong>管理员账号：</strong></p>
+                <p>用户名：<code>admin</code></p>
+                <p>密码：<code>admin123</code></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 检查登录状态
+        const session = sessionStorage.getItem('aiads_admin_session');
+        if (session) {
+            console.log('已登录:', JSON.parse(session));
+        }
+    </script>
+</body>
+</html>

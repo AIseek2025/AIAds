@@ -1,0 +1,140 @@
+/* ========================================
+   UX 模式切换 - 来自 UI-UX Pro Max
+   ======================================== */
+
+/* 1. 平滑滚动 (Smooth Scroll) */
+[data-ux-mode="smooth-scroll"] html {
+  scroll-behavior: smooth;
+}
+
+/* 2. 粘性导航补偿 (Sticky Navigation Compensation) */
+[data-ux-mode="sticky-nav"] body {
+  padding-top: 56px; /* 导航栏高度 */
+}
+
+[data-ux-mode="sticky-nav"] .navbar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+/* 3. 减少动画 (Reduced Motion) */
+[data-ux-mode="reduced-motion"] * {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+[data-ux-mode="reduced-motion"] .navbar,
+[data-ux-mode="reduced-motion"] .sidebar,
+[data-ux-mode="reduced-motion"] .stat-card,
+[data-ux-mode="reduced-motion"] .bg-card {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* 4. 大触摸目标 (Large Touch Targets) */
+[data-ux-mode="large-touch"] button,
+[data-ux-mode="large-touch"] .btn,
+[data-ux-mode="large-touch"] input,
+[data-ux-mode="large-touch"] select,
+[data-ux-mode="large-touch"] .theme-option,
+[data-ux-mode="large-touch"] .ui-style-option {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 12px 16px;
+}
+
+[data-ux-mode="large-touch"] .theme-select-button,
+[data-ux-mode="large-touch"] .ui-style-select-button {
+  min-height: 48px;
+  padding: 14px 20px;
+}
+
+/* 5. 高对比度 (High Contrast) */
+[data-ux-mode="high-contrast"] body {
+  color: #000000;
+}
+
+[data-ux-mode="high-contrast"] .navbar,
+[data-ux-mode="high-contrast"] .sidebar,
+[data-ux-mode="high-contrast"] .content-area,
+[data-ux-mode="high-contrast"] .section,
+[data-ux-mode="high-contrast"] .stat-card,
+[data-ux-mode="high-contrast"] .modal-content {
+  background: #ffffff !important;
+  border: 2px solid #000000;
+  color: #000000;
+}
+
+[data-ux-mode="high-contrast"] .text-secondary {
+  color: #333333 !important;
+}
+
+[data-ux-mode="high-contrast"] .text-muted {
+  color: #666666 !important;
+}
+
+[data-ux-mode="high-contrast"] input,
+[data-ux-mode="high-contrast"] select,
+[data-ux-mode="high-contrast"] textarea {
+  background: #ffffff;
+  border: 2px solid #000000;
+  color: #000000;
+}
+
+[data-ux-mode="high-contrast"] .theme-select-button,
+[data-ux-mode="high-contrast"] .ui-style-select-button {
+  background: #ffffff;
+  color: #000000;
+  border: 2px solid #000000;
+}
+
+/* 6. 专注模式 (Focus Mode - 隐藏侧边栏) */
+[data-ux-mode="focus"] .sidebar {
+  display: none;
+}
+
+[data-ux-mode="focus"] .content-area {
+  margin-left: 0;
+  max-width: 100%;
+}
+
+/* 7. 阅读模式 (Reading Mode) */
+[data-ux-mode="reading"] .content-area {
+  max-width: 65ch; /* 最佳阅读宽度 */
+  margin: 0 auto;
+  line-height: 1.8;
+  font-size: 18px;
+}
+
+[data-ux-mode="reading"] p {
+  margin-bottom: 1.5em;
+}
+
+[data-ux-mode="reading"] h1,
+[data-ux-mode="reading"] h2,
+[data-ux-mode="reading"] h3 {
+  margin-top: 2em;
+  margin-bottom: 1em;
+}
+
+/* 8. 紧凑模式 (Compact Mode) */
+[data-ux-mode="compact"] .section,
+[data-ux-mode="compact"] .stat-card {
+  padding: var(--spacing-4) !important;
+}
+
+[data-ux-mode="compact"] .navbar {
+  height: 48px;
+}
+
+[data-ux-mode="compact"] .stat-number {
+  font-size: var(--fs-2xl);
+}
+
+[data-ux-mode="compact"] .theme-selector-wrapper,
+[data-ux-mode="compact"] .ui-style-selector-wrapper {
+  bottom: var(--spacing-4);
+  right: var(--spacing-4);
+}

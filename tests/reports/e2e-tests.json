@@ -1,0 +1,234 @@
+{
+  "testSuite": "E2E Tests",
+  "timestamp": "2026-03-24T10:00:00.000Z",
+  "status": "PENDING",
+  "summary": {
+    "total": 3,
+    "passed": 0,
+    "failed": 0,
+    "skipped": 3
+  },
+  "flows": [
+    {
+      "name": "Advertiser Flow",
+      "id": "e2e-advertiser",
+      "status": "PENDING",
+      "steps": [
+        {
+          "step": 1,
+          "action": "Register Advertiser Account",
+          "endpoint": "POST /api/v1/auth/register",
+          "expected": "201 Created with user data and tokens",
+          "status": "PENDING"
+        },
+        {
+          "step": 2,
+          "action": "Login",
+          "endpoint": "POST /api/v1/auth/login",
+          "expected": "200 OK with valid JWT tokens",
+          "status": "PENDING"
+        },
+        {
+          "step": 3,
+          "action": "Complete Real-name Verification",
+          "endpoint": "POST /api/v1/advertisers",
+          "expected": "201 Created with advertiser profile",
+          "status": "PENDING"
+        },
+        {
+          "step": 4,
+          "action": "Recharge Wallet",
+          "endpoint": "POST /api/v1/advertisers/:id/wallet/recharge",
+          "expected": "200 OK with transaction record",
+          "status": "PENDING"
+        },
+        {
+          "step": 5,
+          "action": "Create Campaign",
+          "endpoint": "POST /api/v1/campaigns",
+          "expected": "201 Created with campaign data",
+          "status": "PENDING"
+        },
+        {
+          "step": 6,
+          "action": "Browse KOLs",
+          "endpoint": "GET /api/v1/kols?platform=tiktok&min_followers=10000",
+          "expected": "200 OK with KOL list",
+          "status": "PENDING"
+        },
+        {
+          "step": 7,
+          "action": "Select KOL and Create Order",
+          "endpoint": "POST /api/v1/orders",
+          "expected": "201 Created with order data",
+          "status": "PENDING"
+        },
+        {
+          "step": 8,
+          "action": "Submit Campaign for Review",
+          "endpoint": "POST /api/v1/campaigns/:id/submit-review",
+          "expected": "200 OK with pending_review status",
+          "status": "PENDING"
+        }
+      ]
+    },
+    {
+      "name": "KOL Flow",
+      "id": "e2e-kol",
+      "status": "PENDING",
+      "steps": [
+        {
+          "step": 1,
+          "action": "Register KOL Account",
+          "endpoint": "POST /api/v1/auth/register",
+          "expected": "201 Created with user data and tokens",
+          "status": "PENDING"
+        },
+        {
+          "step": 2,
+          "action": "Login",
+          "endpoint": "POST /api/v1/auth/login",
+          "expected": "200 OK with valid JWT tokens",
+          "status": "PENDING"
+        },
+        {
+          "step": 3,
+          "action": "Bind Social Media Account",
+          "endpoint": "POST /api/v1/kols/bind",
+          "expected": "200 OK with linked account",
+          "status": "PENDING"
+        },
+        {
+          "step": 4,
+          "action": "Browse Available Tasks",
+          "endpoint": "GET /api/v1/tasks",
+          "expected": "200 OK with task list",
+          "status": "PENDING"
+        },
+        {
+          "step": 5,
+          "action": "Apply for Task",
+          "endpoint": "POST /api/v1/tasks/:id/apply",
+          "expected": "200 OK with application record",
+          "status": "PENDING"
+        },
+        {
+          "step": 6,
+          "action": "Accept Order",
+          "endpoint": "PUT /api/v1/kols/orders/:id/accept",
+          "expected": "200 OK with accepted status",
+          "status": "PENDING"
+        },
+        {
+          "step": 7,
+          "action": "Submit Content",
+          "endpoint": "PUT /api/v1/kols/orders/:id/submit",
+          "expected": "200 OK with submitted status",
+          "status": "PENDING"
+        },
+        {
+          "step": 8,
+          "action": "Request Withdrawal",
+          "endpoint": "POST /api/v1/kols/:id/wallet/withdraw",
+          "expected": "201 Created with withdrawal record",
+          "status": "PENDING"
+        }
+      ]
+    },
+    {
+      "name": "Admin Flow",
+      "id": "e2e-admin",
+      "status": "PENDING",
+      "steps": [
+        {
+          "step": 1,
+          "action": "Admin Login",
+          "endpoint": "POST /api/v1/admin/auth/login",
+          "expected": "200 OK with admin JWT tokens",
+          "status": "PENDING"
+        },
+        {
+          "step": 2,
+          "action": "View Dashboard",
+          "endpoint": "GET /api/v1/admin/dashboard/stats",
+          "expected": "200 OK with dashboard statistics",
+          "status": "PENDING"
+        },
+        {
+          "step": 3,
+          "action": "View User Management",
+          "endpoint": "GET /api/v1/admin/users",
+          "expected": "200 OK with user list",
+          "status": "PENDING"
+        },
+        {
+          "step": 4,
+          "action": "Review KOL Application",
+          "endpoint": "GET /api/v1/admin/kols/pending",
+          "expected": "200 OK with pending KOL list",
+          "status": "PENDING"
+        },
+        {
+          "step": 5,
+          "action": "Approve KOL",
+          "endpoint": "POST /api/v1/admin/kols/:id/verify",
+          "expected": "200 OK with verified status",
+          "status": "PENDING"
+        },
+        {
+          "step": 6,
+          "action": "Review Campaign",
+          "endpoint": "GET /api/v1/admin/campaigns/pending-review",
+          "expected": "200 OK with pending campaigns",
+          "status": "PENDING"
+        },
+        {
+          "step": 7,
+          "action": "Approve Campaign",
+          "endpoint": "POST /api/v1/admin/campaigns/:id/review",
+          "expected": "200 OK with approved status",
+          "status": "PENDING"
+        },
+        {
+          "step": 8,
+          "action": "Review Withdrawal Request",
+          "endpoint": "GET /api/v1/admin/finance/withdrawals/pending",
+          "expected": "200 OK with pending withdrawals",
+          "status": "PENDING"
+        },
+        {
+          "step": 9,
+          "action": "Approve Withdrawal",
+          "endpoint": "POST /api/v1/admin/finance/withdrawals/:id/approve",
+          "expected": "200 OK with completed status",
+          "status": "PENDING"
+        },
+        {
+          "step": 10,
+          "action": "View Audit Logs",
+          "endpoint": "GET /api/v1/admin/audit-logs",
+          "expected": "200 OK with audit log list",
+          "status": "PENDING"
+        }
+      ]
+    }
+  ],
+  "prerequisites": [
+    "Full stack application running (frontend + backend)",
+    "Database with seed data",
+    "Redis for session management",
+    "Email service mocked",
+    "Payment gateway mocked"
+  ],
+  "testTools": [
+    "Playwright",
+    "Cypress",
+    "Puppeteer"
+  ],
+  "commands": {
+    "startFullStack": "docker-compose up -d",
+    "runE2E": "cd tests/e2e && npm run test",
+    "runE2EHeadless": "cd tests/e2e && npm run test:headless",
+    "viewReport": "cd tests/e2e && npm run report"
+  }
+}
