@@ -93,6 +93,28 @@ cleanup_old_releases() {
   done
 }
 
+wait_for_http() {
+  local url="$1"
+  local max_attempts="${2:-30}"
+  local sleep_seconds="${3:-2}"
+  local header_name="${4:-}"
+  local header_value="${5:-}"
+  local attempt
+
+  for (( attempt = 1; attempt <= max_attempts; attempt++ )); do
+    if [[ -n "${header_name}" ]]; then
+      if curl -fsSL -H "${header_name}: ${header_value}" "${url}" >/dev/null 2>&1; then
+        return 0
+      fi
+    elif curl -fsSL "${url}" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep "${sleep_seconds}"
+  done
+
+  return 1
+}
+
 main() {
   local git_ref="${1:-main}"
   local repo_url="${AIADS_REPO_URL:-https://github.com/AIseek2025/AIAds.git}"
@@ -186,9 +208,18 @@ main() {
   sudo mv -Tf "${current_link}.tmp" "${current_link}"
 
   log "执行健康检查"
-  curl -fsSL -H "x-forwarded-proto: https" "http://127.0.0.1:${backend_port}/api/v1/health" >/dev/null
-  curl -fsSL "${vite_api_url%/api/v1}/" >/dev/null
-  curl -fsSL "${vite_api_url}/health" >/dev/null
+  if ! wait_for_http "http://127.0.0.1:${backend_port}/api/v1/health" 30 2 "x-forwarded-proto" "https"; then
+    echo "错误: 本机后端健康检查失败"
+    exit 1
+  fi
+  if ! wait_for_http "${vite_api_url%/api/v1}/" 15 2; then
+    echo "错误: 公网首页健康检查失败"
+    exit 1
+  fi
+  if ! wait_for_http "${vite_api_url}/health" 15 2; then
+    echo "错误: 公网 API 健康检查失败"
+    exit 1
+  fi
 
   cleanup_old_releases "${keep_releases}" "${releases_dir}"
 
