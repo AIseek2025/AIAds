@@ -6,7 +6,7 @@ import path from 'path'
 // @ts-ignore
 export default defineConfig({
   plugins: [react()],
-  base: '/src/frontend/dist/',
+  base: '/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

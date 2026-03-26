@@ -1,3 +1,4 @@
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../utils/logger';
 import { prismaPerformanceMiddleware } from '../middleware/performance';
@@ -18,19 +19,33 @@ const connectionPoolConfig = {
   connectionTimeoutMillis: parseInt(process.env.DATABASE_CONNECTION_TIMEOUT || '5000', 10),
 };
 
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL || '',
+  max: connectionPoolConfig.max,
+  connectionTimeoutMillis: connectionPoolConfig.connectionTimeoutMillis,
+  idleTimeoutMillis: connectionPoolConfig.idleTimeoutMillis,
+});
+
 // Create Prisma client instance with proper typing and connection pool optimization
 const prisma = new PrismaClient({
+  adapter,
   log: isProduction ? ['error'] : ['query', 'error', 'warn'],
 });
 
+const prismaWithHooks = prisma as PrismaClient & {
+  $use?: (middleware: unknown) => void;
+  $on?: (event: string, cb: (e: any) => void) => void;
+};
+
 // Register performance monitoring middleware
-// @ts-ignore - Prisma $use middleware typing
-prisma.$use(prismaPerformanceMiddleware());
+if (typeof prismaWithHooks.$use === 'function') {
+  prismaWithHooks.$use(prismaPerformanceMiddleware());
+}
 
 // Only log slow queries in production (threshold: 100ms)
-if (isProduction) {
+if (typeof prismaWithHooks.$on === 'function' && isProduction) {
   // @ts-ignore - Prisma event typing
-  prisma.$on('query', (e: any) => {
+  prismaWithHooks.$on('query', (e: any) => {
     const duration = e.duration;
     if (duration > 100) {
       logger.warn('Slow query detected', {
@@ -40,10 +55,10 @@ if (isProduction) {
       });
     }
   });
-} else {
+} else if (typeof prismaWithHooks.$on === 'function') {
   // Development: log all queries
   // @ts-ignore - Prisma event typing
-  prisma.$on('query', (e: any) => {
+  prismaWithHooks.$on('query', (e: any) => {
     logger.debug('Query executed', {
       query: e.query,
       params: e.params,
@@ -53,22 +68,26 @@ if (isProduction) {
 }
 
 // Log errors
-// @ts-ignore - Prisma event typing
-prisma.$on('error', (e: any) => {
-  logger.error('Prisma error', {
-    target: e.target,
-    message: e.message,
+if (typeof prismaWithHooks.$on === 'function') {
+  // @ts-ignore - Prisma event typing
+  prismaWithHooks.$on('error', (e: any) => {
+    logger.error('Prisma error', {
+      target: e.target,
+      message: e.message,
+    });
   });
-});
+}
 
 // Log warnings
-// @ts-ignore - Prisma event typing
-prisma.$on('warn', (e: any) => {
-  logger.warn('Prisma warning', {
-    target: e.target,
-    message: e.message,
+if (typeof prismaWithHooks.$on === 'function') {
+  // @ts-ignore - Prisma event typing
+  prismaWithHooks.$on('warn', (e: any) => {
+    logger.warn('Prisma warning', {
+      target: e.target,
+      message: e.message,
+    });
   });
-});
+}
 
 // Graceful shutdown
 export async function connectDatabase(): Promise<void> {
