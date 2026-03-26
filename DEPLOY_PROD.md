@@ -84,6 +84,29 @@ curl -I https://aiads.fun
 pm2 logs aiads-api --lines 200
 ```
 
+## 最近上线记录
+
+### 2026-03-27
+
+- 发布 commit：`00ba403`
+- 发布命令：`bash /opt/aiads/bin/deploy-prod-aliyun.sh 00ba403`
+- 发布后代码目录：`/opt/aiads-releases/20260327-043400`
+- 当前代码软链：`/opt/aiads-current -> /opt/aiads-releases/20260327-043400`
+- 发布结果：成功
+
+本次发布内容：
+
+- 修复首页白屏问题，恢复路由懒加载兜底组件
+- 清理前端管理台存量 `build:check` TypeScript 报错
+- 发布前已完成本地 `npm run build:check` 验证
+
+发布后验收：
+
+- `https://aiads.fun/api/v1/health` 返回成功
+- `https://aiads.fun/` 返回 `HTTP 200`
+- 首页截图验收通过，页面正常显示 `AIAds` 品牌、欢迎回来、邮箱/密码输入框、登录按钮、Google 登录按钮和注册链接
+- 本次发布仅切换 AIAds release 与 `pm2` 进程，未改动其他项目配置
+
 ## 回滚
 
 先查看可回滚版本：
