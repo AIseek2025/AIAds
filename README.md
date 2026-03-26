@@ -8,6 +8,12 @@
 
 **源码仓库**: [github.com/AIseek2025/AIAds](https://github.com/AIseek2025/AIAds)
 
+### 发布文档入口
+
+- 正式发布说明：`DEPLOY_PROD.md`
+- 当前发布说明：`RELEASE_NOTES.md`
+- 历史版本说明：`docs/RELEASE_NOTES_V1.md`
+
 ### 一键部署（Docker）
 
 1. 安装 [Docker](https://docs.docker.com/get-docker/) 与 Docker Compose v2  
