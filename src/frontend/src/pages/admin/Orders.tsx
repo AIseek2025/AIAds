@@ -41,6 +41,7 @@ import Grid from '@mui/material/Grid';
 import Divider from '@mui/material/Divider';
 import TableSortLabel from '@mui/material/TableSortLabel';
 import Link from '@mui/material/Link';
+import Checkbox from '@mui/material/Checkbox';
 import Stepper from '@mui/material/Stepper';
 import Step from '@mui/material/Step';
 import StepLabel from '@mui/material/StepLabel';
@@ -325,14 +326,14 @@ const OrdersPage: React.FC = () => {
 
   // Status badge
   const StatusBadge = ({ status }: { status: string }) => {
-    const config: Record<string, { color: 'success' | 'warning' | 'error' | 'info' | 'default'; label: string; icon?: React.ReactNode }> = {
+    const config: Record<string, { color: 'success' | 'warning' | 'error' | 'info' | 'default'; label: string; icon?: React.ReactElement }> = {
       pending: { color: 'warning', label: '待处理', icon: <ScheduleIcon fontSize="small" /> },
       in_progress: { color: 'info', label: '进行中' },
       completed: { color: 'success', label: '已完成', icon: <CheckCircleIcon fontSize="small" /> },
       cancelled: { color: 'error', label: '已取消' },
       disputed: { color: 'error', label: '纠纷中', icon: <ErrorIcon fontSize="small" /> },
     };
-    const conf = config[status] || { color: 'default', label: status };
+    const conf = config[status] || { color: 'default' as const, label: status };
     return (
       <Chip
         label={conf.label}

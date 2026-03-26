@@ -252,7 +252,7 @@ const FinancePage: React.FC = () => {
 
   // Type badge
   const TypeBadge = ({ type }: { type: string }) => {
-    const config: Record<string, { color: string; label: string; icon: React.ReactNode }> = {
+    const config: Record<string, { color: string; label: string; icon?: React.ReactElement }> = {
       recharge: { color: '#4CAF50', label: '充值', icon: <TrendingUpIcon fontSize="small" /> },
       withdrawal: { color: '#F44336', label: '提现', icon: <AccountBalanceIcon fontSize="small" /> },
       order_payment: { color: '#2196F3', label: '订单支付', icon: <ReceiptIcon fontSize="small" /> },
@@ -260,7 +260,7 @@ const FinancePage: React.FC = () => {
       commission: { color: '#9C27B0', label: '佣金', icon: <AttachMoneyIcon fontSize="small" /> },
     };
 
-    const c = config[type] || { color: '#999', label: type, icon: null };
+    const c = config[type] || { color: '#999', label: type, icon: undefined };
 
     return (
       <Chip
@@ -274,7 +274,7 @@ const FinancePage: React.FC = () => {
 
   // Status badge
   const StatusBadge = ({ status }: { status: string }) => {
-    const config: Record<string, { color: 'success' | 'warning' | 'error' | 'default'; label: string }> = {
+    const config: Record<string, { color: 'success' | 'warning' | 'error' | 'info' | 'default'; label: string }> = {
       success: { color: 'success', label: '成功' },
       pending: { color: 'warning', label: '待处理' },
       processing: { color: 'info', label: '处理中' },
@@ -282,7 +282,7 @@ const FinancePage: React.FC = () => {
       rejected: { color: 'error', label: '已拒绝' },
     };
 
-    const c = config[status] || { color: 'default', label: status };
+    const c = config[status] || { color: 'default' as const, label: status };
 
     return <Chip label={c.label} color={c.color} size="small" sx={{ fontWeight: 500 }} />;
   };

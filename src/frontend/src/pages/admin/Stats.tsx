@@ -31,7 +31,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import PeopleIcon from '@mui/icons-material/People';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
-import CampaignIcon from '@mui/material/Campaign';
+import CampaignIcon from '@mui/icons-material/Campaign';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 
 // Recharts

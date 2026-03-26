@@ -102,7 +102,7 @@ const ContentReviewPage: React.FC = () => {
   };
 
   if (keyword) queryParams.keyword = keyword;
-  if (contentTypeFilter) queryParams.content_type = contentTypeFilter;
+  if (contentTypeFilter) queryParams.content_type = contentTypeFilter as ContentListParams['content_type'];
 
   // Fetch content based on tab
   const { data, isLoading, error } = useQuery({
@@ -137,7 +137,7 @@ const ContentReviewPage: React.FC = () => {
   // Reject content mutation
   const rejectContentMutation = useMutation({
     mutationFn: (data: { id: string; reason: string; note?: string }) =>
-      adminContentAPI.rejectContent(data.id, { reason: data.reason, note: data.note }),
+      adminContentAPI.rejectContent(data.id, { reason: data.reason, revision_note: data.note }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminContent'] });
       setSnackbar({ open: true, message: '内容审核拒绝', severity: 'success' });
@@ -259,13 +259,13 @@ const ContentReviewPage: React.FC = () => {
 
   // Content type badge
   const ContentTypeBadge = ({ type }: { type: string }) => {
-    const config: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
+    const config: Record<string, { icon?: React.ReactElement; label: string; color: string }> = {
       video: { icon: <VideoLibraryIcon fontSize="small" />, label: '视频', color: '#FF0050' },
       image: { icon: <ImageIcon fontSize="small" />, label: '图片', color: '#00C8FF' },
       post: { icon: <ArticleIcon fontSize="small" />, label: '图文', color: '#FFAB00' },
     };
 
-    const c = config[type] || { icon: null, label: type, color: '#999' };
+    const c = config[type] || { icon: undefined, label: type, color: '#999' };
 
     return (
       <Chip

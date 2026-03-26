@@ -120,6 +120,45 @@ export const mockOrders: OrderListItem[] = [
 
 // Mock Stats
 export const mockDashboardStats: DashboardStats = {
+  period: {
+    start: '2026-03-01T00:00:00Z',
+    end: '2026-03-31T23:59:59Z',
+  },
+  users: {
+    total: 10520,
+    newToday: 120,
+    activeToday: 8500,
+    advertisers: 2150,
+    kols: 8200,
+  },
+  campaigns: {
+    total: 1580,
+    active: 320,
+    completedToday: 18,
+    totalBudget: 5280000,
+    spentAmount: 4488000,
+  },
+  orders: {
+    total: 4260,
+    pending: 156,
+    inProgress: 248,
+    completedToday: 36,
+  },
+  finance: {
+    totalRevenue: 792000,
+    todayRevenue: 26800,
+    totalPayout: 3680000,
+    todayPayout: 18200,
+    pendingWithdrawals: 23,
+  },
+  content: {
+    pendingReview: 156,
+    approvedToday: 48,
+    rejectedToday: 9,
+  },
+  kol: {
+    pendingVerification: 37,
+  },
   totalUsers: 10520,
   totalAdvertisers: 2150,
   totalKols: 8200,

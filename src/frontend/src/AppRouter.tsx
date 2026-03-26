@@ -6,6 +6,7 @@ import ProtectedAdminRoute from './components/ProtectedAdminRoute';
 import { MainLayout } from './components/layout';
 import AdminLayout from './components/layout/AdminLayout';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import Loading from './components/common/Loading';
 
 // P2 Performance: Route-level code splitting with lazy loading
 // Advertiser routes
@@ -44,7 +45,7 @@ const AppRouter: React.FC = () => {
   return (
     <BrowserRouter>
       <ErrorBoundary>
-        <Suspense fallback={<LoadingSpinner fullScreen />}>
+        <Suspense fallback={<Loading open={true} message="页面加载中..." />}>
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />

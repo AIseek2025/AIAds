@@ -44,8 +44,8 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import Divider from '@mui/material/Divider';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
+import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
-import InputLabel from '@mui/material/InputLabel';
 import OutlinedInput from '@mui/material/OutlinedInput';
 import Checkbox from '@mui/material/Checkbox';
 
@@ -464,20 +464,24 @@ const SettingsPage: React.FC = () => {
                 {roles?.map((role) => (
                   <ListItem
                     key={role.id}
-                    button
-                    selected={selectedRole?.id === role.id}
-                    onClick={() => setSelectedRole(role)}
                     sx={{
-                      border: 1,
-                      borderColor: selectedRole?.id === role.id ? 'primary.main' : 'divider',
-                      borderRadius: 1,
                       mb: 1,
                     }}
                   >
-                    <ListItemText
-                      primary={role.name}
-                      secondary={`${role.permissions?.length || 0} 个权限`}
-                    />
+                    <ListItemButton
+                      selected={selectedRole?.id === role.id}
+                      onClick={() => setSelectedRole(role)}
+                      sx={{
+                        border: 1,
+                        borderColor: selectedRole?.id === role.id ? 'primary.main' : 'divider',
+                        borderRadius: 1,
+                      }}
+                    >
+                      <ListItemText
+                        primary={role.name}
+                        secondary={`${role.permissions?.length || 0} 个权限`}
+                      />
+                    </ListItemButton>
                   </ListItem>
                 ))}
               </List>

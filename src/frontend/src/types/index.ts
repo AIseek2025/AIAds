@@ -404,6 +404,7 @@ export interface KolApplication {
   user: {
     email: string;
     nickname: string;
+    avatarUrl?: string;
   };
   platform: string;
   platformId: string;
@@ -418,6 +419,9 @@ export interface KolApplication {
   bio?: string;
   tags: string[];
   status: 'pending' | 'active' | 'verified' | 'suspended' | 'rejected' | 'banned';
+  verified?: boolean;
+  avgViews?: number;
+  totalOrders?: number;
   submittedAt: string;
   createdAt: string;
 }
@@ -439,6 +443,7 @@ export interface KolDetail extends KolApplication {
 }
 
 export interface KolListParams extends PaginationParams {
+  keyword?: string;
   status?: 'pending' | 'active' | 'verified' | 'suspended' | 'rejected' | 'banned';
   platform?: string;
   category?: string;
@@ -461,6 +466,7 @@ export interface ContentItem {
     id: string;
     name: string;
     platform: string;
+    avatarUrl?: string;
   };
   relatedOrderId?: string;
   relatedOrder?: {
@@ -472,11 +478,15 @@ export interface ContentItem {
   status: 'pending' | 'approved' | 'rejected' | 'deleted';
   aiScore?: number;
   aiFlags?: string[];
+  aiReview?: {
+    suggestions?: string[];
+  };
   submittedAt: string;
   createdAt: string;
 }
 
 export interface ContentListParams extends PaginationParams {
+  keyword?: string;
   content_type?: 'video' | 'image' | 'post';
   source_type?: 'kol_profile' | 'campaign_content' | 'user_report';
   priority?: 'high' | 'normal' | 'low';
@@ -487,7 +497,7 @@ export interface ContentListParams extends PaginationParams {
 export interface Transaction {
   id: string;
   transactionNo: string;
-  type: 'recharge' | 'order_payment' | 'withdrawal' | 'refund';
+  type: 'recharge' | 'order_payment' | 'withdrawal' | 'refund' | 'commission';
   amount: number;
   currency: string;
   paymentMethod: string;
@@ -515,6 +525,10 @@ export interface Withdrawal {
     email: string;
     platform: string;
     platformUsername: string;
+  };
+  user?: {
+    nickname?: string;
+    email?: string;
   };
   amount: number;
   currency: string;
@@ -545,7 +559,8 @@ export interface Withdrawal {
 }
 
 export interface TransactionListParams extends PaginationParams {
-  type?: 'recharge' | 'order_payment' | 'withdrawal' | 'refund';
+  keyword?: string;
+  type?: 'recharge' | 'order_payment' | 'withdrawal' | 'refund' | 'commission';
   status?: 'pending' | 'completed' | 'failed' | 'cancelled';
   payment_method?: string;
   user_id?: string;
@@ -593,6 +608,17 @@ export interface DashboardStats {
     approvedToday: number;
     rejectedToday: number;
   };
+  kol?: {
+    pendingVerification: number;
+  };
+  totalUsers?: number;
+  totalAdvertisers?: number;
+  totalKols?: number;
+  totalCampaigns?: number;
+  totalGmv?: number;
+  totalRevenue?: number;
+  activeUsers?: number;
+  pendingReviews?: number;
 }
 
 export interface AnalyticsData {
@@ -670,6 +696,15 @@ export interface SystemSettings {
     requiredForWithdrawal: boolean;
     minWithdrawalAmount: number;
   };
+  siteName?: string;
+  siteUrl?: string;
+  logoUrl?: string;
+  faviconUrl?: string;
+  emailFrom?: string;
+  enableRegistration?: boolean;
+  enableEmailVerification?: boolean;
+  enableMaintenanceMode?: boolean;
+  maintenanceMessage?: string;
 }
 
 // Audit log types
@@ -679,6 +714,7 @@ export interface AuditLog {
     id: string;
     email: string;
     name: string;
+    avatarUrl?: string;
   };
   action: string;
   resourceType: string;
@@ -693,6 +729,7 @@ export interface AuditLog {
     city: string;
   };
   status: 'success' | 'failure';
+  details?: string;
   createdAt: string;
 }
 
@@ -710,16 +747,21 @@ export interface AuditLogListParams extends PaginationParams {
 
 export interface AdvertiserListItem {
   id: string;
-  userId: string;
+  userId?: string;
   companyName: string;
-  contactPerson: string;
+  contactPerson?: string;
+  contactName?: string;
   contactEmail: string;
-  industry: string;
-  verificationStatus: 'pending' | 'approved' | 'rejected';
-  walletBalance: number;
-  frozenBalance: number;
-  activeCampaigns: number;
-  createdAt: string;
+  contactPhone?: string;
+  industry?: string;
+  verificationStatus: 'pending' | 'approved' | 'rejected' | 'verified';
+  walletBalance?: number;
+  balance?: number;
+  frozenBalance?: number;
+  activeCampaigns?: number;
+  status?: 'active' | 'disabled' | 'suspended';
+  createdAt?: string;
+  registeredAt?: string;
 }
 
 export interface AdvertiserDetail extends AdvertiserListItem {
@@ -811,21 +853,23 @@ export interface BalanceAdjustment {
 
 export interface CampaignListItem {
   id: string;
-  advertiserId: string;
+  advertiserId?: string;
   advertiserName: string;
   title: string;
-  description: string;
+  description?: string;
+  industry?: string;
   budget: number;
-  spentAmount: number;
-  status: 'draft' | 'pending_review' | 'approved' | 'rejected' | 'active' | 'paused' | 'completed' | 'cancelled';
-  objective: 'awareness' | 'engagement' | 'traffic' | 'conversion' | 'sales';
-  startDate: string;
-  endDate: string;
-  totalOrders: number;
-  completedOrders: number;
-  totalImpressions: number;
-  totalClicks: number;
-  performanceScore: 'excellent' | 'good' | 'average' | 'poor';
+  spentAmount?: number;
+  status: 'draft' | 'pending_review' | 'pending' | 'approved' | 'rejected' | 'active' | 'paused' | 'completed' | 'cancelled';
+  objective?: 'awareness' | 'engagement' | 'traffic' | 'conversion' | 'sales';
+  startDate?: string;
+  endDate?: string;
+  totalOrders?: number;
+  completedOrders?: number;
+  totalImpressions?: number;
+  totalClicks?: number;
+  kolCount?: number;
+  performanceScore?: 'excellent' | 'good' | 'average' | 'poor';
   createdAt: string;
 }
 
@@ -934,17 +978,18 @@ export interface CampaignAnomaly {
 export interface OrderListItem {
   id: string;
   orderNo: string;
-  campaignId: string;
+  campaignId?: string;
   campaignName: string;
-  advertiserId: string;
-  advertiserName: string;
-  kolId: string;
+  advertiserId?: string;
+  advertiserName?: string;
+  kolId?: string;
   kolName: string;
-  kolPlatform: string;
+  kolPlatform?: string;
+  platform?: string;
   amount: number;
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'disputed';
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
 export interface OrderDetail extends OrderListItem {

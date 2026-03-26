@@ -52,7 +52,7 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import BlockIcon from '@mui/icons-material/Block';
-import UnlockIcon from '@mui/icons-material/Unlock';
+import UnlockIcon from '@mui/icons-material/LockOpen';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';

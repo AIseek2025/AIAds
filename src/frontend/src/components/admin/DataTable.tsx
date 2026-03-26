@@ -30,8 +30,8 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   onRowClick?: (row: T) => void;
   selectable?: boolean;
-  selectedIds?: string[];
-  onSelect?: (ids: string[]) => void;
+  selectedIds?: Array<string | number>;
+  onSelect?: (ids: Array<string | number>) => void;
   pagination?: {
     page: number;
     pageSize: number;
@@ -61,6 +61,13 @@ function DataTable<T extends { id?: string | number }>({
   sortConfig,
   onSort,
 }: DataTableProps<T>) {
+  const getRowId = (row: T) => row.id;
+
+  const getCellValue = (row: T, column: Column<T>) => {
+    const key = (column.dataKey || column.id) as keyof T;
+    return row[key] as React.ReactNode;
+  };
+
   const [localSortConfig, setLocalSortConfig] = useState<{
     field: string;
     order: 'asc' | 'desc';
@@ -79,13 +86,13 @@ function DataTable<T extends { id?: string | number }>({
 
   const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (onSelect && event.target.checked) {
-      onSelect(data.map((row) => row.id!).filter(Boolean));
+      onSelect(data.map((row) => getRowId(row)).filter((id): id is string | number => id !== undefined));
     } else if (onSelect) {
       onSelect([]);
     }
   };
 
-  const handleSelectRow = (id: string) => {
+  const handleSelectRow = (id: string | number) => {
     if (!onSelect) return;
     const newSelected = selectedIds.includes(id)
       ? selectedIds.filter((selectedId) => selectedId !== id)
@@ -168,9 +175,9 @@ function DataTable<T extends { id?: string | number }>({
             ) : (
               data.map((row, rowIndex) => (
                 <TableRow
-                  key={row.id as string || rowIndex}
+                  key={(getRowId(row) ?? rowIndex) as React.Key}
                   hover
-                  selected={selectable && selectedIds.includes(row.id!)}
+                  selected={selectable && getRowId(row) !== undefined && selectedIds.includes(getRowId(row)!)}
                   onClick={() => onRowClick?.(row)}
                   sx={{
                     cursor: onRowClick ? 'pointer' : 'default',
@@ -180,8 +187,13 @@ function DataTable<T extends { id?: string | number }>({
                   {selectable && (
                     <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
                       <Checkbox
-                        checked={selectedIds.includes(row.id!)}
-                        onChange={() => handleSelectRow(row.id!)}
+                        checked={getRowId(row) !== undefined && selectedIds.includes(getRowId(row)!)}
+                        onChange={() => {
+                          const rowId = getRowId(row);
+                          if (rowId !== undefined) {
+                            handleSelectRow(rowId);
+                          }
+                        }}
                       />
                     </TableCell>
                   )}
@@ -196,7 +208,7 @@ function DataTable<T extends { id?: string | number }>({
                     >
                       {column.render
                         ? column.render(row, rowIndex)
-                        : (row[column.dataKey || column.id] as React.ReactNode)}
+                        : getCellValue(row, column)}
                     </TableCell>
                   ))}
                 </TableRow>
