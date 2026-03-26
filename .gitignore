@@ -35,3 +35,6 @@ coverage/
 *.tar.gz
 *.tgz
 *.zip
+
+# 上游 gstack 本地克隆（见 skill/README.md；避免将完整上游仓库提交进本仓库）
+skill/gstack/

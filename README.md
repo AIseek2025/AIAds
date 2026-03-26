@@ -13,6 +13,7 @@
 - 正式发布说明：`DEPLOY_PROD.md`
 - 当前发布说明：`RELEASE_NOTES.md`
 - 历史版本说明：`docs/RELEASE_NOTES_V1.md`
+- gstack 方法论工作审计报告：`docs/GSTACK_AIAADS_WORK_AUDIT_REPORT.md`
 
 ### 一键部署（Docker）
 
