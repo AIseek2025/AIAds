@@ -1,47 +1,49 @@
-import sgMail from '@sendgrid/mail';
+import { Resend } from 'resend';
 import { logger } from '../utils/logger';
 
-let configured = false;
+let client: Resend | null = null;
 
-function ensureConfigured(): boolean {
-  if (configured) return true;
+function getClient(): Resend | null {
+  if (client) return client;
 
-  const apiKey = process.env.SENDGRID_API_KEY;
-  const from = process.env.EMAIL_FROM;
-
-  if (!apiKey || apiKey === 'your-sendgrid-api-key') {
-    logger.warn('SENDGRID_API_KEY not configured — emails will be skipped');
-    return false;
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey || apiKey === 'your-resend-api-key') {
+    logger.warn('RESEND_API_KEY not configured — emails will be skipped');
+    return null;
   }
 
-  sgMail.setApiKey(apiKey);
-  configured = true;
-  logger.info('SendGrid configured', { from: from ?? 'noreply@aiads.com' });
-  return true;
+  client = new Resend(apiKey);
+  logger.info('Resend email client configured');
+  return client;
 }
 
 function getFrom(): string {
-  return process.env.EMAIL_FROM || 'noreply@aiads.com';
+  return process.env.EMAIL_FROM || 'AIAds <noreply@aiads.fun>';
 }
 
 export async function sendVerificationEmail(to: string, code: string, purpose: string): Promise<boolean> {
-  if (!ensureConfigured()) {
-    logger.warn('Email not sent (SendGrid not configured)', { to, purpose });
+  const resend = getClient();
+  if (!resend) {
+    logger.warn('Email not sent (Resend not configured)', { to, purpose });
     return false;
   }
 
   const purposeLabel = purpose === 'login' ? '登录' : purpose === 'reset_password' ? '重置密码' : '注册';
 
-  const msg = {
-    to,
-    from: getFrom(),
-    subject: `AIAds ${purposeLabel}验证码`,
-    text: `您的 AIAds ${purposeLabel}验证码是：${code}，有效期 5 分钟。如非本人操作，请忽略此邮件。`,
-    html: buildVerificationHtml(code, purposeLabel),
-  };
-
   try {
-    await sgMail.send(msg);
+    const { error } = await resend.emails.send({
+      from: getFrom(),
+      to,
+      subject: `AIAds ${purposeLabel}验证码`,
+      text: `您的 AIAds ${purposeLabel}验证码是：${code}，有效期 5 分钟。如非本人操作，请忽略此邮件。`,
+      html: buildVerificationHtml(code, purposeLabel),
+    });
+
+    if (error) {
+      logger.error('Resend API returned error', { to, purpose, error: error.message });
+      return false;
+    }
+
     logger.info('Verification email sent', { to, purpose });
     return true;
   } catch (err: unknown) {
