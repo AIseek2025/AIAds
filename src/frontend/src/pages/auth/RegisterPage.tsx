@@ -138,8 +138,14 @@ export const RegisterPage: React.FC = () => {
         newErrors.password = '请输入密码';
       } else if (formData.password.length < 8) {
         newErrors.password = '密码至少 8 位';
-      } else if (passwordStrength.score < 2) {
-        newErrors.password = '密码强度不够';
+      } else if (!/[A-Z]/.test(formData.password)) {
+        newErrors.password = '密码必须包含大写字母';
+      } else if (!/[a-z]/.test(formData.password)) {
+        newErrors.password = '密码必须包含小写字母';
+      } else if (!/\d/.test(formData.password)) {
+        newErrors.password = '密码必须包含数字';
+      } else if (!/[^A-Za-z0-9]/.test(formData.password)) {
+        newErrors.password = '密码必须包含特殊字符（如 !@#$%）';
       }
 
       if (!formData.agreeTerms) {
