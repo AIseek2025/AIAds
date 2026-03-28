@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { adminDashboardService } from '../../services/admin/dashboard.service';
 import { asyncHandler } from '../../middleware/errorHandler';
+import { requireAdmin } from '../../middleware/adminAuth';
 import { ApiResponse } from '../../types';
 
 export class AdminDashboardController {
@@ -10,7 +11,7 @@ export class AdminDashboardController {
    */
   getStats = asyncHandler(async (req: Request, res: Response) => {
     const { period = 'today' } = req.query;
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminDashboardService.getStats(period as string, adminId);
 
@@ -28,13 +29,9 @@ export class AdminDashboardController {
    */
   getAnalytics = asyncHandler(async (req: Request, res: Response) => {
     const { metric = 'all', period = 'month' } = req.query;
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
-    const result = await adminDashboardService.getAnalytics(
-      metric as string,
-      period as string,
-      adminId
-    );
+    const result = await adminDashboardService.getAnalytics(metric as string, period as string, adminId);
 
     const response: ApiResponse<typeof result> = {
       success: true,
@@ -50,7 +47,7 @@ export class AdminDashboardController {
    */
   getKolRankings = asyncHandler(async (req: Request, res: Response) => {
     const { metric = 'earnings', limit = '10', platform } = req.query;
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminDashboardService.getKolRankings(
       metric as string,
@@ -58,6 +55,21 @@ export class AdminDashboardController {
       platform as string,
       adminId
     );
+
+    const response: ApiResponse<typeof result> = {
+      success: true,
+      data: result,
+    };
+
+    res.status(200).json(response);
+  });
+
+  /**
+   * GET /api/v1/admin/dashboard/kol-frequency-policy
+   * KOL 接单滚动窗口策略（只读）
+   */
+  getKolFrequencyPolicy = asyncHandler(async (_req: Request, res: Response) => {
+    const result = adminDashboardService.getKolFrequencyPolicy();
 
     const response: ApiResponse<typeof result> = {
       success: true,

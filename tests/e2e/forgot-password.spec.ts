@@ -7,7 +7,7 @@ test.describe('忘记密码流程', () => {
     const newPassword = 'NewPass456!';
 
     // 1. 先注册账号
-    await page.goto('http://localhost:3000/register');
+    await page.goto('/register');
     await page.click('text=广告主');
     await page.click('button:has-text("下一步")');
     await page.fill('label:has-text("邮箱") input', testEmail);

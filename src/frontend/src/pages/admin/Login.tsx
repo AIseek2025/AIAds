@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useAdminAuthStore } from '../../stores/adminStore';
 import { adminAuthAPI } from '../../services/adminApi';
-import type { AdminLoginData } from '../../types';
+import { getApiErrorMessage, getApiErrorCode } from '../../utils/apiError';
+import type { AdminLoginData, AdminPermission } from '../../types';
+import { ADMIN_ROUTE_SEG, pathAdmin } from '../../constants/appPaths';
 
 // MUI Components
 import Box from '@mui/material/Box';
@@ -32,7 +34,13 @@ import PinIcon from '@mui/icons-material/Pin';
 
 const AdminLoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login } = useAdminAuthStore();
+  const { login, isAuthenticated } = useAdminAuthStore();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate(pathAdmin(ADMIN_ROUTE_SEG.dashboard), { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const [formData, setFormData] = useState<AdminLoginData>({
     email: '',
@@ -45,7 +53,6 @@ const AdminLoginPage: React.FC = () => {
   const [showMfaInput, setShowMfaInput] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mfaRequired, setMfaRequired] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -69,17 +76,16 @@ const AdminLoginPage: React.FC = () => {
         response.tokens.access_token,
         response.tokens.refresh_token,
         response.admin.role,
-        response.permissions as any
+        response.permissions as AdminPermission[]
       );
 
       // Redirect to admin dashboard
-      navigate('/admin/dashboard');
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error?.message || '登录失败，请检查账号密码';
+      navigate(pathAdmin(ADMIN_ROUTE_SEG.dashboard));
+    } catch (err: unknown) {
+      const errorMessage = getApiErrorMessage(err, '登录失败，请检查账号密码');
 
       // Check if MFA is required
-      if (err.response?.data?.error?.code === 'MFA_REQUIRED') {
-        setMfaRequired(true);
+      if (getApiErrorCode(err) === 'MFA_REQUIRED') {
         setShowMfaInput(true);
         setError('需要 MFA 验证码，请检查您的认证器');
       } else {
@@ -223,7 +229,7 @@ const AdminLoginPage: React.FC = () => {
                 />
                 <Link
                   component={RouterLink}
-                  to="/admin/forgot-password"
+                  to={pathAdmin(ADMIN_ROUTE_SEG.forgotPassword)}
                   variant="body2"
                   underline="hover"
                 >

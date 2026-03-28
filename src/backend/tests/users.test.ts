@@ -2,7 +2,6 @@ import request from 'supertest';
 import app from '../src/app';
 import prisma from '../src/config/database';
 
-
 describe('Users API Tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -11,7 +10,7 @@ describe('Users API Tests', () => {
   describe('GET /api/v1/users/:id', () => {
     it('应该返回用户详情', async () => {
       const email = `userdetail_${Date.now()}@example.com`;
-      
+
       // Register user
       const registerRes = await request(app)
         .post('/api/v1/auth/register')
@@ -78,16 +77,14 @@ describe('Users API Tests', () => {
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .get('/api/v1/users/some-id')
-        .expect(401);
+      const response = await request(app).get('/api/v1/users/some-id').expect(401);
 
       expect(response.body.error.code).toBe('AUTH_REQUIRED');
     });
 
     it('应该返回 404 当用户不存在', async () => {
       const email = `finduser_${Date.now()}@example.com`;
-      
+
       const registerRes = await request(app)
         .post('/api/v1/auth/register')
         .send({
@@ -113,7 +110,7 @@ describe('Users API Tests', () => {
   describe('PUT /api/v1/users/:id', () => {
     it('应该成功更新用户信息', async () => {
       const email = `updateuser_${Date.now()}@example.com`;
-      
+
       const registerRes = await request(app)
         .post('/api/v1/auth/register')
         .send({
@@ -187,7 +184,7 @@ describe('Users API Tests', () => {
 
     it('应该拒绝无效字段', async () => {
       const email = `invalidupdate_${Date.now()}@example.com`;
-      
+
       const registerRes = await request(app)
         .post('/api/v1/auth/register')
         .send({
@@ -215,7 +212,7 @@ describe('Users API Tests', () => {
   describe('DELETE /api/v1/users/:id', () => {
     it('应该软删除用户', async () => {
       const email = `deleteuser_${Date.now()}@example.com`;
-      
+
       const registerRes = await request(app)
         .post('/api/v1/auth/register')
         .send({
@@ -285,9 +282,7 @@ describe('Users API Tests', () => {
     });
 
     it('应该拒绝未认证删除请求', async () => {
-      const response = await request(app)
-        .delete('/api/v1/users/some-id')
-        .expect(401);
+      const response = await request(app).delete('/api/v1/users/some-id').expect(401);
 
       expect(response.body.error.code).toBe('AUTH_REQUIRED');
     });

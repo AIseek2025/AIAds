@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { adminContentService } from '../../services/admin/content.service';
 import { asyncHandler } from '../../middleware/errorHandler';
-import { validateBody } from '../../middleware/validation';
+import { requireAdmin } from '../../middleware/adminAuth';
+import { parseBodyOrRespond } from '../../middleware/validation';
 import { ApiResponse } from '../../types';
 import { z } from 'zod';
 
@@ -45,7 +46,7 @@ export class AdminContentController {
       priority: priority as string,
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminContentService.getPendingContent(filters, adminId);
 
     const response: ApiResponse<typeof result> = {
@@ -72,7 +73,7 @@ export class AdminContentController {
       reviewedBefore: reviewed_before as string,
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminContentService.getReviewHistory(filters, adminId);
 
     const response: ApiResponse<typeof result> = {
@@ -88,16 +89,7 @@ export class AdminContentController {
    * Get content list with filters
    */
   getContentList = asyncHandler(async (req: Request, res: Response) => {
-    const {
-      page,
-      limit,
-      content_type,
-      source_type,
-      priority,
-      status,
-      sort,
-      order,
-    } = req.query;
+    const { page, limit, content_type, source_type, priority, status, sort, order } = req.query;
 
     const filters = {
       page: page ? parseInt(page as string, 10) : 1,
@@ -110,7 +102,7 @@ export class AdminContentController {
       order: (order as 'asc' | 'desc') || 'desc',
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminContentService.getContentList(filters, adminId);
 
     const response: ApiResponse<typeof result> = {
@@ -127,7 +119,7 @@ export class AdminContentController {
    */
   getContentById = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminContentService.getContentById(id.toString(), adminId);
 
@@ -152,11 +144,12 @@ export class AdminContentController {
       revisionNote: z.string().optional(),
     });
 
-    validateBody(verifySchema)(req, res, () => {});
+    if (!parseBodyOrRespond(verifySchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminContentService.verifyContent(id.toString(), req.body, adminId, adminEmail);
 
@@ -174,11 +167,12 @@ export class AdminContentController {
    * Approve content
    */
   approveContent = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(approveContentSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(approveContentSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminContentService.approveContent(id.toString(), req.body, adminId, adminEmail);
 
@@ -196,11 +190,12 @@ export class AdminContentController {
    * Reject content
    */
   rejectContent = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(rejectContentSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(rejectContentSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminContentService.rejectContent(id.toString(), req.body, adminId, adminEmail);
 
@@ -218,10 +213,11 @@ export class AdminContentController {
    * Batch verify content
    */
   batchVerify = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(batchVerifySchema)(req, res, () => {});
+    if (!parseBodyOrRespond(batchVerifySchema, req, res)) {
+      return;
+    }
 
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminContentService.batchVerify(
       req.body.contentIds,
@@ -246,11 +242,12 @@ export class AdminContentController {
    * Delete content
    */
   deleteContent = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(deleteContentSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(deleteContentSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminContentService.deleteContent(id.toString(), req.body, adminId, adminEmail);
 

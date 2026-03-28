@@ -2,8 +2,24 @@ import prisma from '../config/database';
 import { logger } from '../utils/logger';
 import { errors, ApiError } from '../middleware/errorHandler';
 import { cacheService } from '../config/redis';
-import { CreateCampaignRequest, CampaignResponse } from '../types';
-import { Prisma } from '@prisma/client';
+import { CreateCampaignRequest, CampaignResponse, type CampaignTargetAudience } from '../types';
+import { Prisma, type CampaignStatus, type Campaign, type CampaignObjective } from '@prisma/client';
+import { sumFrozenAmountForCampaign, sumFrozenAmountForCampaigns } from './order-frozen.util';
+
+/** 将 Prisma Json 收窄为 API 层的 `CampaignTargetAudience` */
+function jsonToTargetAudience(value: Prisma.JsonValue): CampaignTargetAudience | undefined {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  const o = value as Record<string, unknown>;
+  const gender = o.gender;
+  return {
+    age_range: typeof o.age_range === 'string' ? o.age_range : undefined,
+    gender: gender === 'male' || gender === 'female' || gender === 'all' ? gender : undefined,
+    locations: Array.isArray(o.locations) ? o.locations.filter((x): x is string => typeof x === 'string') : undefined,
+    interests: Array.isArray(o.interests) ? o.interests.filter((x): x is string => typeof x === 'string') : undefined,
+  };
+}
 
 export class CampaignService {
   /**
@@ -65,14 +81,12 @@ export class CampaignService {
       return cached;
     }
 
-    const where: any = { id: campaignId };
-    
-    // If advertiserId is provided, ensure ownership
-    if (advertiserId) {
-      where.advertiserId = advertiserId;
-    }
+    const where: Prisma.CampaignWhereInput = {
+      id: campaignId,
+      ...(advertiserId ? { advertiserId } : {}),
+    };
 
-    const campaign = await prisma.campaign.findUnique({
+    const campaign = await prisma.campaign.findFirst({
       where,
     });
 
@@ -80,11 +94,15 @@ export class CampaignService {
       throw errors.notFound('活动不存在');
     }
 
-    const response = this.formatCampaignResponse(campaign);
-    
+    const orders_frozen_total = await sumFrozenAmountForCampaign(campaignId);
+    const response: CampaignResponse = {
+      ...this.formatCampaignResponse(campaign),
+      orders_frozen_total,
+    };
+
     // Cache for 5 minutes
     await cacheService.set(cacheKey, response, 300);
-    
+
     return response;
   }
 
@@ -102,28 +120,25 @@ export class CampaignService {
       objective?: string;
     }
   ): Promise<{ items: CampaignResponse[]; total: number }> {
-    const where: any = {
+    const where: Prisma.CampaignWhereInput = {
       advertiserId,
     };
 
     if (filters?.status) {
-      where.status = filters.status;
+      where.status = filters.status as CampaignStatus;
     }
 
     if (filters?.objective) {
-      where.objective = filters.objective;
+      where.objective = filters.objective as CampaignObjective;
     }
 
     if (filters?.keyword) {
-      where.OR = [
-        { title: { contains: filters.keyword } },
-        { description: { contains: filters.keyword } },
-      ];
+      where.OR = [{ title: { contains: filters.keyword } }, { description: { contains: filters.keyword } }];
     }
 
     // P1 Performance: Cache key for campaign list
     const cacheKey = `campaign:list:${advertiserId}:${filters?.status || 'all'}:${page}:${pageSize}`;
-    
+
     // Try cache first (3 min TTL for campaign lists)
     if (!filters?.keyword) {
       const cached = await cacheService.get<{ items: CampaignResponse[]; total: number }>(cacheKey);
@@ -132,32 +147,9 @@ export class CampaignService {
       }
     }
 
-    // P1 Performance: Use selective field selection
-    const selectFields = {
-      id: true,
-      title: true,
-      description: true,
-      objective: true,
-      budget: true,
-      budgetType: true,
-      spentAmount: true,
-      status: true,
-      totalKols: true,
-      selectedKols: true,
-      publishedVideos: true,
-      totalViews: true,
-      totalLikes: true,
-      totalComments: true,
-      startDate: true,
-      endDate: true,
-      createdAt: true,
-      updatedAt: true,
-    };
-
     const [campaigns, total] = await Promise.all([
       prisma.campaign.findMany({
         where,
-        select: selectFields,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -165,8 +157,13 @@ export class CampaignService {
       prisma.campaign.count({ where }),
     ]);
 
+    const frozenMap = await sumFrozenAmountForCampaigns(campaigns.map((c) => c.id));
+
     const result = {
-      items: campaigns.map((c) => this.formatCampaignResponse(c)),
+      items: campaigns.map((c) => ({
+        ...this.formatCampaignResponse(c),
+        orders_frozen_total: frozenMap.get(c.id) ?? 0,
+      })),
       total,
     };
 
@@ -184,7 +181,7 @@ export class CampaignService {
   async updateCampaign(
     campaignId: string,
     advertiserId: string,
-    data: any
+    data: Partial<CreateCampaignRequest> & { status?: CampaignStatus }
   ): Promise<CampaignResponse> {
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
@@ -204,25 +201,61 @@ export class CampaignService {
     }
 
     // Build update data
-    const updateData: any = {};
-    if (data.title !== undefined) updateData.title = data.title;
-    if (data.description !== undefined) updateData.description = data.description;
-    if (data.objective !== undefined) updateData.objective = data.objective;
-    if (data.budget !== undefined) updateData.budget = data.budget;
-    if (data.budget_type !== undefined) updateData.budgetType = data.budget_type;
-    if (data.target_audience !== undefined) updateData.targetAudience = data.target_audience;
-    if (data.target_platforms !== undefined) updateData.targetPlatforms = data.target_platforms;
-    if (data.min_followers !== undefined) updateData.minFollowers = data.min_followers;
-    if (data.max_followers !== undefined) updateData.maxFollowers = data.max_followers;
-    if (data.min_engagement_rate !== undefined) updateData.minEngagementRate = data.min_engagement_rate;
-    if (data.required_categories !== undefined) updateData.requiredCategories = data.required_categories;
-    if (data.target_countries !== undefined) updateData.targetCountries = data.target_countries;
-    if (data.content_requirements !== undefined) updateData.contentRequirements = data.content_requirements;
-    if (data.required_hashtags !== undefined) updateData.requiredHashtags = data.required_hashtags;
-    if (data.start_date !== undefined) updateData.startDate = data.start_date ? new Date(data.start_date) : null;
-    if (data.end_date !== undefined) updateData.endDate = data.end_date ? new Date(data.end_date) : null;
-    if (data.deadline !== undefined) updateData.deadline = data.deadline ? new Date(data.deadline) : null;
-    if (data.status !== undefined) updateData.status = data.status;
+    const updateData: Prisma.CampaignUpdateInput = {};
+    if (data.title !== undefined) {
+      updateData.title = data.title;
+    }
+    if (data.description !== undefined) {
+      updateData.description = data.description;
+    }
+    if (data.objective !== undefined) {
+      updateData.objective = data.objective;
+    }
+    if (data.budget !== undefined) {
+      updateData.budget = data.budget;
+    }
+    if (data.budget_type !== undefined) {
+      updateData.budgetType = data.budget_type;
+    }
+    if (data.target_audience !== undefined) {
+      updateData.targetAudience = data.target_audience as Prisma.InputJsonValue;
+    }
+    if (data.target_platforms !== undefined) {
+      updateData.targetPlatforms = data.target_platforms;
+    }
+    if (data.min_followers !== undefined) {
+      updateData.minFollowers = data.min_followers;
+    }
+    if (data.max_followers !== undefined) {
+      updateData.maxFollowers = data.max_followers;
+    }
+    if (data.min_engagement_rate !== undefined) {
+      updateData.minEngagementRate = data.min_engagement_rate;
+    }
+    if (data.required_categories !== undefined) {
+      updateData.requiredCategories = data.required_categories;
+    }
+    if (data.target_countries !== undefined) {
+      updateData.targetCountries = data.target_countries;
+    }
+    if (data.content_requirements !== undefined) {
+      updateData.contentRequirements = data.content_requirements;
+    }
+    if (data.required_hashtags !== undefined) {
+      updateData.requiredHashtags = data.required_hashtags;
+    }
+    if (data.start_date !== undefined) {
+      updateData.startDate = data.start_date ? new Date(data.start_date) : null;
+    }
+    if (data.end_date !== undefined) {
+      updateData.endDate = data.end_date ? new Date(data.end_date) : null;
+    }
+    if (data.deadline !== undefined) {
+      updateData.deadline = data.deadline ? new Date(data.deadline) : null;
+    }
+    if (data.status !== undefined) {
+      updateData.status = data.status;
+    }
 
     const updated = await prisma.campaign.update({
       where: { id: campaignId },
@@ -313,26 +346,26 @@ export class CampaignService {
   /**
    * Format campaign response
    */
-  private formatCampaignResponse(campaign: any): CampaignResponse {
+  private formatCampaignResponse(campaign: Campaign): CampaignResponse {
     return {
       id: campaign.id,
       advertiser_id: campaign.advertiserId,
       title: campaign.title,
-      description: campaign.description,
+      description: campaign.description ?? undefined,
       objective: campaign.objective,
       budget: campaign.budget.toNumber(),
       budget_type: campaign.budgetType,
       spent_amount: campaign.spentAmount.toNumber(),
-      target_audience: campaign.targetAudience,
+      target_audience: jsonToTargetAudience(campaign.targetAudience),
       target_platforms: campaign.targetPlatforms,
-      min_followers: campaign.minFollowers,
-      max_followers: campaign.maxFollowers,
-      min_engagement_rate: campaign.minEngagementRate,
+      min_followers: campaign.minFollowers ?? undefined,
+      max_followers: campaign.maxFollowers ?? undefined,
+      min_engagement_rate: campaign.minEngagementRate != null ? campaign.minEngagementRate.toNumber() : undefined,
       required_categories: campaign.requiredCategories,
       excluded_categories: campaign.excludedCategories,
       target_countries: campaign.targetCountries,
-      content_requirements: campaign.contentRequirements,
-      content_guidelines: campaign.contentGuidelines,
+      content_requirements: campaign.contentRequirements ?? undefined,
+      content_guidelines: campaign.contentGuidelines ?? undefined,
       required_hashtags: campaign.requiredHashtags,
       required_mentions: campaign.requiredMentions,
       start_date: campaign.startDate?.toISOString().split('T')[0],
@@ -346,9 +379,9 @@ export class CampaignService {
       total_views: campaign.totalViews,
       total_likes: campaign.totalLikes,
       total_comments: campaign.totalComments,
-      reviewed_by: campaign.reviewedBy,
+      reviewed_by: campaign.reviewedBy ?? undefined,
       reviewed_at: campaign.reviewedAt?.toISOString(),
-      review_notes: campaign.reviewNotes,
+      review_notes: campaign.reviewNotes ?? undefined,
       created_at: campaign.createdAt.toISOString(),
       updated_at: campaign.updatedAt.toISOString(),
     };

@@ -3,7 +3,7 @@ import { tasksService } from '../services/tasks.service';
 import { kolService } from '../services/kols.service';
 import { orderService } from '../services/orders.service';
 import { asyncHandler, errors } from '../middleware/errorHandler';
-import { validateBody } from '../middleware/validation';
+import { parseBodyOrRespond } from '../middleware/validation';
 import { applyTaskSchema, submitOrderSchema, reviseOrderSchema } from '../utils/validator';
 import { ApiResponse } from '../types';
 
@@ -25,18 +25,26 @@ export class TasksController {
 
     const { page = 1, page_size = 20, platform, min_budget, max_budget, status } = req.query;
 
-    const filters: any = {};
-    if (platform) filters.platform = platform as string;
-    if (min_budget) filters.min_budget = Number(min_budget);
-    if (max_budget) filters.max_budget = Number(max_budget);
-    if (status) filters.status = status as string;
+    const filters: {
+      platform?: string;
+      min_budget?: number;
+      max_budget?: number;
+      status?: string;
+    } = {};
+    if (platform) {
+      filters.platform = platform as string;
+    }
+    if (min_budget) {
+      filters.min_budget = Number(min_budget);
+    }
+    if (max_budget) {
+      filters.max_budget = Number(max_budget);
+    }
+    if (status) {
+      filters.status = status as string;
+    }
 
-    const result = await tasksService.getAvailableTasks(
-      kol.id,
-      Number(page),
-      Number(page_size),
-      filters
-    );
+    const result = await tasksService.getAvailableTasks(kol.id, Number(page), Number(page_size), filters);
 
     const totalPages = Math.ceil(result.total / Number(page_size));
 
@@ -90,7 +98,9 @@ export class TasksController {
    * Apply for a task
    */
   applyForTask = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(applyTaskSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(applyTaskSchema, req, res)) {
+      return;
+    }
 
     const userId = req.user?.id;
     if (!userId) {
@@ -132,17 +142,15 @@ export class TasksController {
 
     const { page = 1, page_size = 20, status, campaign_id } = req.query;
 
-    const filters: any = {};
-    if (status) filters.status = status as string;
-    if (campaign_id) filters.campaign_id = campaign_id as string;
+    const filters: { status?: string; campaign_id?: string } = {};
+    if (status) {
+      filters.status = status as string;
+    }
+    if (campaign_id) {
+      filters.campaign_id = campaign_id as string;
+    }
 
-    const result = await orderService.getOrders(
-      userId,
-      'kol',
-      Number(page),
-      Number(page_size),
-      filters
-    );
+    const result = await orderService.getOrders(userId, 'kol', Number(page), Number(page_size), filters);
 
     const totalPages = Math.ceil(result.total / Number(page_size));
 
@@ -238,7 +246,9 @@ export class TasksController {
    * Submit order work
    */
   submitOrder = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(submitOrderSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(submitOrderSchema, req, res)) {
+      return;
+    }
 
     const userId = req.user?.id;
     if (!userId) {
@@ -263,7 +273,9 @@ export class TasksController {
    * Revise order work
    */
   reviseOrder = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(reviseOrderSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(reviseOrderSchema, req, res)) {
+      return;
+    }
 
     const userId = req.user?.id;
     if (!userId) {

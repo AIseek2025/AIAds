@@ -1,6 +1,36 @@
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, AxiosHeaders } from 'axios';
+import { getApiErrorMessage } from '../utils/apiError';
+import { isAuthRefreshPath, isPublicAuthRequestPath } from '../utils/authRequestPaths';
+import { redirectToAppLogin } from '../utils/redirectOnUnauthorized';
 import type { ApiResponse, LoginData, RegisterData, ForgotPasswordData } from '../types';
 import type { AuthResponse, User } from '../types';
+
+/** 后端 TokenResponse 为 snake_case，统一为前端 AuthTokens */
+function mapAuthResponseData(raw: unknown): AuthResponse {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('认证接口返回数据无效');
+  }
+  const d = raw as {
+    user: User;
+    tokens: {
+      access_token?: string;
+      refresh_token?: string;
+      expires_in?: number;
+      accessToken?: string;
+      refreshToken?: string;
+      expiresIn?: number;
+    };
+  };
+  const t = d.tokens;
+  return {
+    user: d.user,
+    tokens: {
+      accessToken: String(t.accessToken ?? t.access_token ?? ''),
+      refreshToken: String(t.refreshToken ?? t.refresh_token ?? ''),
+      expiresIn: Number(t.expiresIn ?? t.expires_in ?? 0),
+    },
+  };
+}
 
 // API base URL from environment or default
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
@@ -28,25 +58,71 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor - Handle errors
+// Response interceptor：401 时优先 refresh 并重试（与 adminApi 一致）；登录/注册等公开认证接口不刷新
 api.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<ApiResponse>) => {
-    // Handle 401 Unauthorized - Token expired or invalid
-    if (error.response?.status === 401) {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      // Redirect to login (only if not already on login page)
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
+  async (error: AxiosError<ApiResponse>) => {
+    const originalRequest = error.config as (typeof error.config & { _retry?: boolean }) | undefined;
+    const status = error.response?.status;
+
+    const logAndReject = () => {
+      const errorMessage = getApiErrorMessage(error, '请求失败，请稍后重试');
+      console.error('API Error:', errorMessage);
+      return Promise.reject(error);
+    };
+
+    if (status !== 401 || !originalRequest) {
+      return logAndReject();
     }
 
-    // Handle other errors
-    const errorMessage = error.response?.data?.error?.message || '请求失败，请稍后重试';
-    console.error('API Error:', errorMessage);
+    const reqUrl = originalRequest.url || '';
 
-    return Promise.reject(error);
+    if (isPublicAuthRequestPath(reqUrl)) {
+      return logAndReject();
+    }
+
+    if (isAuthRefreshPath(reqUrl)) {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      redirectToAppLogin();
+      return logAndReject();
+    }
+
+    if (originalRequest._retry) {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      redirectToAppLogin();
+      return logAndReject();
+    }
+
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) {
+      localStorage.removeItem('accessToken');
+      redirectToAppLogin();
+      return logAndReject();
+    }
+
+    originalRequest._retry = true;
+    try {
+      const { data } = await axios.post<
+        ApiResponse<{ access_token: string; refresh_token: string; expires_in: number }>
+      >(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken });
+      if (!data.success || !data.data) {
+        throw new Error('refresh response invalid');
+      }
+      const { access_token, refresh_token } = data.data;
+      localStorage.setItem('accessToken', access_token);
+      localStorage.setItem('refreshToken', refresh_token);
+      const headers = AxiosHeaders.from(originalRequest.headers ?? {});
+      headers.set('Authorization', `Bearer ${access_token}`);
+      originalRequest.headers = headers;
+      return api(originalRequest);
+    } catch {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      redirectToAppLogin();
+      return logAndReject();
+    }
   }
 );
 
@@ -57,15 +133,32 @@ export const authAPI = {
    */
   login: async (data: LoginData): Promise<AuthResponse> => {
     const response = await api.post<ApiResponse<AuthResponse>>('/auth/login', data);
-    return response.data.data!;
+    return mapAuthResponseData(response.data.data);
+  },
+
+  /**
+   * 邮箱验证码登录（先 sendVerificationCode(..., 'login')）
+   */
+  loginWithEmailCode: async (payload: { email: string; code: string }): Promise<AuthResponse> => {
+    const response = await api.post<ApiResponse<AuthResponse>>('/auth/login-email-code', payload);
+    return mapAuthResponseData(response.data.data);
   },
 
   /**
    * User registration
    */
   register: async (data: RegisterData): Promise<AuthResponse> => {
-    const response = await api.post<ApiResponse<AuthResponse>>('/auth/register', data);
-    return response.data.data!;
+    const body: Record<string, unknown> = {
+      email: data.email,
+      password: data.password,
+      phone: data.phone,
+      role: data.role,
+    };
+    if (data.inviteCode?.trim()) {
+      body.invite_code = data.inviteCode.trim();
+    }
+    const response = await api.post<ApiResponse<AuthResponse>>('/auth/register', body);
+    return mapAuthResponseData(response.data.data);
   },
 
   /**
@@ -86,32 +179,54 @@ export const authAPI = {
   /**
    * Send verification code
    */
-  sendVerificationCode: async (type: 'email' | 'phone', target: string, purpose: 'register' | 'reset_password'): Promise<void> => {
+  sendVerificationCode: async (
+    type: 'email' | 'phone',
+    target: string,
+    purpose: 'register' | 'reset_password' | 'login'
+  ): Promise<void> => {
     await api.post('/auth/verification-code', { type, target, purpose });
   },
 
   /**
    * Verify code
    */
-  verifyCode: async (type: 'email' | 'phone', target: string, code: string): Promise<void> => {
-    await api.post('/auth/verify-code', { type, target, code });
+  verifyCode: async (
+    type: 'email' | 'phone',
+    target: string,
+    code: string,
+    purpose: 'register' | 'reset_password' | 'verify' | 'login' = 'register'
+  ): Promise<void> => {
+    await api.post('/auth/verify-code', { type, target, code, purpose });
   },
 
   /**
    * Reset password
    */
   resetPassword: async (data: ForgotPasswordData): Promise<void> => {
-    await api.post('/auth/reset-password', data);
+    await api.post('/auth/reset-password', {
+      type: 'email',
+      target: data.email,
+      code: data.verificationCode,
+      new_password: data.newPassword,
+    });
   },
 
   /**
-   * Refresh token
+   * Refresh token（直连 POST，避免走带拦截器的 `api` 实例导致与拦截器逻辑交织）
    */
   refreshToken: async (refreshToken: string): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> => {
-    const response = await api.post<ApiResponse<{ accessToken: string; refreshToken: string; expiresIn: number }>>('/auth/refresh', {
-      refresh_token: refreshToken,
-    });
-    return response.data.data!;
+    const { data } = await axios.post<
+      ApiResponse<{ access_token: string; refresh_token: string; expires_in: number }>
+    >(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken });
+    if (!data.success || !data.data) {
+      throw new Error('刷新 Token 失败');
+    }
+    const d = data.data;
+    return {
+      accessToken: d.access_token,
+      refreshToken: d.refresh_token,
+      expiresIn: d.expires_in,
+    };
   },
 };
 

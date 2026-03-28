@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { orderService } from '../services/orders.service';
 import { asyncHandler, errors } from '../middleware/errorHandler';
-import { validateBody } from '../middleware/validation';
+import { parseBodyOrRespond } from '../middleware/validation';
 import { createOrderSchema } from '../utils/validator';
 import { ApiResponse } from '../types';
 
@@ -11,11 +11,13 @@ export class OrderController {
    * Create order
    */
   createOrder = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(createOrderSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(createOrderSchema, req, res)) {
+      return;
+    }
 
     const userId = req.user?.id;
     const userRole = req.user?.role;
-    
+
     if (!userId || userRole !== 'advertiser') {
       throw errors.forbidden('只有广告主可以创建订单');
     }
@@ -41,16 +43,20 @@ export class OrderController {
   getOrders = asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?.id;
     const userRole = req.user?.role;
-    
+
     if (!userId) {
       throw errors.unauthorized('未授权');
     }
 
     const { page = 1, page_size = 20, status, campaign_id } = req.query;
 
-    const filters: any = {};
-    if (status) filters.status = status as string;
-    if (campaign_id) filters.campaign_id = campaign_id as string;
+    const filters: { status?: string; campaign_id?: string } = {};
+    if (status) {
+      filters.status = status as string;
+    }
+    if (campaign_id) {
+      filters.campaign_id = campaign_id as string;
+    }
 
     const result = await orderService.getOrders(
       userId,
@@ -81,13 +87,35 @@ export class OrderController {
   });
 
   /**
+   * GET /api/v1/orders/:id/cpm-metrics
+   */
+  getOrderCpmMetrics = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+
+    if (!userId) {
+      throw errors.unauthorized('未授权');
+    }
+
+    const { id } = req.params;
+    const metrics = await orderService.getOrderCpmMetrics(id as string, userId, userRole);
+
+    const response: ApiResponse<typeof metrics> = {
+      success: true,
+      data: metrics,
+    };
+
+    res.status(200).json(response);
+  });
+
+  /**
    * GET /api/v1/orders/:id
    * Get order by ID
    */
   getOrder = asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?.id;
     const userRole = req.user?.role;
-    
+
     if (!userId) {
       throw errors.unauthorized('未授权');
     }
@@ -110,7 +138,7 @@ export class OrderController {
    */
   acceptOrder = asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?.id;
-    
+
     if (!userId) {
       throw errors.unauthorized('未授权');
     }
@@ -134,7 +162,7 @@ export class OrderController {
    */
   rejectOrder = asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?.id;
-    
+
     if (!userId) {
       throw errors.unauthorized('未授权');
     }
@@ -159,7 +187,7 @@ export class OrderController {
    */
   completeOrder = asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?.id;
-    
+
     if (!userId) {
       throw errors.unauthorized('未授权');
     }
@@ -184,7 +212,7 @@ export class OrderController {
    */
   submitOrder = asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?.id;
-    
+
     if (!userId) {
       throw errors.unauthorized('未授权');
     }

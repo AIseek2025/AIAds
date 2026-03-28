@@ -19,6 +19,7 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
+      - run: npm run typecheck
       - run: npm run lint
       - run: npm test
       - run: npm run test:coverage
@@ -35,6 +36,7 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
+      - run: npm run typecheck
       - run: npm run lint
       - run: npm test
       - run: npm run test:coverage
@@ -65,16 +67,18 @@ jobs:
         with:
           node-version: '20'
       
-      # 构建前端
+      - name: Install dependencies (backend + frontend)
+        run: |
+          cd src/backend && npm ci
+          cd ../frontend && npm ci
+
+      - name: Monorepo aggregate check
+        run: npm run check
+
       - name: Build Frontend
-        run: |
-          cd src/frontend
-          npm ci
-          npm run build
-      
-      # 构建后端
+        run: npm run build
+        working-directory: ./src/frontend
+
       - name: Build Backend
-        run: |
-          cd src/backend
-          npm ci
-          npm run build
+        run: npm run build
+        working-directory: ./src/backend

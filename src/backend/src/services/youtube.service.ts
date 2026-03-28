@@ -118,7 +118,7 @@ export class YouTubeService {
         throw new ApiError('Failed to get access token from YouTube', 500, 'YOUTUBE_TOKEN_ERROR');
       }
 
-      const data = await response.json() as YouTubeTokenResponse;
+      const data = (await response.json()) as YouTubeTokenResponse;
 
       const now = new Date();
       const token: YouTubeToken = {
@@ -168,7 +168,7 @@ export class YouTubeService {
         throw new ApiError('Failed to refresh access token', 500, 'YOUTUBE_TOKEN_REFRESH_ERROR');
       }
 
-      const data = await response.json() as YouTubeTokenResponse;
+      const data = (await response.json()) as YouTubeTokenResponse;
 
       const now = new Date();
       const token: YouTubeToken = {
@@ -206,7 +206,7 @@ export class YouTubeService {
       const response = await fetch(`${url}?${params.toString()}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
         },
       });
 
@@ -216,7 +216,7 @@ export class YouTubeService {
         throw new ApiError('Failed to get channel info from YouTube', 500, 'YOUTUBE_CHANNEL_INFO_ERROR');
       }
 
-      const data = await response.json() as YouTubeChannelInfoResponse;
+      const data = (await response.json()) as YouTubeChannelInfoResponse;
 
       if (!data.items || data.items.length === 0) {
         throw new ApiError('No channel found', 404, 'YOUTUBE_CHANNEL_NOT_FOUND');
@@ -260,11 +260,7 @@ export class YouTubeService {
   /**
    * Get channel's video list
    */
-  async getChannelVideos(
-    accessToken: string,
-    channelId: string,
-    maxResults: number = 30
-  ): Promise<YouTubeVideo[]> {
+  async getChannelVideos(accessToken: string, channelId: string, maxResults: number = 30): Promise<YouTubeVideo[]> {
     const url = `${this.baseUrl}/search`;
     const videos: YouTubeVideo[] = [];
     let nextPageToken: string | undefined;
@@ -286,7 +282,7 @@ export class YouTubeService {
         const response = await fetch(`${url}?${params.toString()}`, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${accessToken}`,
+            Authorization: `Bearer ${accessToken}`,
           },
         });
 
@@ -296,20 +292,24 @@ export class YouTubeService {
           break;
         }
 
-        const data = await response.json() as YouTubeVideoListResponse;
+        const data = (await response.json()) as YouTubeVideoListResponse;
         nextPageToken = data.nextPageToken;
 
-        const videoIds = data.items.map(item => item.id);
-        if (videoIds.length === 0) break;
+        const videoIds = data.items.map((item) => item.id);
+        if (videoIds.length === 0) {
+          break;
+        }
 
         // Fetch video details with statistics
         const videoDetails = await this.getVideoDetails(accessToken, videoIds);
-        
+
         for (const video of videoDetails) {
           videos.push(video);
         }
 
-        if (!nextPageToken) break;
+        if (!nextPageToken) {
+          break;
+        }
       }
 
       logger.info('Successfully fetched YouTube videos', { count: videos.length });
@@ -323,10 +323,7 @@ export class YouTubeService {
   /**
    * Get video details with statistics
    */
-  private async getVideoDetails(
-    accessToken: string,
-    videoIds: string[]
-  ): Promise<YouTubeVideo[]> {
+  private async getVideoDetails(accessToken: string, videoIds: string[]): Promise<YouTubeVideo[]> {
     const url = `${this.baseUrl}/videos`;
     const params = new URLSearchParams({
       part: 'snippet,contentDetails,statistics',
@@ -337,7 +334,7 @@ export class YouTubeService {
       const response = await fetch(`${url}?${params.toString()}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
         },
       });
 
@@ -347,9 +344,9 @@ export class YouTubeService {
         return [];
       }
 
-      const data = await response.json() as YouTubeVideoListResponse;
+      const data = (await response.json()) as YouTubeVideoListResponse;
 
-      return data.items.map(item => ({
+      return data.items.map((item) => ({
         videoId: item.id,
         title: item.snippet.title,
         description: item.snippet.description,
@@ -380,10 +377,7 @@ export class YouTubeService {
   /**
    * Get video statistics
    */
-  async getVideoStats(
-    accessToken: string,
-    videoId: string
-  ): Promise<YouTubeVideoStats> {
+  async getVideoStats(accessToken: string, videoId: string): Promise<YouTubeVideoStats> {
     const url = `${this.baseUrl}/videos`;
     const params = new URLSearchParams({
       part: 'statistics',
@@ -394,7 +388,7 @@ export class YouTubeService {
       const response = await fetch(`${url}?${params.toString()}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
         },
       });
 
@@ -404,7 +398,7 @@ export class YouTubeService {
         throw new ApiError('Failed to get video statistics', 500, 'YOUTUBE_VIDEO_STATS_ERROR');
       }
 
-      const data = await response.json() as YouTubeVideoStatsResponse;
+      const data = (await response.json()) as YouTubeVideoStatsResponse;
 
       if (!data.items || data.items.length === 0) {
         throw new ApiError('Video not found', 404, 'YOUTUBE_VIDEO_NOT_FOUND');
@@ -415,9 +409,7 @@ export class YouTubeService {
       // Calculate engagement rate
       const totalEngagements = parseInt(stats.likeCount, 10) + parseInt(stats.commentCount, 10);
       const viewCount = parseInt(stats.viewCount, 10);
-      const engagementRate = viewCount > 0
-        ? (totalEngagements / viewCount) * 100
-        : 0;
+      const engagementRate = viewCount > 0 ? (totalEngagements / viewCount) * 100 : 0;
 
       const videoStats: YouTubeVideoStats = {
         videoId,
@@ -448,10 +440,7 @@ export class YouTubeService {
   /**
    * Handle OAuth callback and save token to database
    */
-  async handleCallback(
-    params: YouTubeCallbackParams,
-    kolId: string
-  ): Promise<YouTubeCallbackResult> {
+  async handleCallback(params: YouTubeCallbackParams, kolId: string): Promise<YouTubeCallbackResult> {
     try {
       // Check for error in callback
       if (params.error) {
@@ -626,9 +615,7 @@ export class YouTubeService {
         const avgLikes = Math.round(avgViews * 0.05);
         const avgComments = Math.round(avgViews * 0.01);
         const avgShares = Math.round(avgViews * 0.005);
-        const engagementRate = avgViews > 0
-          ? ((avgLikes + avgComments + avgShares) / avgViews) * 100
-          : 0;
+        const engagementRate = avgViews > 0 ? ((avgLikes + avgComments + avgShares) / avgViews) * 100 : 0;
 
         // Create stats history
         await prisma.kolStatsHistory.create({
@@ -649,19 +636,15 @@ export class YouTubeService {
 
       // Sync videos
       if (defaultOptions.syncVideos) {
-        const videos = await this.getChannelVideos(
-          accessToken,
-          kolAccount.platformId,
-          defaultOptions.maxVideos
-        );
+        const videos = await this.getChannelVideos(accessToken, kolAccount.platformId, defaultOptions.maxVideos);
         result.videos = videos;
       }
 
       // Sync video stats (for recent videos)
       if (defaultOptions.syncVideoStats && result.videos) {
-        const videoStatsPromises = result.videos.slice(0, 5).map(
-          (video) => this.getVideoStats(accessToken, video.videoId)
-        );
+        const videoStatsPromises = result.videos
+          .slice(0, 5)
+          .map((video) => this.getVideoStats(accessToken, video.videoId));
         result.videoStats = await Promise.all(videoStatsPromises);
       }
 
@@ -736,10 +719,7 @@ export class YouTubeService {
   /**
    * Calculate sync statistics
    */
-  calculateSyncStats(
-    channelInfo: YouTubeChannelInfo,
-    videoStats: YouTubeVideoStats[]
-  ): YouTubeSyncStats {
+  calculateSyncStats(channelInfo: YouTubeChannelInfo, videoStats: YouTubeVideoStats[]): YouTubeSyncStats {
     const totalVideos = videoStats.length;
     const totalViews = videoStats.reduce((sum, s) => sum + s.viewCount, 0);
     const totalLikes = videoStats.reduce((sum, s) => sum + s.likeCount, 0);
@@ -749,9 +729,7 @@ export class YouTubeService {
     const avgLikes = totalVideos > 0 ? Math.round(totalLikes / totalVideos) : 0;
     const avgComments = totalVideos > 0 ? Math.round(totalComments / totalVideos) : 0;
 
-    const engagementRate = avgViews > 0
-      ? ((avgLikes + avgComments) / avgViews) * 100
-      : 0;
+    const engagementRate = avgViews > 0 ? ((avgLikes + avgComments) / avgViews) * 100 : 0;
 
     return {
       totalSubscribers: channelInfo.subscriberCount,

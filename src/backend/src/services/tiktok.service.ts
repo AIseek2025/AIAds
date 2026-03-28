@@ -1,6 +1,6 @@
 /**
  * TikTok Service
- * 
+ *
  * Handles TikTok API integration including OAuth authentication,
  * user data fetching, and video statistics.
  */
@@ -39,12 +39,7 @@ export class TikTokService {
       clientId: process.env.TIKTOK_CLIENT_ID || '',
       clientSecret: process.env.TIKTOK_CLIENT_SECRET || '',
       redirectUri: process.env.TIKTOK_REDIRECT_URI || 'http://localhost:3000/api/v1/integrations/tiktok/callback',
-      scopes: [
-        'user.info.basic',
-        'video.list',
-        'video.statistic',
-        'follower.list',
-      ],
+      scopes: ['user.info.basic', 'video.list', 'video.statistic', 'follower.list'],
     };
 
     this.validateConfig();
@@ -71,7 +66,7 @@ export class TikTokService {
    */
   async getAuthUrl(state?: string): Promise<TikTokAuthUrlResponse> {
     const oauthState = state || this.generateState();
-    
+
     const params = new URLSearchParams({
       client_key: this.config.clientId,
       redirect_uri: this.config.redirectUri,
@@ -81,7 +76,7 @@ export class TikTokService {
     });
 
     const authUrl = `${this.authUrl}?${params.toString()}`;
-    
+
     logger.info('Generated TikTok OAuth URL', { state: oauthState });
 
     return {
@@ -95,7 +90,7 @@ export class TikTokService {
    */
   async getAccessToken(code: string): Promise<TikTokToken> {
     const tokenUrl = `${this.baseUrl}/oauth/token/`;
-    
+
     const params = new URLSearchParams({
       client_key: this.config.clientId,
       client_secret: this.config.clientSecret,
@@ -119,8 +114,8 @@ export class TikTokService {
         throw new ApiError('Failed to get access token from TikTok', 500, 'TIKTOK_TOKEN_ERROR');
       }
 
-      const data = await response.json() as TikTokTokenResponse;
-      
+      const data = (await response.json()) as TikTokTokenResponse;
+
       const now = new Date();
       const token: TikTokToken = {
         accessToken: data.access_token,
@@ -131,7 +126,7 @@ export class TikTokService {
         scope: data.scope,
       };
 
-      logger.info('Successfully obtained TikTok access token', { 
+      logger.info('Successfully obtained TikTok access token', {
         openId: data.open_id,
         expiresAt: token.expiresAt,
       });
@@ -151,7 +146,7 @@ export class TikTokService {
    */
   async refreshAccessToken(refreshToken: string): Promise<TikTokToken> {
     const tokenUrl = `${this.baseUrl}/oauth/refresh_token/`;
-    
+
     const params = new URLSearchParams({
       client_key: this.config.clientId,
       client_secret: this.config.clientSecret,
@@ -174,8 +169,8 @@ export class TikTokService {
         throw new ApiError('Failed to refresh access token', 500, 'TIKTOK_TOKEN_REFRESH_ERROR');
       }
 
-      const data = await response.json() as TikTokTokenResponse;
-      
+      const data = (await response.json()) as TikTokTokenResponse;
+
       const now = new Date();
       const token: TikTokToken = {
         accessToken: data.access_token,
@@ -186,7 +181,7 @@ export class TikTokService {
         scope: data.scope,
       };
 
-      logger.info('Successfully refreshed TikTok access token', { 
+      logger.info('Successfully refreshed TikTok access token', {
         openId: data.open_id,
         expiresAt: token.expiresAt,
       });
@@ -206,12 +201,12 @@ export class TikTokService {
    */
   async getUserInfo(accessToken: string): Promise<TikTokUserInfo> {
     const url = `${this.baseUrl}/user/info/`;
-    
+
     try {
       const response = await fetch(url, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
         },
       });
 
@@ -221,8 +216,8 @@ export class TikTokService {
         throw new ApiError('Failed to get user info from TikTok', 500, 'TIKTOK_USER_INFO_ERROR');
       }
 
-      const data = await response.json() as TikTokUserInfoResponse;
-      
+      const data = (await response.json()) as TikTokUserInfoResponse;
+
       const userInfo: TikTokUserInfo = {
         openId: data.data.open_id,
         unionId: data.data.union_id,
@@ -239,7 +234,7 @@ export class TikTokService {
         profileDeepLink: data.data.profile_deep_link,
       };
 
-      logger.info('Successfully fetched TikTok user info', { 
+      logger.info('Successfully fetched TikTok user info', {
         username: userInfo.username,
         followers: userInfo.followerCount,
       });
@@ -257,11 +252,7 @@ export class TikTokService {
   /**
    * Get user's video list
    */
-  async getUserVideos(
-    accessToken: string, 
-    userId: string,
-    maxResults: number = 30
-  ): Promise<TikTokVideo[]> {
+  async getUserVideos(accessToken: string, userId: string, maxResults: number = 30): Promise<TikTokVideo[]> {
     const url = `${this.baseUrl}/video/list/`;
     const videos: TikTokVideo[] = [];
     let cursor = 0;
@@ -278,7 +269,7 @@ export class TikTokService {
         const response = await fetch(`${url}?${params.toString()}`, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${accessToken}`,
+            Authorization: `Bearer ${accessToken}`,
           },
         });
 
@@ -288,8 +279,8 @@ export class TikTokService {
           break;
         }
 
-        const data = await response.json() as TikTokVideoResponse;
-        
+        const data = (await response.json()) as TikTokVideoResponse;
+
         for (const videoItem of data.data.videos) {
           videos.push({
             videoId: videoItem.video_id,
@@ -336,12 +327,9 @@ export class TikTokService {
   /**
    * Get video statistics
    */
-  async getVideoStats(
-    accessToken: string, 
-    videoId: string
-  ): Promise<TikTokVideoStats> {
+  async getVideoStats(accessToken: string, videoId: string): Promise<TikTokVideoStats> {
     const url = `${this.baseUrl}/video/statistic/`;
-    
+
     try {
       const params = new URLSearchParams({
         video_id: videoId,
@@ -350,7 +338,7 @@ export class TikTokService {
       const response = await fetch(`${url}?${params.toString()}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
         },
       });
 
@@ -360,14 +348,12 @@ export class TikTokService {
         throw new ApiError('Failed to get video statistics', 500, 'TIKTOK_VIDEO_STATS_ERROR');
       }
 
-      const data = await response.json() as TikTokVideoStatsResponse;
+      const data = (await response.json()) as TikTokVideoStatsResponse;
       const stats = data.data;
 
       // Calculate engagement rate
       const totalEngagements = stats.like_count + stats.comment_count + stats.share_count;
-      const engagementRate = stats.play_count > 0 
-        ? (totalEngagements / stats.play_count) * 100 
-        : 0;
+      const engagementRate = stats.play_count > 0 ? (totalEngagements / stats.play_count) * 100 : 0;
 
       const videoStats: TikTokVideoStats = {
         videoId: stats.video_id,
@@ -384,7 +370,7 @@ export class TikTokService {
         engagementRate: parseFloat(engagementRate.toFixed(2)),
       };
 
-      logger.info('Successfully fetched TikTok video stats', { 
+      logger.info('Successfully fetched TikTok video stats', {
         videoId,
         playCount: stats.play_count,
         engagementRate: videoStats.engagementRate,
@@ -403,10 +389,7 @@ export class TikTokService {
   /**
    * Handle OAuth callback and save token to database
    */
-  async handleCallback(
-    params: TikTokCallbackParams,
-    kolId: string
-  ): Promise<TikTokCallbackResult> {
+  async handleCallback(params: TikTokCallbackParams, kolId: string): Promise<TikTokCallbackResult> {
     try {
       // Exchange code for token
       const token = await this.getAccessToken(params.code);
@@ -458,8 +441,8 @@ export class TikTokService {
         });
       }
 
-      logger.info('TikTok account bound successfully', { 
-        kolId, 
+      logger.info('TikTok account bound successfully', {
+        kolId,
         accountId: kolAccount.id,
         username: userInfo.username,
       });
@@ -515,13 +498,13 @@ export class TikTokService {
       let accessToken = kolAccount.accessToken;
       const expiresAt = new Date(kolAccount.expiresAt || '2000-01-01');
       const now = new Date();
-      
+
       if (expiresAt.getTime() - now.getTime() < this.tokenRefreshThreshold * 1000) {
         logger.info('Refreshing TikTok access token', { kolId });
         if (kolAccount.refreshToken) {
           const newToken = await this.refreshAccessToken(kolAccount.refreshToken);
           accessToken = newToken.accessToken;
-          
+
           await prisma.kolAccount.update({
             where: { id: kolAccount.id },
             data: {
@@ -579,9 +562,7 @@ export class TikTokService {
         const avgLikes = Math.round(avgViews * 0.05);
         const avgComments = Math.round(avgViews * 0.01);
         const avgShares = Math.round(avgViews * 0.005);
-        const engagementRate = avgViews > 0 
-          ? ((avgLikes + avgComments + avgShares) / avgViews) * 100 
-          : 0;
+        const engagementRate = avgViews > 0 ? ((avgLikes + avgComments + avgShares) / avgViews) * 100 : 0;
 
         // Create stats history
         await prisma.kolStatsHistory.create({
@@ -603,24 +584,20 @@ export class TikTokService {
 
       // Sync videos
       if (defaultOptions.syncVideos) {
-        const videos = await this.getUserVideos(
-          accessToken, 
-          kolAccount.platformId,
-          defaultOptions.maxVideos
-        );
+        const videos = await this.getUserVideos(accessToken, kolAccount.platformId, defaultOptions.maxVideos);
         result.videos = videos;
       }
 
       // Sync video stats (for recent videos)
       if (defaultOptions.syncVideoStats && result.videos) {
-        const videoStatsPromises = result.videos.slice(0, 5).map(
-          (video) => this.getVideoStats(accessToken, video.videoId)
-        );
+        const videoStatsPromises = result.videos
+          .slice(0, 5)
+          .map((video) => this.getVideoStats(accessToken, video.videoId));
         result.videoStats = await Promise.all(videoStatsPromises);
       }
 
-      logger.info('TikTok KOL data synced successfully', { 
-        kolId, 
+      logger.info('TikTok KOL data synced successfully', {
+        kolId,
         username: result.userInfo?.username,
         followers: result.userInfo?.followerCount,
       });
@@ -628,7 +605,7 @@ export class TikTokService {
       return result;
     } catch (error) {
       logger.error('Failed to sync TikTok KOL data', { kolId, error });
-      
+
       return {
         kolId,
         accountId: '',
@@ -690,10 +667,7 @@ export class TikTokService {
   /**
    * Calculate sync statistics
    */
-  calculateSyncStats(
-    userInfo: TikTokUserInfo,
-    videoStats: TikTokVideoStats[]
-  ): TikTokSyncStats {
+  calculateSyncStats(userInfo: TikTokUserInfo, videoStats: TikTokVideoStats[]): TikTokSyncStats {
     const totalVideos = videoStats.length;
     const totalViews = videoStats.reduce((sum, s) => sum + s.playCount, 0);
     const totalLikes = videoStats.reduce((sum, s) => sum + s.likeCount, 0);
@@ -705,9 +679,7 @@ export class TikTokService {
     const avgComments = totalVideos > 0 ? Math.round(totalComments / totalVideos) : 0;
     const avgShares = totalVideos > 0 ? Math.round(totalShares / totalVideos) : 0;
 
-    const engagementRate = avgViews > 0
-      ? ((avgLikes + avgComments + avgShares) / avgViews) * 100
-      : 0;
+    const engagementRate = avgViews > 0 ? ((avgLikes + avgComments + avgShares) / avgViews) * 100 : 0;
 
     return {
       totalFollowers: userInfo.followerCount,

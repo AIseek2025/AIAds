@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { advertiserService } from '../services/advertisers.service';
 import { asyncHandler, errors } from '../middleware/errorHandler';
-import { validateBody } from '../middleware/validation';
+import { parseBodyOrRespond } from '../middleware/validation';
 import { createAdvertiserSchema, updateAdvertiserSchema, rechargeSchema } from '../utils/validator';
 import { ApiResponse } from '../types';
 
@@ -11,7 +11,9 @@ export class AdvertiserController {
    * Create advertiser profile
    */
   createAdvertiser = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(createAdvertiserSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(createAdvertiserSchema, req, res)) {
+      return;
+    }
 
     const userId = req.user?.id;
     if (!userId) {
@@ -58,7 +60,9 @@ export class AdvertiserController {
    * Update advertiser profile
    */
   updateAdvertiser = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(updateAdvertiserSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(updateAdvertiserSchema, req, res)) {
+      return;
+    }
 
     const userId = req.user?.id;
     if (!userId) {
@@ -81,7 +85,9 @@ export class AdvertiserController {
    * Recharge advertiser account
    */
   recharge = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(rechargeSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(rechargeSchema, req, res)) {
+      return;
+    }
 
     const userId = req.user?.id;
     if (!userId) {
@@ -131,12 +137,7 @@ export class AdvertiserController {
 
     const { page = 1, page_size = 20, type } = req.query;
 
-    const result = await advertiserService.getTransactions(
-      userId,
-      Number(page),
-      Number(page_size),
-      type as string
-    );
+    const result = await advertiserService.getTransactions(userId, Number(page), Number(page_size), type as string);
 
     const totalPages = Math.ceil(result.total / Number(page_size));
 

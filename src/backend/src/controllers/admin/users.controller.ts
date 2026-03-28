@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { adminUsersService } from '../../services/admin/users.service';
 import { asyncHandler } from '../../middleware/errorHandler';
-import { validateBody } from '../../middleware/validation';
+import { requireAdmin } from '../../middleware/adminAuth';
+import { parseBodyOrRespond } from '../../middleware/validation';
 import { ApiResponse } from '../../types';
 import { z } from 'zod';
 
@@ -42,18 +43,8 @@ export class AdminUsersController {
    * Get user list with pagination and filters
    */
   getUserList = asyncHandler(async (req: Request, res: Response) => {
-    const {
-      page,
-      limit,
-      role,
-      status,
-      keyword,
-      email_verified,
-      created_after,
-      created_before,
-      sort,
-      order,
-    } = req.query;
+    const { page, limit, role, status, keyword, email_verified, created_after, created_before, sort, order } =
+      req.query;
 
     const filters = {
       page: page ? parseInt(page as string, 10) : 1,
@@ -61,16 +52,14 @@ export class AdminUsersController {
       role: role as string,
       status: status as string,
       keyword: keyword as string,
-      emailVerified: email_verified === 'true' || email_verified === 'false'
-        ? email_verified === 'true'
-        : undefined,
+      emailVerified: email_verified === 'true' || email_verified === 'false' ? email_verified === 'true' : undefined,
       createdAfter: created_after as string,
       createdBefore: created_before as string,
       sort: sort as string,
       order: (order as 'asc' | 'desc') || 'desc',
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminUsersService.getUserList(filters, adminId);
 
     const response: ApiResponse<typeof result> = {
@@ -87,7 +76,7 @@ export class AdminUsersController {
    */
   getUserById = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminUsersService.getUserById(id.toString(), adminId);
 
@@ -104,11 +93,12 @@ export class AdminUsersController {
    * Update user
    */
   updateUser = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(updateUserSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(updateUserSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminUsersService.updateUser(id.toString(), req.body, adminId, adminEmail);
 
@@ -132,11 +122,12 @@ export class AdminUsersController {
       note: z.string().optional(),
     });
 
-    validateBody(statusSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(statusSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminUsersService.updateUserStatus(
       id.toString(),
@@ -162,8 +153,7 @@ export class AdminUsersController {
    */
   deleteUser = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminUsersService.deleteUser(id.toString(), adminId, adminEmail);
 
@@ -192,7 +182,7 @@ export class AdminUsersController {
       createdBefore: created_before as string,
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminUsersService.getUserActivity(id.toString(), filters, adminId);
 
     const response: ApiResponse<typeof result> = {
@@ -208,11 +198,12 @@ export class AdminUsersController {
    * Ban user
    */
   banUser = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(banUserSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(banUserSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminUsersService.banUser(id.toString(), req.body, adminId, adminEmail);
 
@@ -230,11 +221,12 @@ export class AdminUsersController {
    * Unban user
    */
   unbanUser = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(unbanUserSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(unbanUserSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminUsersService.unbanUser(id.toString(), adminId, adminEmail, req.body.note);
 
@@ -252,11 +244,12 @@ export class AdminUsersController {
    * Suspend user
    */
   suspendUser = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(suspendUserSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(suspendUserSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminUsersService.suspendUser(id.toString(), req.body, adminId, adminEmail);
 
@@ -274,11 +267,12 @@ export class AdminUsersController {
    * Reset user password
    */
   resetPassword = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(resetPasswordSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(resetPasswordSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminUsersService.resetUserPassword(
       id.toString(),

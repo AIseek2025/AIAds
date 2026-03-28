@@ -92,6 +92,10 @@ enum TransactionType {
   commission
   adjustment
   bonus
+  /// 下单时从可用余额划入冻结
+  budget_freeze
+  /// 拒单或流程终止时解冻退回可用余额
+  budget_release
 }
 
 enum TransactionStatus {
@@ -161,11 +165,13 @@ model User {
   createdAt           DateTime   @default(now()) @map("created_at")
   updatedAt           DateTime   @updatedAt @map("updated_at")
   deletedAt           DateTime?  @map("deleted_at")
+  inviteCodeId        String?    @map("invite_code_id")
 
   advertiser    Advertiser?
   kol           Kol?
   notifications Notification[]
   auditLogs     AuditLog[]
+  inviteCode    InviteCode? @relation(fields: [inviteCodeId], references: [id], onDelete: SetNull)
 
   @@index([email])
   @@index([phone])
@@ -174,7 +180,29 @@ model User {
   @@index([role, status])
   @@index([createdAt])
   @@index([email, status])
+  @@index([inviteCodeId])
   @@map("users")
+}
+
+/// 注册邀请码（增长/渠道；与注册角色 role_target 对齐）
+model InviteCode {
+  id              String    @id @default(uuid())
+  code            String    @unique
+  roleTarget      UserRole  @map("role_target")
+  maxUses         Int       @default(1) @map("max_uses")
+  usedCount       Int       @default(0) @map("used_count")
+  expiresAt       DateTime? @map("expires_at")
+  active          Boolean   @default(true)
+  note            String?
+  createdByUserId String?   @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  users User[]
+
+  @@index([code])
+  @@index([active])
+  @@map("invite_codes")
 }
 
 model Advertiser {
@@ -450,6 +478,13 @@ model Order {
   kolId              String      @map("kol_id")
   advertiserId       String      @map("advertiser_id")
   orderNo            String      @unique @map("order_no")
+  /// fixed：一口价总价；cpm：结算时按曝光写入 price / platform_fee / kol_earning
+  pricingModel       String      @default("fixed") @map("pricing_model")
+  cpmRate            Decimal?    @map("cpm_rate")
+  /// CPM 订单预算上限（与文档「应付」封顶一致）；冻结与超额保护依赖此字段
+  cpmBudgetCap       Decimal?    @map("cpm_budget_cap")
+  /// 已从广告主可用余额划入 frozen_balance 的预算（固定价=成交价；CPM=预算上限）
+  frozenAmount       Decimal     @default(0) @map("frozen_amount")
   price              Decimal
   platformFee        Decimal     @map("platform_fee")
   kolEarning         Decimal     @map("kol_earning")
@@ -495,6 +530,7 @@ model Order {
   @@index([status, createdAt])
   @@index([advertiserId, status])
   @@index([kolId, status])
+  @@index([kolId, acceptedAt])
   @@map("orders")
 }
 

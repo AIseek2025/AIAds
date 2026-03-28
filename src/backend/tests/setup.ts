@@ -1,121 +1,55 @@
-// Load test environment variables first
+import path from 'path';
 import dotenv from 'dotenv';
-dotenv.config({ path: '.env.test' });
+
+dotenv.config({ path: path.join(__dirname, '../.env.test') });
 
 import request from 'supertest';
 
-// Mock Prisma before importing app
 jest.mock('../src/config/database', () => {
-  const mockPrisma = {
-    user: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      findMany: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-      deleteMany: jest.fn(),
-      count: jest.fn(),
-    },
-    advertiser: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      findMany: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-      deleteMany: jest.fn(),
-      count: jest.fn(),
-    },
-    kol: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      findMany: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-      deleteMany: jest.fn(),
-      count: jest.fn(),
-    },
-    campaign: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      findMany: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-      deleteMany: jest.fn(),
-      count: jest.fn(),
-    },
-    order: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      findMany: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-      deleteMany: jest.fn(),
-      count: jest.fn(),
-    },
-    transaction: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      findMany: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-      deleteMany: jest.fn(),
-      count: jest.fn(),
-    },
-    $connect: jest.fn(),
-    $disconnect: jest.fn(),
-    $on: jest.fn(),
-    $use: jest.fn(),
-    $transaction: jest.fn(),
-  };
+  if (process.env.TEST_USE_REAL_DB === '1') {
+    return jest.requireActual('../src/config/database');
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require('./prisma-memory').createPrismaMemoryMock();
+});
 
+jest.mock('../src/config/redis', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { getTestRedis } = require('./memory-redis');
   return {
-    __esModule: true,
-    default: mockPrisma,
-    connectDatabase: jest.fn(),
-    disconnectDatabase: jest.fn(),
-    connectionPoolConfig: {},
+    cacheService: {
+      get: jest.fn(),
+      set: jest.fn(),
+      delete: jest.fn(),
+    },
+    initRedis: jest.fn(() => getTestRedis()),
+    getRedis: jest.fn(() => getTestRedis()),
+    closeRedis: jest.fn(),
   };
 });
 
-// Mock Redis
-jest.mock('../src/config/redis', () => ({
-  cacheService: {
-    get: jest.fn(),
-    set: jest.fn(),
-    delete: jest.fn(),
-  },
-  initRedis: jest.fn(),
-  closeRedis: jest.fn(),
-}));
-
+import { resetPrismaMemory } from './prisma-memory';
+import { resetTestRedis } from './memory-redis';
 import app from '../src/app';
 import { hashPassword } from '../src/utils/crypto';
 
-// Global test setup
 beforeAll(async () => {
-  // Wait for database to be ready
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  await new Promise((resolve) => setTimeout(resolve, 500));
 });
 
-// Clean up test data after each test
 afterEach(async () => {
-  // Clear all mocks
+  resetTestRedis();
+  if (process.env.TEST_USE_REAL_DB !== '1') {
+    resetPrismaMemory();
+  }
   jest.clearAllMocks();
 });
 
-// Close database connection
 afterAll(async () => {
-  // Cleanup
+  // no-op
 });
 
-// Helper function to create test user
-export async function createTestUser(overrides = {}) {
+export async function createTestUser(overrides: Record<string, unknown> = {}) {
   const userData = {
     email: `test_${Date.now()}@test.com`,
     password: 'TestPass123!',
@@ -124,9 +58,9 @@ export async function createTestUser(overrides = {}) {
     ...overrides,
   };
 
-  const passwordHash = await hashPassword(userData.password);
+  const passwordHash = await hashPassword(userData.password as string);
 
-  const user = {
+  return {
     id: 'test-user-id',
     email: userData.email,
     passwordHash,
@@ -136,32 +70,35 @@ export async function createTestUser(overrides = {}) {
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-
-  return user;
 }
 
-// Helper function to get auth token
-export async function getAuthToken(overrides = {}) {
-  const user = await createTestUser(overrides);
-
-  const response = await request(app)
-    .post('/api/v1/auth/login')
+export async function getAuthToken(overrides: Record<string, unknown> = {}) {
+  const email = `test_${Date.now()}@test.com`;
+  await request(app)
+    .post('/api/v1/auth/register')
     .send({
-      email: user.email,
+      email,
       password: 'TestPass123!',
+      role: 'advertiser',
+      nickname: 'Test User',
+      ...overrides,
     });
+
+  const response = await request(app).post('/api/v1/auth/login').send({
+    email,
+    password: 'TestPass123!',
+  });
 
   return {
     token: response.body.data?.tokens?.access_token || 'mock-token',
-    user,
+    user: response.body.data?.user,
   };
 }
 
-// Declare global test types
 declare global {
   namespace NodeJS {
     interface Global {
-      testUser: any;
+      testUser: unknown;
       testToken: string;
     }
   }

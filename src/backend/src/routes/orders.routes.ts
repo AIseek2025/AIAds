@@ -23,6 +23,13 @@ router.post('/', moderateRateLimiter, orderController.createOrder);
 router.get('/', orderController.getOrders);
 
 /**
+ * @route   GET /api/v1/orders/:id/cpm-metrics
+ * @desc    CPM 口径与预估/结算拆分（数据透明化）
+ * @access  Private
+ */
+router.get('/:id/cpm-metrics', orderController.getOrderCpmMetrics);
+
+/**
  * @route   GET /api/v1/orders/:id
  * @desc    Get order by ID
  * @access  Private

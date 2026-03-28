@@ -81,10 +81,7 @@ export class IntegrationsController {
     }
 
     // Handle callback and save token
-    const result = await tiktokService.handleCallback(
-      { code, state },
-      kolId
-    );
+    const result = await tiktokService.handleCallback({ code, state }, kolId);
 
     if (result.success) {
       // Redirect to frontend success page
@@ -141,11 +138,7 @@ export class IntegrationsController {
     const result: TikTokSyncResult = await tiktokSyncService.syncKol(kol.id, fullSync);
 
     if (!result.success) {
-      throw new ApiError(
-        result.error || '数据同步失败',
-        500,
-        'TIKTOK_SYNC_ERROR'
-      );
+      throw new ApiError(result.error || '数据同步失败', 500, 'TIKTOK_SYNC_ERROR');
     }
 
     const response: ApiResponse<{
@@ -297,10 +290,7 @@ export class IntegrationsController {
       return res.redirect('/kol/settings?youtube=error&message=缺少 KOL ID');
     }
 
-    const result = await youtubeService.handleCallback(
-      { code, state: state as string | undefined },
-      kolId
-    );
+    const result = await youtubeService.handleCallback({ code, state: state as string | undefined }, kolId);
 
     if (result.success) {
       return res.redirect(result.redirectUrl);
@@ -355,11 +345,7 @@ export class IntegrationsController {
     const result: YouTubeSyncResult = await youtubeSyncService.syncKol(kol.id, fullSync);
 
     if (!result.success) {
-      throw new ApiError(
-        result.error || '数据同步失败',
-        500,
-        'YOUTUBE_SYNC_ERROR'
-      );
+      throw new ApiError(result.error || '数据同步失败', 500, 'YOUTUBE_SYNC_ERROR');
     }
 
     const response: ApiResponse<{
@@ -488,10 +474,7 @@ export class IntegrationsController {
       return res.redirect('/kol/settings?instagram=error&message=缺少 KOL ID');
     }
 
-    const result = await instagramService.handleCallback(
-      { code, state: state as string | undefined },
-      kolId
-    );
+    const result = await instagramService.handleCallback({ code, state: state as string | undefined }, kolId);
 
     if (result.success) {
       return res.redirect(result.redirectUrl);
@@ -546,11 +529,7 @@ export class IntegrationsController {
     const result: InstagramSyncResult = await instagramSyncService.syncKol(kol.id, fullSync);
 
     if (!result.success) {
-      throw new ApiError(
-        result.error || '数据同步失败',
-        500,
-        'INSTAGRAM_SYNC_ERROR'
-      );
+      throw new ApiError(result.error || '数据同步失败', 500, 'INSTAGRAM_SYNC_ERROR');
     }
 
     const response: ApiResponse<{

@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Typography from '@mui/material/Typography';
-import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import { styled } from '@mui/material/styles';
 import EmailIcon from '@mui/icons-material/Email';
 import { Button, Input, Loading, SnackbarComponent } from '../../components/common';
 import { authAPI } from '../../services/api';
+import { loginPathAfterPasswordRecovery } from '../../constants/appPaths';
+import { getApiErrorMessage } from '../../utils/apiError';
 
 const AuthContainer = styled(Box)(({ theme }) => ({
   minHeight: '100vh',
@@ -55,6 +56,9 @@ const DescriptionText = styled(Typography)(({ theme }) => ({
 }));
 
 export const ForgotPasswordPage: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const loginPath = useMemo(() => loginPathAfterPasswordRecovery(searchParams), [searchParams]);
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
@@ -71,8 +75,6 @@ export const ForgotPasswordPage: React.FC = () => {
     message: '',
     severity: 'info',
   });
-
-  const [showPassword, setShowPassword] = useState(false);
 
   const validateEmail = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -134,10 +136,9 @@ export const ForgotPasswordPage: React.FC = () => {
       });
       setStep(2);
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : '发送验证码失败';
       setSnackbar({
         open: true,
-        message: errorMessage,
+        message: getApiErrorMessage(error, '发送验证码失败'),
         severity: 'error',
       });
     } finally {
@@ -145,25 +146,12 @@ export const ForgotPasswordPage: React.FC = () => {
     }
   };
 
-  const handleVerifyCode = async () => {
+  /** 仅校验格式后进入设密步骤；验证码在「重置密码」接口中一次性校验并消费，避免重复 verify 导致 Redis 中码被提前删除 */
+  const handleContinueAfterCode = () => {
     if (!validateCode()) {
       return;
     }
-
-    setLoading(true);
-    try {
-      await authAPI.verifyCode('email', email, verificationCode);
-      setStep(3);
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : '验证码错误';
-      setSnackbar({
-        open: true,
-        message: errorMessage,
-        severity: 'error',
-      });
-    } finally {
-      setLoading(false);
-    }
+    setStep(3);
   };
 
   const handleResetPassword = async () => {
@@ -184,13 +172,12 @@ export const ForgotPasswordPage: React.FC = () => {
         severity: 'success',
       });
       setTimeout(() => {
-        window.location.href = '/login';
+        navigate(loginPath, { replace: true });
       }, 2000);
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : '密码重置失败';
       setSnackbar({
         open: true,
-        message: errorMessage,
+        message: getApiErrorMessage(error, '密码重置失败'),
         severity: 'error',
       });
     } finally {
@@ -288,10 +275,9 @@ export const ForgotPasswordPage: React.FC = () => {
                   color="primary"
                   size="large"
                   fullWidth
-                  onClick={handleVerifyCode}
-                  loading={loading}
+                  onClick={handleContinueAfterCode}
                 >
-                  验证
+                  下一步
                 </Button>
               </Box>
             </>
@@ -307,7 +293,7 @@ export const ForgotPasswordPage: React.FC = () => {
               <Box sx={{ mb: 2 }}>
                 <Input
                   label="新密码"
-                  type={showPassword ? 'text' : 'password'}
+                  type="password"
                   value={newPassword}
                   onChange={handleInputChange(setNewPassword, 'newPassword')}
                   error={!!errors.newPassword}
@@ -319,7 +305,7 @@ export const ForgotPasswordPage: React.FC = () => {
               <Box sx={{ mb: 3 }}>
                 <Input
                   label="确认密码"
-                  type={showPassword ? 'text' : 'password'}
+                  type="password"
                   value={confirmPassword}
                   onChange={handleInputChange(setConfirmPassword, 'confirmPassword')}
                   error={!!errors.confirmPassword}
@@ -355,7 +341,7 @@ export const ForgotPasswordPage: React.FC = () => {
           <Box sx={{ mt: 3, textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary">
               记得密码了？{' '}
-              <Link to="/login" style={{ textDecoration: 'none' }}>
+              <Link to={loginPath} style={{ textDecoration: 'none' }}>
                 <Typography component="span" color="primary" fontWeight="600">
                   返回登录
                 </Typography>

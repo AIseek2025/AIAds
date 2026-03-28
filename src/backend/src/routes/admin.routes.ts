@@ -11,6 +11,7 @@ import { adminDashboardController } from '../controllers/admin/dashboard.control
 import { adminAdvertisersController } from '../controllers/admin/advertisers.controller';
 import { adminCampaignsController } from '../controllers/admin/campaigns.controller';
 import { adminOrdersController } from '../controllers/admin/orders.controller';
+import { adminInviteCodesController } from '../controllers/admin/invite-codes.controller';
 
 const router = Router();
 
@@ -50,7 +51,12 @@ router.get('/users/:id/activity', adminAuth, requirePermission('user:view'), adm
 router.put('/users/:id/ban', adminAuth, requirePermission('user:ban'), adminUsersController.banUser);
 router.put('/users/:id/unban', adminAuth, requirePermission('user:unban'), adminUsersController.unbanUser);
 router.put('/users/:id/suspend', adminAuth, requirePermission('user:suspend'), adminUsersController.suspendUser);
-router.post('/users/:id/reset-password', adminAuth, requirePermission('user:reset_password'), adminUsersController.resetPassword);
+router.post(
+  '/users/:id/reset-password',
+  adminAuth,
+  requirePermission('user:reset_password'),
+  adminUsersController.resetPassword
+);
 
 // ============================================================================
 // KOL Management Routes
@@ -61,7 +67,12 @@ router.get('/kols/:id', adminAuth, requirePermission('kol:view'), adminKolsContr
 router.put('/kols/:id/verify', adminAuth, requirePermission('kol:verify'), adminKolsController.verifyKol);
 router.put('/kols/:id/rating', adminAuth, requirePermission('kol:verify'), adminKolsController.rateKol);
 router.put('/kols/:id/blacklist', adminAuth, requirePermission('kol:blacklist'), adminKolsController.blacklistKol);
-router.delete('/kols/:id/blacklist', adminAuth, requirePermission('kol:blacklist'), adminKolsController.removeFromBlacklist);
+router.delete(
+  '/kols/:id/blacklist',
+  adminAuth,
+  requirePermission('kol:blacklist'),
+  adminKolsController.removeFromBlacklist
+);
 router.post('/kols/:id/approve', adminAuth, requirePermission('kol:approve'), adminKolsController.approveKol);
 router.post('/kols/:id/reject', adminAuth, requirePermission('kol:reject'), adminKolsController.rejectKol);
 router.post('/kols/:id/suspend', adminAuth, requirePermission('kol:suspend'), adminKolsController.suspendKol);
@@ -76,25 +87,80 @@ router.get('/content/history', adminAuth, requirePermission('content:view'), adm
 router.get('/content', adminAuth, requirePermission('content:view'), adminContentController.getContentList);
 router.get('/content/:id', adminAuth, requirePermission('content:view'), adminContentController.getContentById);
 router.put('/content/:id/verify', adminAuth, requirePermission('content:review'), adminContentController.verifyContent);
-router.post('/content/:id/approve', adminAuth, requirePermission('content:approve'), adminContentController.approveContent);
-router.post('/content/:id/reject', adminAuth, requirePermission('content:reject'), adminContentController.rejectContent);
-router.post('/content/batch-verify', adminAuth, requirePermission('content:review'), adminContentController.batchVerify);
+router.post(
+  '/content/:id/approve',
+  adminAuth,
+  requirePermission('content:approve'),
+  adminContentController.approveContent
+);
+router.post(
+  '/content/:id/reject',
+  adminAuth,
+  requirePermission('content:reject'),
+  adminContentController.rejectContent
+);
+router.post(
+  '/content/batch-verify',
+  adminAuth,
+  requirePermission('content:review'),
+  adminContentController.batchVerify
+);
 router.delete('/content/:id', adminAuth, requirePermission('content:delete'), adminContentController.deleteContent);
 
 // ============================================================================
 // Finance Management Routes
 // ============================================================================
-router.get('/finance/overview', adminAuth, requirePermission('finance:view'), adminFinanceController.getFinanceOverview);
+router.get(
+  '/finance/overview',
+  adminAuth,
+  requirePermission('finance:view'),
+  adminFinanceController.getFinanceOverview
+);
 router.get('/finance/deposits', adminAuth, requirePermission('finance:view'), adminFinanceController.getDeposits);
 router.get('/finance/withdrawals', adminAuth, requirePermission('finance:view'), adminFinanceController.getWithdrawals);
-router.get('/finance/withdrawals/pending', adminAuth, requirePermission('withdrawal:review'), adminFinanceController.getPendingWithdrawals);
-router.get('/finance/withdrawals/:id', adminAuth, requirePermission('withdrawal:review'), adminFinanceController.getWithdrawalById);
-router.put('/finance/withdrawals/:id/verify', adminAuth, requirePermission('withdrawal:review'), adminFinanceController.verifyWithdrawal);
-router.post('/finance/withdrawals/:id/approve', adminAuth, requirePermission('withdrawal:approve'), adminFinanceController.approveWithdrawal);
-router.post('/finance/withdrawals/:id/reject', adminAuth, requirePermission('withdrawal:reject'), adminFinanceController.rejectWithdrawal);
-router.get('/finance/transactions', adminAuth, requirePermission('finance:view'), adminFinanceController.getTransactionList);
+router.get(
+  '/finance/withdrawals/pending',
+  adminAuth,
+  requirePermission('withdrawal:review'),
+  adminFinanceController.getPendingWithdrawals
+);
+router.get(
+  '/finance/withdrawals/:id',
+  adminAuth,
+  requirePermission('withdrawal:review'),
+  adminFinanceController.getWithdrawalById
+);
+router.put(
+  '/finance/withdrawals/:id/verify',
+  adminAuth,
+  requirePermission('withdrawal:review'),
+  adminFinanceController.verifyWithdrawal
+);
+router.post(
+  '/finance/withdrawals/:id/approve',
+  adminAuth,
+  requirePermission('withdrawal:approve'),
+  adminFinanceController.approveWithdrawal
+);
+router.post(
+  '/finance/withdrawals/:id/reject',
+  adminAuth,
+  requirePermission('withdrawal:reject'),
+  adminFinanceController.rejectWithdrawal
+);
+router.get(
+  '/finance/transactions',
+  adminAuth,
+  requirePermission('finance:view'),
+  adminFinanceController.getTransactionList
+);
 router.get('/finance/export', adminAuth, requirePermission('finance:export'), adminFinanceController.exportFinance);
-router.post('/finance/recharge/confirm', adminAuth, requirePermission('recharge:confirm'), adminFinanceController.confirmRecharge);
+router.post(
+  '/finance/recharge/confirm',
+  adminAuth,
+  requirePermission('recharge:confirm'),
+  adminFinanceController.confirmRecharge
+);
 router.put('/finance/balance/adjust', adminAuth, superAdminOnly, adminFinanceController.adjustBalance);
 
 // ============================================================================
@@ -115,7 +181,16 @@ router.get('/stats/comparison', adminAuth, requirePermission('analytics:view'), 
 // Settings Routes
 // ============================================================================
 router.get('/settings/system', adminAuth, requirePermission('settings:view'), adminSettingsController.getSystemConfig);
-router.put('/settings/system', adminAuth, requirePermission('settings:edit'), adminSettingsController.updateSystemConfig);
+router.put(
+  '/settings/system',
+  adminAuth,
+  requirePermission('settings:edit'),
+  adminSettingsController.updateSystemConfig
+);
+
+router.get('/invite-codes', adminAuth, requirePermission('settings:view'), adminInviteCodesController.list);
+router.post('/invite-codes', adminAuth, requirePermission('settings:edit'), adminInviteCodesController.create);
+router.patch('/invite-codes/:id', adminAuth, requirePermission('settings:edit'), adminInviteCodesController.patch);
 
 // Admin management
 router.get('/settings/admins', adminAuth, superAdminOnly, adminSettingsController.getAdminList);
@@ -131,16 +206,41 @@ router.put('/settings/roles/:id', adminAuth, superAdminOnly, adminSettingsContro
 router.delete('/settings/roles/:id', adminAuth, superAdminOnly, adminSettingsController.deleteRole);
 
 // Audit logs
-router.get('/settings/audit-logs', adminAuth, requirePermission('settings:audit:view'), adminSettingsController.getAuditLogs);
+router.get(
+  '/settings/audit-logs',
+  adminAuth,
+  requirePermission('settings:audit:view'),
+  adminSettingsController.getAuditLogs
+);
 router.get('/settings/audit-logs/export', adminAuth, superAdminOnly, adminSettingsController.exportAuditLogs);
 
 // System monitor
-router.get('/settings/system-monitor', adminAuth, requirePermission('settings:view'), adminSettingsController.getSystemMonitor);
+router.get(
+  '/settings/system-monitor',
+  adminAuth,
+  requirePermission('settings:view'),
+  adminSettingsController.getSystemMonitor
+);
 
 // Sensitive words
-router.get('/settings/sensitive-words', adminAuth, requirePermission('settings:view'), adminSettingsController.getSensitiveWords);
-router.post('/settings/sensitive-words', adminAuth, requirePermission('settings:edit'), adminSettingsController.addSensitiveWord);
-router.delete('/settings/sensitive-words/:id', adminAuth, requirePermission('settings:edit'), adminSettingsController.deleteSensitiveWord);
+router.get(
+  '/settings/sensitive-words',
+  adminAuth,
+  requirePermission('settings:view'),
+  adminSettingsController.getSensitiveWords
+);
+router.post(
+  '/settings/sensitive-words',
+  adminAuth,
+  requirePermission('settings:edit'),
+  adminSettingsController.addSensitiveWord
+);
+router.delete(
+  '/settings/sensitive-words/:id',
+  adminAuth,
+  requirePermission('settings:edit'),
+  adminSettingsController.deleteSensitiveWord
+);
 
 // Backup management
 router.post('/settings/backup/create', adminAuth, superAdminOnly, adminSettingsController.createBackup);
@@ -151,39 +251,133 @@ router.post('/settings/backup/restore', adminAuth, superAdminOnly, adminSettings
 // Dashboard Routes
 // ============================================================================
 router.get('/dashboard/stats', adminAuth, requirePermission('dashboard:view'), adminDashboardController.getStats);
-router.get('/dashboard/analytics', adminAuth, requirePermission('analytics:view'), adminDashboardController.getAnalytics);
-router.get('/dashboard/kol-rankings', adminAuth, requirePermission('dashboard:view'), adminDashboardController.getKolRankings);
+router.get(
+  '/dashboard/analytics',
+  adminAuth,
+  requirePermission('analytics:view'),
+  adminDashboardController.getAnalytics
+);
+router.get(
+  '/dashboard/kol-rankings',
+  adminAuth,
+  requirePermission('dashboard:view'),
+  adminDashboardController.getKolRankings
+);
+router.get(
+  '/dashboard/kol-frequency-policy',
+  adminAuth,
+  requirePermission('dashboard:view'),
+  adminDashboardController.getKolFrequencyPolicy
+);
 
 // ============================================================================
 // Advertiser Management Routes
 // ============================================================================
-router.get('/advertisers', adminAuth, requirePermission('advertiser:view'), adminAdvertisersController.getAdvertiserList);
-router.get('/advertisers/:id', adminAuth, requirePermission('advertiser:view'), adminAdvertisersController.getAdvertiserById);
-router.put('/advertisers/:id/verify', adminAuth, requirePermission('advertiser:verify'), adminAdvertisersController.verifyAdvertiser);
-router.get('/advertisers/:id/recharges', adminAuth, requirePermission('finance:view'), adminAdvertisersController.getRechargeRecords);
-router.get('/advertisers/:id/consumptions', adminAuth, requirePermission('finance:view'), adminAdvertisersController.getConsumptionRecords);
-router.put('/advertisers/:id/balance', adminAuth, requirePermission('finance:adjustment'), adminAdvertisersController.adjustBalance);
-router.put('/advertisers/:id/freeze', adminAuth, requirePermission('advertiser:freeze'), adminAdvertisersController.freezeAccount);
-router.put('/advertisers/:id/unfreeze', adminAuth, requirePermission('advertiser:unfreeze'), adminAdvertisersController.unfreezeAccount);
+router.get(
+  '/advertisers',
+  adminAuth,
+  requirePermission('advertiser:view'),
+  adminAdvertisersController.getAdvertiserList
+);
+router.get(
+  '/advertisers/:id',
+  adminAuth,
+  requirePermission('advertiser:view'),
+  adminAdvertisersController.getAdvertiserById
+);
+router.put(
+  '/advertisers/:id/verify',
+  adminAuth,
+  requirePermission('advertiser:verify'),
+  adminAdvertisersController.verifyAdvertiser
+);
+router.get(
+  '/advertisers/:id/recharges',
+  adminAuth,
+  requirePermission('finance:view'),
+  adminAdvertisersController.getRechargeRecords
+);
+router.get(
+  '/advertisers/:id/consumptions',
+  adminAuth,
+  requirePermission('finance:view'),
+  adminAdvertisersController.getConsumptionRecords
+);
+router.put(
+  '/advertisers/:id/balance',
+  adminAuth,
+  requirePermission('finance:adjustment'),
+  adminAdvertisersController.adjustBalance
+);
+router.put(
+  '/advertisers/:id/freeze',
+  adminAuth,
+  requirePermission('advertiser:freeze'),
+  adminAdvertisersController.freezeAccount
+);
+router.put(
+  '/advertisers/:id/unfreeze',
+  adminAuth,
+  requirePermission('advertiser:unfreeze'),
+  adminAdvertisersController.unfreezeAccount
+);
 
 // ============================================================================
 // Campaign Management Routes
 // ============================================================================
 router.get('/campaigns', adminAuth, requirePermission('campaign:view'), adminCampaignsController.getCampaignList);
+router.get(
+  '/campaigns/budget-risks',
+  adminAuth,
+  requirePermission('campaign:view'),
+  adminCampaignsController.getBudgetRiskCampaigns
+);
+router.get(
+  '/campaigns/abnormal',
+  adminAuth,
+  requirePermission('campaign:view'),
+  adminCampaignsController.getAbnormalCampaigns
+);
 router.get('/campaigns/:id', adminAuth, requirePermission('campaign:view'), adminCampaignsController.getCampaignById);
-router.put('/campaigns/:id/verify', adminAuth, requirePermission('campaign:review'), adminCampaignsController.verifyCampaign);
-router.put('/campaigns/:id/status', adminAuth, requirePermission('campaign:manage'), adminCampaignsController.updateCampaignStatus);
-router.get('/campaigns/:id/stats', adminAuth, requirePermission('campaign:view'), adminCampaignsController.getCampaignStats);
-router.get('/campaigns/abnormal', adminAuth, requirePermission('campaign:view'), adminCampaignsController.getAbnormalCampaigns);
+router.put(
+  '/campaigns/:id/verify',
+  adminAuth,
+  requirePermission('campaign:review'),
+  adminCampaignsController.verifyCampaign
+);
+router.put(
+  '/campaigns/:id/status',
+  adminAuth,
+  requirePermission('campaign:manage'),
+  adminCampaignsController.updateCampaignStatus
+);
+router.get(
+  '/campaigns/:id/stats',
+  adminAuth,
+  requirePermission('campaign:view'),
+  adminCampaignsController.getCampaignStats
+);
 
 // ============================================================================
-// Order Management Routes
+// Order Management Routes（具体路径须先于 /orders/:id，避免 disputes 等被当成 id）
 // ============================================================================
 router.get('/orders', adminAuth, requirePermission('order:view'), adminOrdersController.getOrderList);
+router.get('/orders/disputes', adminAuth, requirePermission('order:dispute'), adminOrdersController.getDisputeOrders);
+router.post('/orders/export', adminAuth, requirePermission('order:export'), adminOrdersController.exportOrders);
+router.put(
+  '/orders/metrics/batch',
+  adminAuth,
+  requirePermission('order:manage'),
+  adminOrdersController.batchUpdateOrderMetrics
+);
+router.put(
+  '/orders/:id/metrics',
+  adminAuth,
+  requirePermission('order:manage'),
+  adminOrdersController.updateOrderMetrics
+);
 router.get('/orders/:id', adminAuth, requirePermission('order:view'), adminOrdersController.getOrderById);
 router.put('/orders/:id/status', adminAuth, requirePermission('order:manage'), adminOrdersController.updateOrderStatus);
-router.get('/orders/disputes', adminAuth, requirePermission('order:dispute'), adminOrdersController.getDisputeOrders);
 router.put('/orders/:id/dispute', adminAuth, requirePermission('order:dispute'), adminOrdersController.handleDispute);
-router.post('/orders/export', adminAuth, requirePermission('order:export'), adminOrdersController.exportOrders);
 
 export default router;

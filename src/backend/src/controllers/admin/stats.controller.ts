@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { adminStatsService } from '../../services/admin/stats.service';
 import { asyncHandler } from '../../middleware/errorHandler';
+import { requireAdmin } from '../../middleware/adminAuth';
 import { ApiResponse } from '../../types';
 import { z } from 'zod';
 
@@ -26,7 +27,7 @@ export class AdminStatsController {
    */
   getOverview = asyncHandler(async (req: Request, res: Response) => {
     const query = statsQuerySchema.parse(req.query);
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminStatsService.getOverview(query, adminId);
 
@@ -44,7 +45,7 @@ export class AdminStatsController {
    */
   getUserStats = asyncHandler(async (req: Request, res: Response) => {
     const query = statsQuerySchema.parse(req.query);
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminStatsService.getUserStats(query, adminId);
 
@@ -62,7 +63,7 @@ export class AdminStatsController {
    */
   getCampaignStats = asyncHandler(async (req: Request, res: Response) => {
     const query = statsQuerySchema.parse(req.query);
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminStatsService.getCampaignStats(query, adminId);
 
@@ -80,7 +81,7 @@ export class AdminStatsController {
    */
   getRevenueStats = asyncHandler(async (req: Request, res: Response) => {
     const query = statsQuerySchema.parse(req.query);
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminStatsService.getRevenueStats(query, adminId);
 
@@ -98,7 +99,7 @@ export class AdminStatsController {
    */
   getKolStats = asyncHandler(async (req: Request, res: Response) => {
     const query = statsQuerySchema.parse(req.query);
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminStatsService.getKolStats(query, adminId);
 
@@ -116,7 +117,7 @@ export class AdminStatsController {
    */
   getOrderStats = asyncHandler(async (req: Request, res: Response) => {
     const query = statsQuerySchema.parse(req.query);
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminStatsService.getOrderStats(query, adminId);
 
@@ -134,7 +135,7 @@ export class AdminStatsController {
    */
   getContentStats = asyncHandler(async (req: Request, res: Response) => {
     const query = statsQuerySchema.parse(req.query);
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminStatsService.getContentStats(query, adminId);
 
@@ -152,7 +153,7 @@ export class AdminStatsController {
    */
   exportStats = asyncHandler(async (req: Request, res: Response) => {
     const query = exportStatsSchema.parse(req.query);
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminStatsService.exportStats(query, adminId);
 
@@ -178,13 +179,9 @@ export class AdminStatsController {
   getTrends = asyncHandler(async (req: Request, res: Response) => {
     const { metric, period = 'month' } = req.query;
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
-    const result = await adminStatsService.getTrends(
-      metric as string,
-      period as string,
-      adminId
-    );
+    const result = await adminStatsService.getTrends(metric as string, period as string, adminId);
 
     const response: ApiResponse<typeof result> = {
       success: true,
@@ -201,7 +198,7 @@ export class AdminStatsController {
   getComparison = asyncHandler(async (req: Request, res: Response) => {
     const { metric, currentPeriod, previousPeriod } = req.query;
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminStatsService.getComparison(
       metric as string,

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminContentAPI } from '../../services/adminApi';
+import { getApiErrorMessage } from '../../utils/apiError';
 import type { ContentItem, ContentListParams } from '../../types';
+import { AdminHubNav } from '../../components/admin/AdminHubNav';
 
 // MUI Components
 import Box from '@mui/material/Box';
@@ -50,24 +52,55 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import DeleteIcon from '@mui/icons-material/Delete';
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
+const ContentTypeBadge = ({ type }: { type: string }) => {
+  const config: Record<string, { icon?: React.ReactElement; label: string; color: string }> = {
+    video: { icon: <VideoLibraryIcon fontSize="small" />, label: '视频', color: '#FF0050' },
+    image: { icon: <ImageIcon fontSize="small" />, label: '图片', color: '#00C8FF' },
+    post: { icon: <ArticleIcon fontSize="small" />, label: '图文', color: '#FFAB00' },
+  };
 
-const TabPanel: React.FC<TabPanelProps> = ({ children, value, index, ...other }) => {
+  const c = config[type] || { icon: undefined, label: type, color: '#999' };
+
   return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`content-tabpanel-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
-    </div>
+    <Chip
+      icon={c.icon}
+      label={c.label}
+      size="small"
+      sx={{ bgcolor: `${c.color}15`, color: c.color, fontWeight: 500 }}
+    />
+  );
+};
+
+const PriorityBadge = ({ priority }: { priority: string }) => {
+  const config: Record<string, { color: string; label: string }> = {
+    high: { color: '#F44336', label: '高' },
+    normal: { color: '#2196F3', label: '普通' },
+    low: { color: '#4CAF50', label: '低' },
+  };
+
+  const c = config[priority] || { color: '#999', label: priority };
+
+  return (
+    <Chip
+      label={c.label}
+      size="small"
+      sx={{ bgcolor: `${c.color}15`, color: c.color, fontWeight: 500 }}
+    />
+  );
+};
+
+const AIScoreBadge = ({ score }: { score: number }) => {
+  let color = '#4CAF50';
+  if (score < 60) color = '#F44336';
+  else if (score < 80) color = '#FF9800';
+
+  return (
+    <Chip
+      label={`AI: ${score}`}
+      size="small"
+      sx={{ bgcolor: `${color}15`, color, fontWeight: 600 }}
+    />
   );
 };
 
@@ -105,7 +138,7 @@ const ContentReviewPage: React.FC = () => {
   if (contentTypeFilter) queryParams.content_type = contentTypeFilter as ContentListParams['content_type'];
 
   // Fetch content based on tab
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['adminContent', queryParams, tabValue],
     queryFn: () => {
       if (tabValue === 0) {
@@ -129,8 +162,12 @@ const ContentReviewPage: React.FC = () => {
       setReviewNote('');
       setSelectedContent(null);
     },
-    onError: (err: any) => {
-      setSnackbar({ open: true, message: err.response?.data?.error?.message || '操作失败', severity: 'error' });
+    onError: (err: unknown) => {
+      setSnackbar({
+        open: true,
+        message: getApiErrorMessage(err, '操作失败'),
+        severity: 'error',
+      });
     },
   });
 
@@ -146,8 +183,12 @@ const ContentReviewPage: React.FC = () => {
       setReviewNote('');
       setSelectedContent(null);
     },
-    onError: (err: any) => {
-      setSnackbar({ open: true, message: err.response?.data?.error?.message || '操作失败', severity: 'error' });
+    onError: (err: unknown) => {
+      setSnackbar({
+        open: true,
+        message: getApiErrorMessage(err, '操作失败'),
+        severity: 'error',
+      });
     },
   });
 
@@ -161,8 +202,12 @@ const ContentReviewPage: React.FC = () => {
       setSnackbar({ open: true, message: `已通过 ${selectedIds.length} 个内容`, severity: 'success' });
       setSelectedIds([]);
     },
-    onError: (err: any) => {
-      setSnackbar({ open: true, message: err.response?.data?.error?.message || '操作失败', severity: 'error' });
+    onError: (err: unknown) => {
+      setSnackbar({
+        open: true,
+        message: getApiErrorMessage(err, '操作失败'),
+        severity: 'error',
+      });
     },
   });
 
@@ -257,61 +302,11 @@ const ContentReviewPage: React.FC = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  // Content type badge
-  const ContentTypeBadge = ({ type }: { type: string }) => {
-    const config: Record<string, { icon?: React.ReactElement; label: string; color: string }> = {
-      video: { icon: <VideoLibraryIcon fontSize="small" />, label: '视频', color: '#FF0050' },
-      image: { icon: <ImageIcon fontSize="small" />, label: '图片', color: '#00C8FF' },
-      post: { icon: <ArticleIcon fontSize="small" />, label: '图文', color: '#FFAB00' },
-    };
-
-    const c = config[type] || { icon: undefined, label: type, color: '#999' };
-
-    return (
-      <Chip
-        icon={c.icon}
-        label={c.label}
-        size="small"
-        sx={{ bgcolor: `${c.color}15`, color: c.color, fontWeight: 500 }}
-      />
-    );
-  };
-
-  // Priority badge
-  const PriorityBadge = ({ priority }: { priority: string }) => {
-    const config: Record<string, { color: string; label: string }> = {
-      high: { color: '#F44336', label: '高' },
-      normal: { color: '#2196F3', label: '普通' },
-      low: { color: '#4CAF50', label: '低' },
-    };
-
-    const c = config[priority] || { color: '#999', label: priority };
-
-    return (
-      <Chip
-        label={c.label}
-        size="small"
-        sx={{ bgcolor: `${c.color}15`, color: c.color, fontWeight: 500 }}
-      />
-    );
-  };
-
-  // AI Score badge
-  const AIScoreBadge = ({ score }: { score: number }) => {
-    let color = '#4CAF50';
-    if (score < 60) color = '#F44336';
-    else if (score < 80) color = '#FF9800';
-
-    return (
-      <Chip
-        label={`AI: ${score}`}
-        size="small"
-        sx={{ bgcolor: `${color}15`, color, fontWeight: 600 }}
-      />
-    );
-  };
-
   const allSelected = selectedIds.length > 0 && data?.items && selectedIds.length === data.items.length;
+
+  const handleHubRefresh = () => {
+    void refetch();
+  };
 
   return (
     <Box>
@@ -324,6 +319,10 @@ const ContentReviewPage: React.FC = () => {
           审核用户提交的内容，包括视频、图片、图文等
         </Typography>
       </Box>
+      <AdminHubNav onRefresh={handleHubRefresh} />
+      <Alert severity="info" sx={{ mb: 3, mt: 2 }}>
+        列表与待审核数量来自当前筛选与分页；刷新将重新拉取本页内容，不重置表单与弹窗。
+      </Alert>
 
       {/* Tabs */}
       <Paper sx={{ mb: 3 }}>
@@ -424,7 +423,9 @@ const ContentReviewPage: React.FC = () => {
               ) : error ? (
                 <TableRow>
                   <TableCell colSpan={tabValue === 0 ? 8 : 7} align="center">
-                    <Alert severity="error">加载失败：{(error as Error).message}</Alert>
+                    <Alert severity="error">
+                      加载失败：{getApiErrorMessage(error, '请稍后重试')}
+                    </Alert>
                   </TableCell>
                 </TableRow>
               ) : data?.items.length === 0 ? (

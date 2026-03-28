@@ -8,11 +8,9 @@ import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import CardActions from '@mui/material/CardActions';
 import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
 import LinearProgress from '@mui/material/LinearProgress';
 import Alert from '@mui/material/Alert';
 import Chip from '@mui/material/Chip';
-import Stack from '@mui/material/Stack';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -22,6 +20,7 @@ import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
+import Stack from '@mui/material/Stack';
 import { styled } from '@mui/material/styles';
 
 // Icons
@@ -31,16 +30,18 @@ import InstagramIcon from '@mui/icons-material/PhotoCamera';
 import AddIcon from '@mui/icons-material/Add';
 import SyncIcon from '@mui/icons-material/Sync';
 import DeleteIcon from '@mui/icons-material/Delete';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WarningIcon from '@mui/icons-material/Warning';
 import ErrorIcon from '@mui/icons-material/Error';
-
 // Types
 import type { KolAccount } from '../../stores/kolStore';
+import { KolHubNav } from '../../components/kol/KolHubNav';
+import { KolFrequencyAlerts } from '../../components/kol/KolFrequencyAlerts';
+import { KOL_ROUTE_SEG, pathKol } from '../../constants/appPaths';
 
 // Services
-import { kolAccountAPI } from '../../services/kolApi';
+import { kolAcceptFrequencyQueryKey, kolAccountAPI, kolProfileAPI } from '../../services/kolApi';
+import { getApiErrorMessage } from '../../utils/apiError';
 
 // Styled Components
 const PlatformIconWrapper = styled(Box)(({ theme }) => ({
@@ -91,11 +92,17 @@ export const AccountsPage: React.FC = () => {
     data: accounts,
     isLoading,
     error,
-    refetch,
+    refetch: refetchAccounts,
   } = useQuery({
     queryKey: [queryKeys.accounts],
     queryFn: kolAccountAPI.getAccounts,
     retry: 1,
+  });
+
+  const freqQ = useQuery({
+    queryKey: [...kolAcceptFrequencyQueryKey],
+    queryFn: kolProfileAPI.getAcceptFrequency,
+    retry: 0,
   });
 
   // Bind account mutation
@@ -194,7 +201,7 @@ export const AccountsPage: React.FC = () => {
   if (error) {
     return (
       <Alert severity="error" sx={{ mt: 2 }}>
-        加载账号列表失败，请稍后重试
+        {getApiErrorMessage(error, '加载账号列表失败，请稍后重试')}
       </Alert>
     );
   }
@@ -205,12 +212,14 @@ export const AccountsPage: React.FC = () => {
       <Box
         sx={{
           display: 'flex',
+          flexWrap: 'wrap',
           justifyContent: 'space-between',
-          alignItems: 'center',
-          mb: 4,
+          alignItems: 'flex-start',
+          gap: 2,
+          mb: 2,
         }}
       >
-        <Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="h4" gutterBottom>
             账号绑定
           </Typography>
@@ -218,24 +227,37 @@ export const AccountsPage: React.FC = () => {
             管理您的社交媒体账号，同步数据以接收更多任务
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            variant="outlined"
-            startIcon={<SyncIcon />}
-            onClick={handleSyncAll}
-            disabled={syncAllMutation.isPending || !accounts?.length}
-          >
-            同步全部
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={openBindDialog}
-          >
-            绑定新账号
-          </Button>
-        </Box>
+        <KolHubNav
+          preset="accounts"
+          onRefresh={() => {
+            void refetchAccounts();
+            void freqQ.refetch();
+          }}
+        />
       </Box>
+      <Stack direction="row" spacing={2} sx={{ mb: 2 }} flexWrap="wrap" alignItems="center">
+        <Button
+          variant="outlined"
+          startIcon={<SyncIcon />}
+          onClick={handleSyncAll}
+          disabled={syncAllMutation.isPending || !accounts?.length}
+        >
+          同步全部
+        </Button>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={openBindDialog}>
+          绑定新账号
+        </Button>
+      </Stack>
+      <Alert severity="info" sx={{ mb: 3 }}>
+        绑定与同步数据用于任务匹配与展示；与「个人资料」主账号信息相互独立，请保持授权有效。顶部刷新将重新拉取账号列表。
+      </Alert>
+
+      <KolFrequencyAlerts
+        freqQ={freqQ}
+        tone="dashboard"
+        onRetry={() => void freqQ.refetch()}
+        onGoTaskMarket={() => navigate(pathKol(KOL_ROUTE_SEG.taskMarket))}
+      />
 
       {/* Accounts Grid */}
       {accounts && accounts.length > 0 ? (

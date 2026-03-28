@@ -23,7 +23,7 @@ describe('Admin Users API Tests', () => {
     testRoleId = role.id;
 
     const email = `admin_users_${Date.now()}@aiads.com`;
-    
+
     const admin = await prisma.admin.create({
       data: {
         email,
@@ -35,12 +35,10 @@ describe('Admin Users API Tests', () => {
     });
     testAdminId = admin.id;
 
-    const loginRes = await request(app)
-      .post('/api/v1/admin/auth/login')
-      .send({
-        username: email,
-        password: 'AdminPass123!',
-      });
+    const loginRes = await request(app).post('/api/v1/admin/auth/login').send({
+      username: email,
+      password: 'AdminPass123!',
+    });
 
     adminAccessToken = loginRes.body.data.tokens.access_token;
   };
@@ -138,9 +136,7 @@ describe('Admin Users API Tests', () => {
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .get('/api/v1/admin/users')
-        .expect(401);
+      const response = await request(app).get('/api/v1/admin/users').expect(401);
 
       expect(response.body.success).toBe(false);
       expect(response.body.error.code).toBe('AUTH_REQUIRED');
@@ -170,9 +166,7 @@ describe('Admin Users API Tests', () => {
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .get(`/api/v1/admin/users/${testUserId}`)
-        .expect(401);
+      const response = await request(app).get(`/api/v1/admin/users/${testUserId}`).expect(401);
 
       expect(response.body.success).toBe(false);
     });
@@ -302,10 +296,7 @@ describe('Admin Users API Tests', () => {
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .put(`/api/v1/admin/users/${testUserId}/unban`)
-        .send()
-        .expect(401);
+      const response = await request(app).put(`/api/v1/admin/users/${testUserId}/unban`).send().expect(401);
 
       expect(response.body.success).toBe(false);
     });

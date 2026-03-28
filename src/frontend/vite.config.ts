@@ -3,7 +3,6 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 
 // https://vitejs.dev/config/
-// @ts-ignore
 export default defineConfig({
   plugins: [react()],
   base: '/',
@@ -14,7 +13,6 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    // @ts-ignore
     proxy: {
       '/api': {
         target: 'http://localhost:8080',
@@ -37,9 +35,16 @@ export default defineConfig({
     // Target modern browsers for smaller bundles
     target: 'esnext',
   },
-  // Optimize dependencies pre-bundling
+  // 勿将 @mui/material 放入 exclude：否则 emotion/MUI 链上大量 CJS（prop-types 等）会以裸 import 进浏览器并报 default export 错
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react-router-dom'],
-    exclude: ['@mui/material'],
+    include: [
+      'react',
+      'react-dom',
+      'react-router-dom',
+      '@mui/material',
+      '@mui/material/styles',
+      '@emotion/react',
+      '@emotion/styled',
+    ],
   },
 })

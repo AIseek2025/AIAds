@@ -87,6 +87,9 @@ export interface OrderStats {
   averageOrderValue: number;
 }
 
+/** 与 `StatsQuery.period` 一致，供日期区间与趋势接口复用 */
+export type StatsPeriod = NonNullable<StatsQuery['period']>;
+
 // Content stats response
 export interface ContentStats {
   totalContent: number;
@@ -156,9 +159,7 @@ export class AdminStatsService {
       },
     });
 
-    const userGrowthRate = previousUsers > 0
-      ? ((totalUsers - previousUsers) / previousUsers) * 100
-      : 0;
+    const userGrowthRate = previousUsers > 0 ? ((totalUsers - previousUsers) / previousUsers) * 100 : 0;
 
     const revenueGrowthRate = 0; // Simplified
 
@@ -226,7 +227,7 @@ export class AdminStatsService {
       _count: { id: true },
     });
 
-    const usersByRole = usersByRoleRaw.map((r: any) => ({
+    const usersByRole = usersByRoleRaw.map((r) => ({
       role: r.role,
       count: r._count.id,
     }));
@@ -238,7 +239,7 @@ export class AdminStatsService {
       _count: { id: true },
     });
 
-    const usersByStatus = usersByStatusRaw.map((r: any) => ({
+    const usersByStatus = usersByStatusRaw.map((r) => ({
       status: r.status,
       count: r._count.id,
     }));
@@ -289,7 +290,7 @@ export class AdminStatsService {
       _count: { id: true },
     });
 
-    const campaignsByStatus = campaignsByStatusRaw.map((r: any) => ({
+    const campaignsByStatus = campaignsByStatusRaw.map((r) => ({
       status: r.status,
       count: r._count.id,
     }));
@@ -354,7 +355,7 @@ export class AdminStatsService {
       _sum: { amount: true },
     });
 
-    const revenueByType = revenueByTypeRaw.map((r: any) => ({
+    const revenueByType = revenueByTypeRaw.map((r) => ({
       type: r.type,
       amount: decimalToNumber(r._sum?.amount),
     }));
@@ -367,8 +368,7 @@ export class AdminStatsService {
     });
 
     const completedCount = orderResult._count ?? 0;
-    const averageOrderValue =
-      completedCount > 0 ? decimalToNumber(orderResult._sum?.price) / completedCount : 0;
+    const averageOrderValue = completedCount > 0 ? decimalToNumber(orderResult._sum?.price) / completedCount : 0;
 
     // Log admin action
     await logAdminAction({
@@ -417,7 +417,7 @@ export class AdminStatsService {
       _count: { id: true },
     });
 
-    const kolsByPlatform = kolsByPlatformRaw.map((r: any) => ({
+    const kolsByPlatform = kolsByPlatformRaw.map((r) => ({
       platform: r.platform,
       count: r._count.id,
     }));
@@ -429,7 +429,7 @@ export class AdminStatsService {
       _count: { id: true },
     });
 
-    const kolsByRating = kolsByRatingRaw.map((r: any) => ({
+    const kolsByRating = kolsByRatingRaw.map((r) => ({
       rating: String(decimalToNumber(r.avgRating)),
       count: r._count.id,
     }));
@@ -489,7 +489,7 @@ export class AdminStatsService {
       _count: { id: true },
     });
 
-    const ordersByStatus = ordersByStatusRaw.map((r: any) => ({
+    const ordersByStatus = ordersByStatusRaw.map((r) => ({
       status: r.status,
       count: r._count.id,
     }));
@@ -548,7 +548,7 @@ export class AdminStatsService {
       _count: { id: true },
     });
 
-    const contentByType = contentByTypeRaw.map((r: any) => ({
+    const contentByType = contentByTypeRaw.map((r) => ({
       type: r.contentType,
       count: r._count.id,
     }));
@@ -580,15 +580,18 @@ export class AdminStatsService {
   /**
    * Export statistics data
    */
-  async exportStats(query: ExportStatsQuery, adminId: string) {
+  async exportStats(
+    query: ExportStatsQuery,
+    adminId: string
+  ): Promise<{ csvData: string; format: NonNullable<ExportStatsQuery['format']>; type: ExportStatsQuery['type'] }> {
     const { type, format = 'csv' } = query;
 
-    let data: any[] = [];
+    let data: (string | number)[][] = [];
     let headers: string[] = [];
 
     // Get data based on type
     switch (type) {
-      case 'users':
+      case 'users': {
         const userStats = await this.getUserStats(query, adminId);
         headers = ['metric', 'value'];
         data = [
@@ -597,7 +600,8 @@ export class AdminStatsService {
           ['activeUsers', userStats.activeUsers],
         ];
         break;
-      case 'campaigns':
+      }
+      case 'campaigns': {
         const campaignStats = await this.getCampaignStats(query, adminId);
         headers = ['metric', 'value'];
         data = [
@@ -607,7 +611,8 @@ export class AdminStatsService {
           ['totalSpent', campaignStats.totalSpent],
         ];
         break;
-      case 'revenue':
+      }
+      case 'revenue': {
         const revenueStats = await this.getRevenueStats(query, adminId);
         headers = ['metric', 'value'];
         data = [
@@ -616,7 +621,8 @@ export class AdminStatsService {
           ['averageOrderValue', revenueStats.averageOrderValue],
         ];
         break;
-      case 'kols':
+      }
+      case 'kols': {
         const kolStats = await this.getKolStats(query, adminId);
         headers = ['metric', 'value'];
         data = [
@@ -626,6 +632,7 @@ export class AdminStatsService {
           ['averageEngagementRate', kolStats.averageEngagementRate],
         ];
         break;
+      }
       case 'all':
         headers = ['metric', 'value'];
         data = [];
@@ -633,10 +640,7 @@ export class AdminStatsService {
     }
 
     // Generate CSV
-    const csvData = [
-      headers.join(','),
-      ...data.map((row) => row.join(',')),
-    ].join('\n');
+    const csvData = [headers.join(','), ...data.map((row) => row.join(','))].join('\n');
 
     // Log admin action
     await logAdminAction({
@@ -658,8 +662,12 @@ export class AdminStatsService {
   /**
    * Get statistics trends
    */
-  async getTrends(metric: string, period: string, _adminId: string) {
-    const { startDate, endDate } = this.getDateRange(period as any);
+  async getTrends(
+    metric: string,
+    period: string,
+    _adminId: string
+  ): Promise<{ metric: string; period: string; trend: Array<{ date: string; value: number }> }> {
+    const { startDate, endDate } = this.getDateRange(period);
 
     let trendData: Array<{ date: string; value: number }> = [];
 
@@ -706,16 +714,24 @@ export class AdminStatsService {
   /**
    * Get statistics comparison
    */
-  async getComparison(metric: string, currentPeriod: string, previousPeriod: string, adminId: string) {
+  async getComparison(
+    metric: string,
+    currentPeriod: string,
+    previousPeriod: string,
+    adminId: string
+  ): Promise<{
+    metric: string;
+    current: { period: string; value: number };
+    previous: { period: string; value: number };
+    change: { absolute: number; percentage: number };
+  }> {
     const current = await this.getTrends(metric, currentPeriod, adminId);
     const previous = await this.getTrends(metric, previousPeriod, adminId);
 
     const currentValue = current.trend.reduce((sum, item) => sum + item.value, 0);
     const previousValue = previous.trend.reduce((sum, item) => sum + item.value, 0);
 
-    const change = previousValue > 0
-      ? ((currentValue - previousValue) / previousValue) * 100
-      : 0;
+    const change = previousValue > 0 ? ((currentValue - previousValue) / previousValue) * 100 : 0;
 
     return {
       metric,
@@ -738,7 +754,7 @@ export class AdminStatsService {
    * Helper: Get date range from period
    */
   private getDateRange(
-    period: string = 'month',
+    period: StatsPeriod | string = 'month',
     startDate?: string,
     endDate?: string
   ): { startDate: Date; endDate: Date } {
@@ -750,7 +766,7 @@ export class AdminStatsService {
     }
 
     const end = new Date();
-    let start = new Date();
+    const start = new Date();
 
     switch (period) {
       case 'day':
@@ -827,10 +843,7 @@ export class AdminStatsService {
   /**
    * Helper: Get revenue time series
    */
-  private async getRevenueTimeSeries(
-    startDate: Date,
-    endDate: Date
-  ): Promise<Array<{ date: string; amount: number }>> {
+  private async getRevenueTimeSeries(startDate: Date, endDate: Date): Promise<Array<{ date: string; amount: number }>> {
     const trend: Array<{ date: string; amount: number }> = [];
     const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 

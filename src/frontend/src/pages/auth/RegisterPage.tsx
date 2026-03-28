@@ -20,8 +20,16 @@ import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { Button, Input, Loading, SnackbarComponent } from '../../components/common';
 import { authAPI } from '../../services/api';
+import { getApiErrorMessage } from '../../utils/apiError';
 import { useAuthStore } from '../../stores/authStore';
 import type { RegisterData } from '../../types';
+import {
+  APP_PATHS,
+  ADVERTISER_ROUTE_SEG,
+  KOL_ROUTE_SEG,
+  pathAdvertiser,
+  pathKol,
+} from '../../constants/appPaths';
 
 const AuthContainer = styled(Box)(({ theme }) => ({
   minHeight: '100vh',
@@ -90,6 +98,7 @@ export const RegisterPage: React.FC = () => {
     password: '',
     phone: '',
     role: 'advertiser',
+    inviteCode: '',
     verificationCode: '',
     agreeTerms: false,
   });
@@ -170,16 +179,34 @@ export const RegisterPage: React.FC = () => {
 
         setTimeout(() => {
           if (response.user.role === 'advertiser') {
-            navigate('/advertiser/dashboard');
+            navigate(pathAdvertiser(ADVERTISER_ROUTE_SEG.dashboard));
           } else {
-            navigate('/kol/dashboard');
+            navigate(pathKol(KOL_ROUTE_SEG.dashboard));
           }
         }, 500);
       } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : '注册失败，请稍后重试';
         setSnackbar({
           open: true,
-          message: errorMessage,
+          message: getApiErrorMessage(error, '注册失败，请稍后重试'),
+          severity: 'error',
+        });
+      } finally {
+        setLoading(false);
+      }
+    } else if (activeStep === 1) {
+      setLoading(true);
+      try {
+        await authAPI.sendVerificationCode('email', formData.email, 'register');
+        setSnackbar({
+          open: true,
+          message: '验证码已发送到您的邮箱',
+          severity: 'success',
+        });
+        setActiveStep(2);
+      } catch (error: unknown) {
+        setSnackbar({
+          open: true,
+          message: getApiErrorMessage(error, '发送验证码失败'),
           severity: 'error',
         });
       } finally {
@@ -218,10 +245,9 @@ export const RegisterPage: React.FC = () => {
         severity: 'success',
       });
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : '发送验证码失败';
       setSnackbar({
         open: true,
-        message: errorMessage,
+        message: getApiErrorMessage(error, '发送验证码失败'),
         severity: 'error',
       });
     }
@@ -341,6 +367,7 @@ export const RegisterPage: React.FC = () => {
                   endAdornment={
                     <InputAdornment position="end">
                       <IconButton
+                        aria-label={showPassword ? '隐藏密码' : '显示密码'}
                         onClick={() => setShowPassword(!showPassword)}
                         edge="end"
                       >
@@ -384,6 +411,19 @@ export const RegisterPage: React.FC = () => {
                     </Box>
                   </Box>
                 )}
+              </Box>
+
+              <Box sx={{ mb: 2 }}>
+                <Input
+                  label="邀请码（可选）"
+                  type="text"
+                  value={formData.inviteCode ?? ''}
+                  onChange={handleInputChange('inviteCode')}
+                  error={!!errors.inviteCode}
+                  helperText={errors.inviteCode ?? '若需邀请注册，请填写平台发放的邀请码'}
+                  placeholder="留空则按平台策略"
+                  autoComplete="off"
+                />
               </Box>
 
               <Box sx={{ mb: 2 }}>
@@ -473,7 +513,7 @@ export const RegisterPage: React.FC = () => {
           <Box sx={{ mt: 3, textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary">
               已有账号？{' '}
-              <Link to="/login" style={{ textDecoration: 'none' }}>
+              <Link to={APP_PATHS.login} style={{ textDecoration: 'none' }}>
                 <Typography component="span" color="primary" fontWeight="600">
                   立即登录
                 </Typography>

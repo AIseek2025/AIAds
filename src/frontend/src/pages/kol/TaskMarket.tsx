@@ -8,10 +8,8 @@ import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import CardActions from '@mui/material/CardActions';
 import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
 import LinearProgress from '@mui/material/LinearProgress';
 import Alert from '@mui/material/Alert';
-import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import FormControl from '@mui/material/FormControl';
@@ -34,13 +32,17 @@ import InstagramIcon from '@mui/icons-material/PhotoCamera';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import PeopleIcon from '@mui/icons-material/People';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 
 // Types
 import type { KolTask } from '../../stores/kolStore';
+import { KolHubNav } from '../../components/kol/KolHubNav';
+import { KolFrequencyAlerts } from '../../components/kol/KolFrequencyAlerts';
+import { KOL_ROUTE_SEG, pathKol, pathKolTaskMarketDetail } from '../../constants/appPaths';
 
 // Services
-import { taskMarketAPI } from '../../services/kolApi';
+import { kolAcceptFrequencyQueryKey, kolProfileAPI, taskMarketAPI } from '../../services/kolApi';
+import { getApiErrorMessage } from '../../utils/apiError';
 
 // Styled Components
 const TaskCard = styled(Card)(({ theme }) => ({
@@ -90,7 +92,6 @@ export const TaskMarketPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(12);
   const [selectedTask, setSelectedTask] = useState<KolTask | null>(null);
-  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [applyDialogOpen, setApplyDialogOpen] = useState(false);
   const [applyMessage, setApplyMessage] = useState('');
   const [filters, setFilters] = useState<FilterState>({
@@ -99,6 +100,12 @@ export const TaskMarketPage: React.FC = () => {
     maxBudget: '',
     category: '',
     keyword: '',
+  });
+
+  const freqQ = useQuery({
+    queryKey: [...kolAcceptFrequencyQueryKey],
+    queryFn: kolProfileAPI.getAcceptFrequency,
+    retry: 0,
   });
 
   // Fetch tasks
@@ -126,8 +133,9 @@ export const TaskMarketPage: React.FC = () => {
   const applyMutation = useMutation({
     mutationFn: ({ taskId, message }: { taskId: string; message?: string }) =>
       taskMarketAPI.applyTask(taskId, message),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: [queryKeys.tasks] });
+      queryClient.invalidateQueries({ queryKey: ['task-market-campaign', variables.taskId] });
       setApplyDialogOpen(false);
       setApplyMessage('');
       setSelectedTask(null);
@@ -150,14 +158,8 @@ export const TaskMarketPage: React.FC = () => {
     setPage(1);
   };
 
-  const handleOpenDetail = (task: KolTask) => {
-    setSelectedTask(task);
-    setDetailDialogOpen(true);
-  };
-
   const handleApplyTask = () => {
     setApplyDialogOpen(true);
-    setDetailDialogOpen(false);
   };
 
   const handleSubmitApply = () => {
@@ -196,7 +198,7 @@ export const TaskMarketPage: React.FC = () => {
   if (error) {
     return (
       <Alert severity="error" sx={{ mt: 2 }}>
-        加载任务列表失败，请稍后重试
+        {getApiErrorMessage(error, '加载任务列表失败，请稍后重试')}
       </Alert>
     );
   }
@@ -204,14 +206,42 @@ export const TaskMarketPage: React.FC = () => {
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          任务广场
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          浏览可接取的任务，找到适合您的合作机会
-        </Typography>
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 2,
+          mb: 2,
+        }}
+      >
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="h4" gutterBottom>
+            任务广场
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            浏览可接活动并报名；接单后在「我的任务」交付，收入与结算见收益与经营分析。
+          </Typography>
+        </Box>
+        <KolHubNav
+          preset="task-market-page"
+          onRefresh={() => {
+            void refetch();
+            void freqQ.refetch();
+          }}
+        />
       </Box>
+      <Alert severity="info" sx={{ mb: 3 }}>
+        点击卡片进入活动详情页可报名；订单状态与 CPM 口径与「我的任务」详情一致。
+      </Alert>
+      <KolFrequencyAlerts
+        freqQ={freqQ}
+        tone="task-market"
+        onRetry={() => void freqQ.refetch()}
+        onGoTaskMarket={() => navigate(pathKol(KOL_ROUTE_SEG.taskMarket))}
+        alertSx={{ mb: 2 }}
+      />
 
       {/* Filters */}
       <Card sx={{ mb: 4 }}>
@@ -352,6 +382,14 @@ export const TaskMarketPage: React.FC = () => {
                           {formatCurrency(task.budget)}
                         </Typography>
                       </Box>
+                      {(task.frozenAmount ?? 0) > 0 ? (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <LockOutlinedIcon sx={{ fontSize: 16, color: 'warning.main' }} />
+                          <Typography variant="caption" color="text.secondary">
+                            订单冻结 {formatCurrency(task.frozenAmount!)}
+                          </Typography>
+                        </Box>
+                      ) : null}
                       {task.deadline && (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <TimelineIcon sx={{ fontSize: 16, color: 'warning.main' }} />
@@ -367,7 +405,7 @@ export const TaskMarketPage: React.FC = () => {
                     <Button
                       variant="outlined"
                       size="small"
-                      onClick={() => handleOpenDetail(task)}
+                      onClick={() => navigate(pathKolTaskMarketDetail(task.id))}
                       fullWidth
                     >
                       详情
@@ -427,91 +465,6 @@ export const TaskMarketPage: React.FC = () => {
             </Box>
           </CardContent>
         </Card>
-      )}
-
-      {/* Task Detail Dialog */}
-      {selectedTask && (
-        <Dialog
-          open={detailDialogOpen}
-          onClose={() => setDetailDialogOpen(false)}
-          maxWidth="md"
-          fullWidth
-        >
-          <DialogTitle>{selectedTask.campaignTitle}</DialogTitle>
-          <DialogContent>
-            <Box sx={{ pt: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                <PlatformIconWrapper
-                  sx={{
-                    bgcolor: `${platformConfig[selectedTask.platform.toLowerCase()]?.color}15`,
-                  }}
-                >
-                  {getPlatformIcon(selectedTask.platform)}
-                </PlatformIconWrapper>
-                <Box>
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    {selectedTask.platform}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    发布平台
-                  </Typography>
-                </Box>
-              </Box>
-
-              <Grid container spacing={3} sx={{ mb: 3 }}>
-                <Grid size={{ xs: 6 }}>
-                  <Box sx={{ p: 2, bgcolor: 'primary.light', borderRadius: 2 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      任务预算
-                    </Typography>
-                    <Typography variant="h5" color="primary.main" fontWeight="bold">
-                      {formatCurrency(selectedTask.budget)}
-                    </Typography>
-                  </Box>
-                </Grid>
-                <Grid size={{ xs: 6 }}>
-                  {selectedTask.deadline && (
-                    <Box sx={{ p: 2, bgcolor: 'warning.light', borderRadius: 2 }}>
-                      <Typography variant="caption" color="text.secondary">
-                        截止日期
-                      </Typography>
-                      <Typography variant="h6" fontWeight="bold">
-                        {formatDate(selectedTask.deadline)}
-                      </Typography>
-                    </Box>
-                  )}
-                </Grid>
-              </Grid>
-
-              <Typography variant="subtitle2" gutterBottom>
-                任务描述
-              </Typography>
-              <Typography variant="body2" color="text.secondary" paragraph>
-                {selectedTask.campaignDescription || '暂无描述'}
-              </Typography>
-
-              <Typography variant="subtitle2" gutterBottom>
-                内容要求
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                - 视频时长不少于 30 秒{'\n'}
-                - 需要包含指定的话题标签{'\n'}
-                - 内容需符合平台规范{'\n'}
-                - 发布后需保留至少 7 天
-              </Typography>
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setDetailDialogOpen(false)}>取消</Button>
-            <Button
-              variant="contained"
-              onClick={handleApplyTask}
-              disabled={applyMutation.isPending}
-            >
-              申请任务
-            </Button>
-          </DialogActions>
-        </Dialog>
       )}
 
       {/* Apply Dialog */}

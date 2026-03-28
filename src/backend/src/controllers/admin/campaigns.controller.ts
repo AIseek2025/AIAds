@@ -1,9 +1,11 @@
 import { Request, Response } from 'express';
 import { adminCampaignService } from '../../services/admin/campaigns.service';
 import { asyncHandler } from '../../middleware/errorHandler';
-import { validateBody } from '../../middleware/validation';
+import { requireAdmin } from '../../middleware/adminAuth';
+import { parseBodyOrRespond } from '../../middleware/validation';
 import { ApiResponse } from '../../types';
 import { z } from 'zod';
+import { getBudgetRiskThreshold } from '../../utils/budgetRiskThreshold';
 
 // Validation schemas
 const verifyCampaignSchema = z.object({
@@ -57,8 +59,33 @@ export class AdminCampaignsController {
       order: (order as 'asc' | 'desc') || 'desc',
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminCampaignService.getCampaignList(filters, adminId);
+
+    const response: ApiResponse<typeof result> = {
+      success: true,
+      data: result,
+    };
+
+    res.status(200).json(response);
+  });
+
+  /**
+   * GET /api/v1/admin/campaigns/budget-risks
+   * 预算占用率 ≥ 阈值的活动（须在 :id 之前注册路由）
+   */
+  getBudgetRiskCampaigns = asyncHandler(async (req: Request, res: Response) => {
+    const raw = req.query.threshold as string | undefined;
+    let threshold = getBudgetRiskThreshold();
+    if (raw !== undefined) {
+      const p = parseFloat(raw);
+      if (Number.isFinite(p)) {
+        threshold = p;
+      }
+    }
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
+
+    const result = await adminCampaignService.getBudgetRiskCampaigns(threshold, adminId, adminEmail);
 
     const response: ApiResponse<typeof result> = {
       success: true,
@@ -74,7 +101,7 @@ export class AdminCampaignsController {
    */
   getCampaignById = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminCampaignService.getCampaignById(id.toString(), adminId);
 
@@ -91,18 +118,14 @@ export class AdminCampaignsController {
    * Verify campaign (approve or reject)
    */
   verifyCampaign = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(verifyCampaignSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(verifyCampaignSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
-    const result = await adminCampaignService.verifyCampaign(
-      id.toString(),
-      req.body,
-      adminId,
-      adminEmail
-    );
+    const result = await adminCampaignService.verifyCampaign(id.toString(), req.body, adminId, adminEmail);
 
     const response: ApiResponse<typeof result> = {
       success: true,
@@ -118,18 +141,14 @@ export class AdminCampaignsController {
    * Update campaign status
    */
   updateCampaignStatus = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(updateCampaignStatusSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(updateCampaignStatusSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
-    const result = await adminCampaignService.updateCampaignStatus(
-      id.toString(),
-      req.body,
-      adminId,
-      adminEmail
-    );
+    const result = await adminCampaignService.updateCampaignStatus(id.toString(), req.body, adminId, adminEmail);
 
     const response: ApiResponse<typeof result> = {
       success: true,
@@ -146,7 +165,7 @@ export class AdminCampaignsController {
    */
   getCampaignStats = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminCampaignService.getCampaignStats(id.toString(), adminId);
 
@@ -163,15 +182,7 @@ export class AdminCampaignsController {
    * Get abnormal campaigns
    */
   getAbnormalCampaigns = asyncHandler(async (req: Request, res: Response) => {
-    const {
-      page,
-      page_size,
-      severity,
-      status,
-      type,
-      sort,
-      order,
-    } = req.query;
+    const { page, page_size, severity, status, type, sort, order } = req.query;
 
     const filters = {
       page: page ? parseInt(page as string, 10) : 1,
@@ -183,7 +194,7 @@ export class AdminCampaignsController {
       order: (order as 'asc' | 'desc') || 'desc',
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminCampaignService.getAbnormalCampaigns(filters, adminId);
 
     const response: ApiResponse<typeof result> = {

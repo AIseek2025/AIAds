@@ -7,7 +7,7 @@ test.describe('KOL 认证流程', () => {
     const testPassword = 'TestPass123!';
 
     // 1. 访问注册页面
-    await page.goto('http://localhost:3000/register');
+    await page.goto('/register');
 
     // 2. 选择 KOL 角色
     await page.click('text=KOL');
@@ -44,7 +44,7 @@ test.describe('KOL 认证流程', () => {
     const testPassword = 'TestPass123!';
 
     // 注册
-    await page.goto('http://localhost:3000/register');
+    await page.goto('/register');
     await page.click('text=KOL');
     await page.click('button:has-text("下一步")');
     await page.fill('label:has-text("邮箱") input', testEmail);

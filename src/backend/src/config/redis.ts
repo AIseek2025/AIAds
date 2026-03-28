@@ -40,7 +40,7 @@ export function initRedis(): Redis | null {
     redis = new Redis(redisUrl, {
       ...redisPoolConfig,
       // Retry strategy
-      retryStrategy: (times: number) => {
+      retryStrategy: (times: number): number | null => {
         if (times > 3) {
           logger.warn('Redis max retries reached');
           return null;
@@ -50,7 +50,7 @@ export function initRedis(): Redis | null {
         return delay;
       },
       // Reconnect on error
-      reconnectOnError: (err: Error) => {
+      reconnectOnError: (err: Error): boolean => {
         logger.warn('Redis connection error, attempting reconnect', { error: err.message });
         return true;
       },
@@ -114,11 +114,15 @@ export class CacheService {
 
   // Get value from cache
   async get<T>(key: string): Promise<T | null> {
-    if (!this.redis) return null;
+    if (!this.redis) {
+      return null;
+    }
 
     try {
       const value = await this.redis.get(key);
-      if (!value) return null;
+      if (!value) {
+        return null;
+      }
       return JSON.parse(value) as T;
     } catch (error) {
       logger.error('Cache get error', { key, error });
@@ -128,7 +132,9 @@ export class CacheService {
 
   // Set value in cache
   async set<T>(key: string, value: T, ttl?: number): Promise<boolean> {
-    if (!this.redis) return false;
+    if (!this.redis) {
+      return false;
+    }
 
     try {
       const serialized = JSON.stringify(value);
@@ -143,7 +149,9 @@ export class CacheService {
 
   // Delete value from cache
   async delete(key: string): Promise<boolean> {
-    if (!this.redis) return false;
+    if (!this.redis) {
+      return false;
+    }
 
     try {
       await this.redis.del(key);
@@ -156,7 +164,9 @@ export class CacheService {
 
   // Check if key exists
   async exists(key: string): Promise<boolean> {
-    if (!this.redis) return false;
+    if (!this.redis) {
+      return false;
+    }
 
     try {
       const result = await this.redis.exists(key);
@@ -169,7 +179,9 @@ export class CacheService {
 
   // Increment counter
   async increment(key: string, ttl?: number): Promise<number> {
-    if (!this.redis) return 0;
+    if (!this.redis) {
+      return 0;
+    }
 
     try {
       const value = await this.redis.incr(key);
@@ -185,7 +197,9 @@ export class CacheService {
 
   // Get counter value
   async getCounter(key: string): Promise<number> {
-    if (!this.redis) return 0;
+    if (!this.redis) {
+      return 0;
+    }
 
     try {
       const value = await this.redis.get(key);

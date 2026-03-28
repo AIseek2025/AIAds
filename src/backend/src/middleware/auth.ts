@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyToken, extractTokenFromHeader } from '../utils/crypto';
+import { verifyToken, extractTokenFromHeader, TokenError } from '../utils/crypto';
 import { logger } from '../utils/logger';
 import prisma from '../config/database';
 
@@ -36,13 +36,9 @@ interface AuthOptions {
  * M06: Set authentication cookies with secure settings
  * Uses HttpOnly, Secure, and SameSite attributes for XSS/CSRF protection
  */
-export function setAuthCookies(
-  res: Response,
-  accessToken: string,
-  refreshToken: string
-): void {
+export function setAuthCookies(res: Response, accessToken: string, refreshToken: string): void {
   const isProduction = process.env.NODE_ENV === 'production';
-  
+
   // Access Token cookie (15 minutes)
   const accessTokenOptions: CookieOptions = {
     httpOnly: true, // Prevents XSS attacks
@@ -51,7 +47,7 @@ export function setAuthCookies(
     maxAge: 15 * 60 * 1000, // 15 minutes
     path: '/',
   };
-  
+
   // Refresh Token cookie (7 days)
   const refreshTokenOptions: CookieOptions = {
     httpOnly: true, // Prevents XSS attacks
@@ -60,10 +56,10 @@ export function setAuthCookies(
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     path: '/',
   };
-  
+
   res.cookie('accessToken', accessToken, accessTokenOptions);
   res.cookie('refreshToken', refreshToken, refreshTokenOptions);
-  
+
   logger.debug('Auth cookies set', {
     secure: isProduction,
     httpOnly: true,
@@ -94,11 +90,11 @@ export function auth(options: AuthOptions = {}) {
     try {
       // Extract token from header or cookie
       let token: string | null = null;
-      
+
       // Try Authorization header first
       const authHeader = req.headers.authorization;
       token = extractTokenFromHeader(authHeader);
-      
+
       // Fall back to cookie if header not present
       if (!token) {
         token = extractTokenFromCookie(req, 'access');
@@ -206,18 +202,15 @@ export function auth(options: AuthOptions = {}) {
     } catch (error) {
       logger.error('Auth middleware error', { error, path: req.path });
 
-      if (error instanceof Error) {
-        if (error.name === 'TokenError') {
-          const tokenError = error as any;
-          res.status(401).json({
-            success: false,
-            error: {
-              code: tokenError.code || 'TOKEN_INVALID',
-              message: tokenError.message || 'Token 无效',
-            },
-          });
-          return;
-        }
+      if (error instanceof TokenError) {
+        res.status(401).json({
+          success: false,
+          error: {
+            code: error.code || 'TOKEN_INVALID',
+            message: error.message || 'Token 无效',
+          },
+        });
+        return;
       }
 
       next(error);
@@ -230,7 +223,7 @@ export function optionalAuth(req: Request, _res: Response, next: NextFunction): 
   // Try header first
   const authHeader = req.headers.authorization;
   let token = extractTokenFromHeader(authHeader);
-  
+
   // Fall back to cookie
   if (!token) {
     token = extractTokenFromCookie(req, 'access');

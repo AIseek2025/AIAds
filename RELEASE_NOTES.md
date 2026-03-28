@@ -1,5 +1,9 @@
 # AIAds Release Notes
 
+## 工程迭代记录（未单独发版）
+
+- **2026-03-27**：扩展管理端 API 回归（Playwright `test:e2e:api`：财务流水 `finance/transactions`、KOL 列表 `admin/kols`、根目录 `npm run test:e2e:api` 转发、`scripts/check-e2e-api-env.sh`）；`tests/README.md`；此前已含订单列表、看板/统计、财务 overview/deposits、可选订单详情等；Wave C 草案见 `docs/drafts/README.md`。
+
 ## v1.0.1
 
 - 发布日期：2026-03-27

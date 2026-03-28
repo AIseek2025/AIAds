@@ -2,13 +2,44 @@ import prisma from '../config/database';
 import { logger } from '../utils/logger';
 import { errors, ApiError } from '../middleware/errorHandler';
 import { cacheService } from '../config/redis';
-import {
-  KolResponse,
-  CreateKolRequest,
-  UpdateKolRequest,
-  KolAccountResponse,
-  BindKolAccountRequest,
-} from '../types';
+import { KolResponse, CreateKolRequest, UpdateKolRequest, KolAccountResponse, BindKolAccountRequest } from '../types';
+import { Prisma, type Kol, type KolAccount, type OrderStatus } from '@prisma/client';
+import { computeKolKeywordRank } from '../utils/kolSearchRank';
+
+type KolSearchFilters = {
+  platform?: string;
+  min_followers?: number;
+  max_followers?: number;
+  categories?: string;
+  regions?: string;
+  min_engagement_rate?: number;
+  keyword?: string;
+};
+
+const KOL_SEARCH_SELECT = {
+  id: true,
+  platform: true,
+  platformUsername: true,
+  platformDisplayName: true,
+  platformAvatarUrl: true,
+  bio: true,
+  category: true,
+  subcategory: true,
+  country: true,
+  followers: true,
+  following: true,
+  avgViews: true,
+  avgLikes: true,
+  avgComments: true,
+  avgShares: true,
+  engagementRate: true,
+  verified: true,
+  basePrice: true,
+  tags: true,
+  createdAt: true,
+} as const;
+
+type KolSearchRow = Prisma.KolGetPayload<{ select: typeof KOL_SEARCH_SELECT }>;
 
 export class KolService {
   /**
@@ -18,55 +49,70 @@ export class KolService {
   async searchKols(
     page: number = 1,
     pageSize: number = 20,
-    filters: {
-      platform?: string;
-      min_followers?: number;
-      max_followers?: number;
-      categories?: string;
-      regions?: string;
-      min_engagement_rate?: number;
-      keyword?: string;
-    }
+    filters: KolSearchFilters
   ): Promise<{ items: KolResponse[]; total: number }> {
-    const where: any = {
-      status: 'active',
-    };
+    const andClauses: Record<string, unknown>[] = [{ status: 'active' }];
 
-    // Platform filter
     if (filters.platform) {
-      where.platform = filters.platform;
+      andClauses.push({ platform: filters.platform });
     }
 
-    // Followers range filter
-    if (filters.min_followers !== undefined) {
-      where.followers = { ...where.followers, gte: filters.min_followers };
-    }
-    if (filters.max_followers !== undefined) {
-      where.followers = { ...where.followers, lte: filters.max_followers };
+    if (filters.min_followers !== undefined || filters.max_followers !== undefined) {
+      const fr: { gte?: number; lte?: number } = {};
+      if (filters.min_followers !== undefined) {
+        fr.gte = filters.min_followers;
+      }
+      if (filters.max_followers !== undefined) {
+        fr.lte = filters.max_followers;
+      }
+      andClauses.push({ followers: fr });
     }
 
-    // Engagement rate filter
     if (filters.min_engagement_rate !== undefined) {
-      where.engagementRate = { gte: filters.min_engagement_rate };
+      andClauses.push({ engagementRate: { gte: filters.min_engagement_rate } });
     }
 
-    // Category filter (using contains for partial match)
     if (filters.categories) {
-      const categories = filters.categories.split(',');
-      where.OR = categories.map((cat) => ({
-        category: { contains: cat.trim(), mode: 'insensitive' },
-      }));
+      const categories = filters.categories
+        .split(',')
+        .map((c) => c.trim())
+        .filter(Boolean);
+      if (categories.length > 0) {
+        andClauses.push({
+          OR: categories.map((cat) => ({
+            category: { contains: cat, mode: 'insensitive' as const },
+          })),
+        });
+      }
     }
 
-    // Region filter
     if (filters.regions) {
-      const regions = filters.regions.split(',');
-      where.country = { in: regions.map((r) => r.trim()) };
+      const regions = filters.regions
+        .split(',')
+        .map((r) => r.trim())
+        .filter(Boolean);
+      if (regions.length > 0) {
+        andClauses.push({ country: { in: regions } });
+      }
     }
+
+    const kw = filters.keyword?.trim();
+    if (kw) {
+      andClauses.push({
+        OR: [
+          { platformUsername: { contains: kw, mode: 'insensitive' as const } },
+          { platformDisplayName: { contains: kw, mode: 'insensitive' as const } },
+          { bio: { contains: kw, mode: 'insensitive' as const } },
+          { category: { contains: kw, mode: 'insensitive' as const } },
+        ],
+      });
+    }
+
+    const where: { AND: Record<string, unknown>[] } = { AND: andClauses };
 
     // Keyword search - use cache for expensive keyword queries
     const cacheKey = `kol:search:${this.buildSearchCacheKey(filters, page, pageSize)}`;
-    
+
     // P1 Performance: Use cache for search results (5 min TTL)
     if (!filters.keyword) {
       const cached = await cacheService.get<{ items: KolResponse[]; total: number }>(cacheKey);
@@ -75,34 +121,10 @@ export class KolService {
       }
     }
 
-    // P1 Performance: Use selective field selection to reduce data transfer
-    const selectFields = {
-      id: true,
-      platform: true,
-      platformUsername: true,
-      platformDisplayName: true,
-      platformAvatarUrl: true,
-      bio: true,
-      category: true,
-      subcategory: true,
-      country: true,
-      followers: true,
-      following: true,
-      avgViews: true,
-      avgLikes: true,
-      avgComments: true,
-      avgShares: true,
-      engagementRate: true,
-      verified: true,
-      basePrice: true,
-      tags: true,
-      createdAt: true,
-    };
-
     const [kols, total] = await Promise.all([
       prisma.kol.findMany({
         where,
-        select: selectFields,
+        select: KOL_SEARCH_SELECT,
         orderBy: { followers: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -110,8 +132,34 @@ export class KolService {
       prisma.kol.count({ where }),
     ]);
 
+    let items = kols.map((k) => this.formatKolSearchResult(k));
+
+    if (kw) {
+      items = items.map((item, i) => {
+        const row = kols[i];
+        const rank = computeKolKeywordRank(
+          {
+            platformUsername: row.platformUsername,
+            platformDisplayName: row.platformDisplayName,
+            bio: row.bio,
+            category: row.category,
+          },
+          kw
+        );
+        return { ...item, search_rank: rank };
+      });
+      items.sort((a, b) => {
+        const sa = a.search_rank?.score ?? 0;
+        const sb = b.search_rank?.score ?? 0;
+        if (sb !== sa) {
+          return sb - sa;
+        }
+        return b.followers - a.followers;
+      });
+    }
+
     const result = {
-      items: kols.map((k) => this.formatKolSearchResult(k)),
+      items,
       total,
     };
 
@@ -124,13 +172,25 @@ export class KolService {
   }
 
   /**
+   * 广告主/KOL 发现页：按 ID 查看公开摘要（不含敏感流水字段，与列表口径一致）
+   */
+  async getKolForAdvertiserDiscovery(kolId: string): Promise<KolResponse> {
+    const kol = await prisma.kol.findFirst({
+      where: { id: kolId, status: 'active' },
+      select: KOL_SEARCH_SELECT,
+    });
+
+    if (!kol) {
+      throw errors.notFound('KOL 不存在');
+    }
+
+    return this.formatKolSearchResult(kol);
+  }
+
+  /**
    * Build cache key for search parameters
    */
-  private buildSearchCacheKey(
-    filters: any,
-    page: number,
-    pageSize: number
-  ): string {
+  private buildSearchCacheKey(filters: KolSearchFilters, page: number, pageSize: number): string {
     const params = {
       p: filters.platform || '',
       minF: filters.min_followers || 0,
@@ -138,6 +198,7 @@ export class KolService {
       cat: filters.categories || '',
       reg: filters.regions || '',
       minE: filters.min_engagement_rate || 0,
+      kw: (filters.keyword || '').trim(),
       page,
       size: pageSize,
     };
@@ -148,19 +209,19 @@ export class KolService {
    * Format KOL search result (lightweight version)
    * P1 Performance: Avoid formatting unnecessary fields for search results
    */
-  private formatKolSearchResult(kol: any): KolResponse {
+  private formatKolSearchResult(kol: KolSearchRow): KolResponse {
     return {
       id: kol.id,
       user_id: '', // Not needed in search results
       platform: kol.platform,
       platform_id: '',
       platform_username: kol.platformUsername,
-      platform_display_name: kol.platformDisplayName,
-      platform_avatar_url: kol.platformAvatarUrl,
-      bio: kol.bio,
-      category: kol.category,
-      subcategory: kol.subcategory,
-      country: kol.country,
+      platform_display_name: kol.platformDisplayName ?? undefined,
+      platform_avatar_url: kol.platformAvatarUrl ?? undefined,
+      bio: kol.bio ?? undefined,
+      category: kol.category ?? undefined,
+      subcategory: kol.subcategory ?? undefined,
+      country: kol.country ?? undefined,
       followers: kol.followers,
       following: kol.following,
       total_videos: 0,
@@ -324,11 +385,19 @@ export class KolService {
     }
 
     // Build update data
-    const updateData: any = {};
-    if (data.bio !== undefined) updateData.bio = data.bio;
-    if (data.category !== undefined) updateData.category = data.category;
-    if (data.base_price !== undefined) updateData.basePrice = data.base_price;
-    if (data.tags !== undefined) updateData.tags = data.tags;
+    const updateData: Prisma.KolUpdateInput = {};
+    if (data.bio !== undefined) {
+      updateData.bio = data.bio;
+    }
+    if (data.category !== undefined) {
+      updateData.category = data.category;
+    }
+    if (data.base_price !== undefined) {
+      updateData.basePrice = data.base_price;
+    }
+    if (data.tags !== undefined) {
+      updateData.tags = data.tags;
+    }
 
     const updated = await prisma.kol.update({
       where: { userId },
@@ -447,7 +516,10 @@ export class KolService {
   /**
    * Sync KOL data from platform
    */
-  async syncData(kolId: string, accountIds?: string[]): Promise<{
+  async syncData(
+    kolId: string,
+    accountIds?: string[]
+  ): Promise<{
     synced: number;
     failed: number;
   }> {
@@ -460,7 +532,7 @@ export class KolService {
     }
 
     // Get accounts to sync
-    const where: any = { kolId };
+    const where: Prisma.KolAccountWhereInput = { kolId };
     if (accountIds && accountIds.length > 0) {
       where.id = { in: accountIds };
     }
@@ -540,7 +612,7 @@ export class KolService {
   /**
    * Fetch platform data (mock implementation)
    */
-  private async fetchPlatformData(account: any): Promise<{
+  private async fetchPlatformData(account: KolAccount): Promise<{
     followers: number;
     following?: number;
     totalVideos?: number;
@@ -555,7 +627,7 @@ export class KolService {
     // For now, return mock data with slight variations
     const baseFollowers = account.followers || 10000;
     const variation = Math.random() * 0.1 - 0.05; // +/- 5%
-    
+
     const followers = Math.round(baseFollowers * (1 + variation));
     const avgViews = Math.round(followers * 0.1 * (1 + variation));
     const avgLikes = Math.round(avgViews * 0.05 * (1 + variation));
@@ -579,21 +651,21 @@ export class KolService {
   /**
    * Format KOL response
    */
-  private formatKolResponse(kol: any): KolResponse {
+  private formatKolResponse(kol: Kol): KolResponse {
     return {
       id: kol.id,
       user_id: kol.userId,
       platform: kol.platform,
       platform_id: kol.platformId,
       platform_username: kol.platformUsername,
-      platform_display_name: kol.platformDisplayName,
-      platform_avatar_url: kol.platformAvatarUrl,
-      bio: kol.bio,
-      category: kol.category,
-      subcategory: kol.subcategory,
-      country: kol.country,
-      region: kol.region,
-      city: kol.city,
+      platform_display_name: kol.platformDisplayName ?? undefined,
+      platform_avatar_url: kol.platformAvatarUrl ?? undefined,
+      bio: kol.bio ?? undefined,
+      category: kol.category ?? undefined,
+      subcategory: kol.subcategory ?? undefined,
+      country: kol.country ?? undefined,
+      region: kol.region ?? undefined,
+      city: kol.city ?? undefined,
       followers: kol.followers,
       following: kol.following,
       total_videos: kol.totalVideos,
@@ -623,24 +695,107 @@ export class KolService {
   }
 
   /**
+   * 仪表盘统计：订单聚合 + 本月入账（流水）+ 曝光互动汇总
+   */
+  async getKolStats(kolId: string): Promise<{
+    total_earnings: number;
+    monthly_earnings: number;
+    pending_earnings: number;
+    available_balance: number;
+    total_tasks: number;
+    ongoing_tasks: number;
+    completed_tasks: number;
+    success_rate: number;
+    total_views: number;
+    total_likes: number;
+  }> {
+    const kol = await prisma.kol.findUnique({
+      where: { id: kolId },
+      select: {
+        totalEarnings: true,
+        availableBalance: true,
+        pendingBalance: true,
+      },
+    });
+    if (!kol) {
+      throw errors.notFound('KOL 不存在');
+    }
+
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const monthlyIncome = await prisma.transaction.aggregate({
+      where: {
+        kolId,
+        status: 'completed',
+        type: { in: ['order_income', 'bonus'] },
+        createdAt: { gte: startOfMonth },
+      },
+      _sum: { amount: true },
+    });
+
+    const ongoingStatuses: OrderStatus[] = [
+      'pending',
+      'accepted',
+      'in_progress',
+      'submitted',
+      'approved',
+      'revision',
+      'published',
+      'disputed',
+    ];
+
+    const [totalTasks, completedTasks, ongoingTasks, rejectedCount, cancelledCount, viewsSum] = await Promise.all([
+      prisma.order.count({ where: { kolId } }),
+      prisma.order.count({ where: { kolId, status: 'completed' } }),
+      prisma.order.count({
+        where: { kolId, status: { in: ongoingStatuses } },
+      }),
+      prisma.order.count({ where: { kolId, status: 'rejected' } }),
+      prisma.order.count({ where: { kolId, status: 'cancelled' } }),
+      prisma.order.aggregate({
+        where: { kolId },
+        _sum: { views: true, likes: true },
+      }),
+    ]);
+
+    const terminal = completedTasks + rejectedCount + cancelledCount;
+    const successRate = terminal > 0 ? Math.round((completedTasks / terminal) * 1000) / 10 : 0;
+
+    return {
+      total_earnings: kol.totalEarnings.toNumber(),
+      monthly_earnings: monthlyIncome._sum.amount?.toNumber() ?? 0,
+      pending_earnings: kol.pendingBalance.toNumber(),
+      available_balance: kol.availableBalance.toNumber(),
+      total_tasks: totalTasks,
+      ongoing_tasks: ongoingTasks,
+      completed_tasks: completedTasks,
+      success_rate: successRate,
+      total_views: viewsSum._sum.views ?? 0,
+      total_likes: viewsSum._sum.likes ?? 0,
+    };
+  }
+
+  /**
    * Format account response
    */
-  private formatAccountResponse(account: any): KolAccountResponse {
+  private formatAccountResponse(account: KolAccount): KolAccountResponse {
     return {
       id: account.id,
       kol_id: account.kolId,
       platform: account.platform,
       platform_username: account.platformUsername,
-      platform_display_name: account.platformDisplayName,
-      platform_avatar_url: account.platformAvatarUrl,
-      followers: account.followers,
-      following: account.following,
-      total_videos: account.totalVideos,
-      total_likes: account.totalLikes,
-      avg_views: account.avgViews,
-      avg_likes: account.avgLikes,
-      avg_comments: account.avgComments,
-      avg_shares: account.avgShares,
+      platform_display_name: account.platformDisplayName ?? undefined,
+      platform_avatar_url: account.platformAvatarUrl ?? undefined,
+      followers: account.followers ?? 0,
+      following: account.following ?? undefined,
+      total_videos: account.totalVideos ?? undefined,
+      total_likes: account.totalLikes ?? undefined,
+      avg_views: account.avgViews ?? undefined,
+      avg_likes: account.avgLikes ?? undefined,
+      avg_comments: account.avgComments ?? undefined,
+      avg_shares: account.avgShares ?? undefined,
       engagement_rate: account.engagementRate?.toNumber(),
       is_primary: account.isPrimary,
       is_verified: account.isVerified,

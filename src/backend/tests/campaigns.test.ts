@@ -13,7 +13,7 @@ describe('Campaigns API Tests', () => {
     // Create test user and advertiser
     const email = `campaign_test_${Date.now()}@example.com`;
     const passwordHash = await hashPassword('SecurePass123!');
-    
+
     testUser = await prisma.user.create({
       data: {
         email,
@@ -25,9 +25,7 @@ describe('Campaigns API Tests', () => {
     });
 
     // Login
-    const loginRes = await request(app)
-      .post('/api/v1/auth/login')
-      .send({ email, password: 'SecurePass123!' });
+    const loginRes = await request(app).post('/api/v1/auth/login').send({ email, password: 'SecurePass123!' });
 
     accessToken = loginRes.body.data.tokens.access_token;
 
@@ -106,10 +104,7 @@ describe('Campaigns API Tests', () => {
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .post('/api/v1/campaigns')
-        .send({ title: '测试', budget: 1000 })
-        .expect(401);
+      const response = await request(app).post('/api/v1/campaigns').send({ title: '测试', budget: 1000 }).expect(401);
 
       expect(response.body.error.code).toBe('AUTH_REQUIRED');
     });

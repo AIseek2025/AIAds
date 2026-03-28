@@ -14,7 +14,7 @@ interface ButtonProps extends Omit<MuiButtonProps, 'color'> {
   children: React.ReactNode;
 }
 
-const StyledButton = styled(MuiButton)(({ theme }) => ({
+const StyledButton = styled(MuiButton)(() => ({
   borderRadius: 8,
   textTransform: 'none',
   fontWeight: 600,

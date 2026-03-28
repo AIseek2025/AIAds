@@ -1,17 +1,57 @@
+import { Prisma, type Order, type OrderStatus } from '@prisma/client';
 import prisma from '../config/database';
+import { cacheService as redisAdvertiserCache } from '../config/redis';
 import { logger } from '../utils/logger';
 import { errors, ApiError } from '../middleware/errorHandler';
 import { cacheService } from './cache.service';
-import { OrderResponse, CreateOrderRequest } from '../types';
+import { OrderResponse, CreateOrderRequest, OrderCpmBreakdown } from '../types';
+import {
+  applyCpmBudgetCap,
+  billableImpressionsFromOrderViews,
+  buildCpmBreakdown,
+  grossSpendFromCpm,
+  prismaDecimalsFromCpmSettlement,
+  splitGrossWithPlatformFee,
+} from './cpm-metrics.service';
+import {
+  freezeBudgetOnOrderCreate,
+  genTransactionNo,
+  releaseFrozenBudgetTx,
+  type OrderTx,
+} from './order-budget.service';
+import { notificationService } from './notifications.service';
+import { kolFrequencyService } from './kol-frequency.service';
+
+type OrderWithListKol = Prisma.OrderGetPayload<{
+  include: {
+    kol: {
+      select: {
+        platformUsername: true;
+        platformDisplayName: true;
+        platformAvatarUrl: true;
+        platform: true;
+      };
+    };
+    campaign: {
+      select: {
+        title: true;
+        targetPlatforms: true;
+      };
+    };
+  };
+}>;
+
+/** 列表含 kol / campaign 片段；详情在 getOrderById 中一并加载 */
+type OrderForResponse = Order & {
+  kol?: OrderWithListKol['kol'];
+  campaign?: OrderWithListKol['campaign'];
+};
 
 export class OrderService {
   /**
    * Create order
    */
-  async createOrder(
-    advertiserId: string,
-    data: CreateOrderRequest
-  ): Promise<OrderResponse> {
+  async createOrder(advertiserId: string, data: CreateOrderRequest): Promise<OrderResponse> {
     // Get campaign
     const campaign = await prisma.campaign.findUnique({
       where: { id: data.campaign_id },
@@ -42,43 +82,89 @@ export class OrderService {
     // Generate order number
     const orderNo = `ORD-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
-    // Calculate platform fee (10% by default)
     const platformFeeRate = 0.1;
-    const price = data.offered_price;
-    const platformFee = price * platformFeeRate;
-    const kolEarning = price - platformFee;
+    const pricingModel = data.pricing_model ?? 'fixed';
 
-    // Create order
-    const order = await prisma.order.create({
-      data: {
-        campaignId: data.campaign_id,
-        kolId: data.kol_id,
+    let price: Prisma.Decimal;
+    let platformFee: Prisma.Decimal;
+    let kolEarning: Prisma.Decimal;
+    let cpmRate: Prisma.Decimal | null = null;
+    let cpmBudgetCap: Prisma.Decimal | null = null;
+
+    if (pricingModel === 'cpm') {
+      cpmRate = new Prisma.Decimal(data.cpm_rate!);
+      cpmBudgetCap = new Prisma.Decimal(data.offered_price!);
+      price = new Prisma.Decimal(0);
+      platformFee = new Prisma.Decimal(0);
+      kolEarning = new Prisma.Decimal(0);
+    } else {
+      const p = data.offered_price!;
+      price = new Prisma.Decimal(p);
+      platformFee = new Prisma.Decimal(p * platformFeeRate);
+      kolEarning = new Prisma.Decimal(p - p * platformFeeRate);
+    }
+
+    const freezeAmount = new Prisma.Decimal(data.offered_price!);
+
+    const order = await prisma.$transaction(async (tx: OrderTx) => {
+      const o = await tx.order.create({
+        data: {
+          campaignId: data.campaign_id,
+          kolId: data.kol_id,
+          advertiserId,
+          orderNo,
+          pricingModel,
+          cpmRate,
+          cpmBudgetCap,
+          frozenAmount: freezeAmount,
+          price,
+          platformFee,
+          kolEarning,
+          contentDescription: data.requirements,
+          status: 'pending',
+          deadline: campaign.deadline,
+        },
+      });
+
+      await freezeBudgetOnOrderCreate(tx, {
         advertiserId,
+        orderId: o.id,
         orderNo,
-        price,
-        platformFee,
-        kolEarning,
-        contentDescription: data.requirements,
-        status: 'pending',
-        deadline: campaign.deadline,
-      },
+        freezeAmount,
+      });
+
+      await tx.campaign.update({
+        where: { id: data.campaign_id },
+        data: {
+          totalKols: { increment: 1 },
+        },
+      });
+
+      return o;
     });
 
-    // Update campaign total_kols count
-    await prisma.campaign.update({
-      where: { id: data.campaign_id },
-      data: {
-        totalKols: { increment: 1 },
-      },
-    });
-
-    logger.info('Order created', { 
-      orderId: order.id, 
+    logger.info('Order created', {
+      orderId: order.id,
       campaignId: data.campaign_id,
       kolId: data.kol_id,
     });
 
-    return this.formatOrderResponse(order);
+    void this.invalidateAdvertiserProfileCache(advertiserId);
+
+    const [kolUser, campaignBrief] = await Promise.all([
+      prisma.kol.findUnique({ where: { id: data.kol_id }, select: { userId: true } }),
+      prisma.campaign.findUnique({ where: { id: data.campaign_id }, select: { title: true } }),
+    ]);
+    if (kolUser?.userId) {
+      notificationService.notifyOrderPendingForKol(
+        kolUser.userId,
+        order.id,
+        campaignBrief?.title ?? '活动',
+        order.orderNo
+      );
+    }
+
+    return this.formatOrderResponse(order as OrderForResponse);
   }
 
   /**
@@ -87,28 +173,73 @@ export class OrderService {
   async getOrderById(orderId: string, userId?: string, userRole?: string): Promise<OrderResponse> {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
+      include: {
+        kol: {
+          select: {
+            platformUsername: true,
+            platformDisplayName: true,
+            platformAvatarUrl: true,
+            platform: true,
+          },
+        },
+        campaign: {
+          select: {
+            title: true,
+            targetPlatforms: true,
+          },
+        },
+      },
     });
 
     if (!order) {
       throw errors.notFound('订单不存在');
     }
 
-    // Check permission (only advertiser or KOL can view)
     if (userId && userRole !== 'admin' && userRole !== 'super_admin') {
-      if (order.advertiserId !== userId && order.kolId !== userId) {
-        // Check if user is the KOL's owner
-        const kol = await prisma.kol.findUnique({
-          where: { id: order.kolId },
-          select: { userId: true },
-        });
-        
-        if (kol?.userId !== userId) {
-          throw errors.forbidden('没有权限查看此订单');
-        }
+      const adv = await prisma.advertiser.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+      const isAdvertiser = adv != null && order.advertiserId === adv.id;
+      const kol = await prisma.kol.findUnique({
+        where: { id: order.kolId },
+        select: { userId: true },
+      });
+      const isKolOwner = kol?.userId === userId;
+      if (!isAdvertiser && !isKolOwner) {
+        throw errors.forbidden('没有权限查看此订单');
       }
     }
 
-    return this.formatOrderResponse(order);
+    return this.formatOrderResponse(order as OrderForResponse);
+  }
+
+  /**
+   * CPM 口径明细（广告主 / KOL 数据看板）
+   */
+  async getOrderCpmMetrics(orderId: string, userId: string, userRole?: string): Promise<OrderCpmBreakdown> {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+    });
+    if (!order) {
+      throw errors.notFound('订单不存在');
+    }
+    if (userRole !== 'admin' && userRole !== 'super_admin') {
+      const adv = await prisma.advertiser.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+      const isAdvertiser = adv != null && order.advertiserId === adv.id;
+      const kol = await prisma.kol.findUnique({
+        where: { id: order.kolId },
+        select: { userId: true },
+      });
+      const isKolOwner = kol?.userId === userId;
+      if (!isAdvertiser && !isKolOwner) {
+        throw errors.forbidden('没有权限查看此订单');
+      }
+    }
+    return buildCpmBreakdown(order);
   }
 
   /**
@@ -125,7 +256,7 @@ export class OrderService {
       campaign_id?: string;
     }
   ): Promise<{ items: OrderResponse[]; total: number }> {
-    const where: any = {};
+    const where: Prisma.OrderWhereInput = {};
 
     // Filter by user role
     let targetId = '';
@@ -150,7 +281,16 @@ export class OrderService {
     }
 
     if (filters?.status) {
-      where.status = filters.status;
+      const raw = filters.status.trim();
+      if (raw.includes(',')) {
+        const parts = raw
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean) as OrderStatus[];
+        where.status = { in: parts };
+      } else {
+        where.status = raw as OrderStatus;
+      }
     }
 
     if (filters?.campaign_id) {
@@ -158,8 +298,8 @@ export class OrderService {
     }
 
     // P1 Performance: Cache key for order list
-    const cacheKey = `order:list:${targetId}:${filters?.status || 'all'}:${page}:${pageSize}`;
-    
+    const cacheKey = `order:list:v2:${targetId}:${filters?.status || 'all'}:${page}:${pageSize}`;
+
     // Try cache first (2 min TTL for order lists)
     if (!filters?.campaign_id) {
       const cached = await cacheService.get<{ items: OrderResponse[]; total: number }>(cacheKey);
@@ -168,36 +308,25 @@ export class OrderService {
       }
     }
 
-    // P1 Performance: Use selective field selection
-    const selectFields = {
-      id: true,
-      orderNo: true,
-      campaignId: true,
-      kolId: true,
-      advertiserId: true,
-      price: true,
-      platformFee: true,
-      kolEarning: true,
-      status: true,
-      contentType: true,
-      contentCount: true,
-      submittedAt: true,
-      approvedAt: true,
-      publishedAt: true,
-      completedAt: true,
-      deadline: true,
-      views: true,
-      likes: true,
-      comments: true,
-      shares: true,
-      createdAt: true,
-      updatedAt: true,
-    };
-
     const [orders, total] = await Promise.all([
       prisma.order.findMany({
         where,
-        select: selectFields,
+        include: {
+          kol: {
+            select: {
+              platformUsername: true,
+              platformDisplayName: true,
+              platformAvatarUrl: true,
+              platform: true,
+            },
+          },
+          campaign: {
+            select: {
+              title: true,
+              targetPlatforms: true,
+            },
+          },
+        },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -243,6 +372,8 @@ export class OrderService {
       throw errors.forbidden('没有权限操作此订单');
     }
 
+    await kolFrequencyService.assertCanAcceptOrder(order.kolId);
+
     const updated = await prisma.order.update({
       where: { id: orderId },
       data: {
@@ -260,6 +391,14 @@ export class OrderService {
     });
 
     logger.info('Order accepted', { orderId });
+
+    const advNotify = await prisma.advertiser.findUnique({
+      where: { id: order.advertiserId },
+      select: { userId: true },
+    });
+    if (advNotify?.userId) {
+      notificationService.notifyOrderAcceptedForAdvertiser(advNotify.userId, orderId, order.orderNo);
+    }
 
     return this.formatOrderResponse(updated);
   }
@@ -289,23 +428,41 @@ export class OrderService {
       throw errors.forbidden('没有权限操作此订单');
     }
 
-    const updated = await prisma.order.update({
-      where: { id: orderId },
-      data: {
-        status: 'rejected',
-        reviewNotes: reason,
-      },
-    });
+    const updated = await prisma.$transaction(async (tx: OrderTx) => {
+      if (order.frozenAmount.toNumber() > 0) {
+        await releaseFrozenBudgetTx(tx, order);
+      }
 
-    // Update campaign count
-    await prisma.campaign.update({
-      where: { id: order.campaignId },
-      data: {
-        totalKols: { decrement: 1 },
-      },
+      const o = await tx.order.update({
+        where: { id: orderId },
+        data: {
+          status: 'rejected',
+          reviewNotes: reason,
+          frozenAmount: new Prisma.Decimal(0),
+        },
+      });
+
+      await tx.campaign.update({
+        where: { id: order.campaignId },
+        data: {
+          totalKols: { decrement: 1 },
+        },
+      });
+
+      return o;
     });
 
     logger.info('Order rejected', { orderId, reason });
+
+    const advUser = await prisma.advertiser.findUnique({
+      where: { id: order.advertiserId },
+      select: { userId: true },
+    });
+    if (advUser?.userId) {
+      notificationService.notifyOrderRejectedForAdvertiser(advUser.userId, orderId, order.orderNo, reason);
+    }
+
+    void this.invalidateAdvertiserProfileCache(order.advertiserId);
 
     return this.formatOrderResponse(updated);
   }
@@ -313,12 +470,7 @@ export class OrderService {
   /**
    * Complete order
    */
-  async completeOrder(
-    orderId: string,
-    userId: string,
-    rating?: number,
-    review?: string
-  ): Promise<OrderResponse> {
+  async completeOrder(orderId: string, userId: string, rating?: number, review?: string): Promise<OrderResponse> {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
     });
@@ -327,8 +479,11 @@ export class OrderService {
       throw errors.notFound('订单不存在');
     }
 
-    // Only advertiser can complete the order
-    if (order.advertiserId !== userId) {
+    const advertiser = await prisma.advertiser.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!advertiser || order.advertiserId !== advertiser.id) {
       throw errors.forbidden('没有权限操作此订单');
     }
 
@@ -336,9 +491,12 @@ export class OrderService {
       throw new ApiError('订单未完成，无法确认', 400, 'INVALID_STATUS');
     }
 
-    const updateData: any = {
+    const platformFeeRate = 0.1;
+    let settledGrossDecimal: Prisma.Decimal = order.price;
+    const updateData: Prisma.OrderUpdateInput = {
       status: 'completed',
       completedAt: new Date(),
+      frozenAmount: new Prisma.Decimal(0),
     };
 
     if (rating !== undefined) {
@@ -348,18 +506,92 @@ export class OrderService {
       updateData.advertiserReview = review;
     }
 
-    const updated = await prisma.order.update({
-      where: { id: orderId },
-      data: updateData,
+    if (order.pricingModel === 'cpm' && order.cpmRate != null) {
+      const billable = billableImpressionsFromOrderViews(order.views);
+      let gross = grossSpendFromCpm(billable, order.cpmRate.toNumber());
+      gross = applyCpmBudgetCap(gross, order.cpmBudgetCap);
+      const split = splitGrossWithPlatformFee(gross, platformFeeRate);
+      const settled = prismaDecimalsFromCpmSettlement(split.gross, split.platformFee, split.kolEarning);
+      updateData.price = settled.price;
+      updateData.platformFee = settled.platformFee;
+      updateData.kolEarning = settled.kolEarning;
+      settledGrossDecimal = settled.price;
+    }
+
+    const updated = await prisma.$transaction(async (tx: OrderTx) => {
+      const F = order.frozenAmount.toNumber();
+      const A = settledGrossDecimal.toNumber();
+
+      if (F > 0) {
+        const adv = await tx.advertiser.findUnique({
+          where: { id: order.advertiserId },
+        });
+        if (!adv) {
+          throw errors.notFound('广告主不存在');
+        }
+        const W = adv.walletBalance.toNumber();
+        if (W + F < A - 1e-9) {
+          throw new ApiError('可用余额不足，无法按结算金额完成订单', 400, 'INSUFFICIENT_BALANCE');
+        }
+
+        const deltaWallet = new Prisma.Decimal(F - A);
+        await tx.advertiser.update({
+          where: { id: order.advertiserId },
+          data: {
+            walletBalance: { increment: deltaWallet },
+            frozenBalance: { decrement: order.frozenAmount },
+            totalSpent: { increment: settledGrossDecimal },
+          },
+        });
+
+        await tx.transaction.create({
+          data: {
+            advertiserId: order.advertiserId,
+            orderId: order.id,
+            transactionNo: genTransactionNo(),
+            type: 'order_payment',
+            amount: settledGrossDecimal,
+            status: 'completed',
+            description: `订单结算扣款 - ${order.orderNo}`,
+            completedAt: new Date(),
+          },
+        });
+      }
+
+      await tx.campaign.update({
+        where: { id: order.campaignId },
+        data: {
+          spentAmount: { increment: settledGrossDecimal },
+        },
+      });
+
+      const o = await tx.order.update({
+        where: { id: orderId },
+        data: updateData,
+      });
+
+      await this.updateKolStats(order.kolId, rating, tx);
+      await this.createKolPaymentTransaction(o, tx);
+
+      return o;
     });
 
-    // Update KOL stats
-    await this.updateKolStats(order.kolId, rating);
-
-    // Create transaction for KOL earning
-    await this.createKolPaymentTransaction(order);
-
     logger.info('Order completed', { orderId, rating });
+
+    void this.invalidateAdvertiserProfileCache(order.advertiserId);
+
+    const kolNotify = await prisma.kol.findUnique({
+      where: { id: order.kolId },
+      select: { userId: true },
+    });
+    if (kolNotify?.userId) {
+      notificationService.notifyOrderCompletedForKol(
+        kolNotify.userId,
+        orderId,
+        order.orderNo,
+        updated.kolEarning.toNumber()
+      );
+    }
 
     return this.formatOrderResponse(updated);
   }
@@ -400,17 +632,21 @@ export class OrderService {
 
     logger.info('Order work submitted', { orderId });
 
+    const advUser = await prisma.advertiser.findUnique({
+      where: { id: order.advertiserId },
+      select: { userId: true },
+    });
+    if (advUser?.userId) {
+      notificationService.notifyOrderSubmittedForAdvertiser(advUser.userId, orderId, order.orderNo);
+    }
+
     return this.formatOrderResponse(updated);
   }
 
   /**
    * Update order status (admin or advertiser)
    */
-  async updateOrderStatus(
-    orderId: string,
-    status: string,
-    reviewNotes?: string
-  ): Promise<OrderResponse> {
+  async updateOrderStatus(orderId: string, status: string, reviewNotes?: string): Promise<OrderResponse> {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
     });
@@ -419,8 +655,8 @@ export class OrderService {
       throw errors.notFound('订单不存在');
     }
 
-    const updateData: any = {
-      status,
+    const updateData: Prisma.OrderUpdateInput = {
+      status: status as OrderStatus,
     };
 
     if (reviewNotes) {
@@ -449,25 +685,27 @@ export class OrderService {
   /**
    * Update KOL stats after order completion
    */
-  private async updateKolStats(kolId: string, rating?: number): Promise<void> {
-    const kol = await prisma.kol.findUnique({
+  private async updateKolStats(kolId: string, rating?: number, tx?: OrderTx): Promise<void> {
+    const db = tx ?? prisma;
+    const kol = await db.kol.findUnique({
       where: { id: kolId },
     });
 
-    if (!kol) return;
+    if (!kol) {
+      return;
+    }
 
-    const updateData: any = {
+    const updateData: Prisma.KolUpdateInput = {
       completedOrders: { increment: 1 },
     };
 
-    // Update average rating
     if (rating !== undefined) {
       const newTotalRating = kol.avgRating.toNumber() * kol.completedOrders + rating;
       const newCompletedOrders = kol.completedOrders + 1;
       updateData.avgRating = newTotalRating / newCompletedOrders;
     }
 
-    await prisma.kol.update({
+    await db.kol.update({
       where: { id: kolId },
       data: updateData,
     });
@@ -476,10 +714,11 @@ export class OrderService {
   /**
    * Create payment transaction for KOL
    */
-  private async createKolPaymentTransaction(order: any): Promise<void> {
-    const transactionNo = `TXN-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+  private async createKolPaymentTransaction(order: Order, tx?: OrderTx): Promise<void> {
+    const db = tx ?? prisma;
+    const transactionNo = genTransactionNo();
 
-    await prisma.transaction.create({
+    await db.transaction.create({
       data: {
         orderId: order.id,
         kolId: order.kolId,
@@ -492,8 +731,7 @@ export class OrderService {
       },
     });
 
-    // Update KOL balance
-    await prisma.kol.update({
+    await db.kol.update({
       where: { id: order.kolId },
       data: {
         availableBalance: { increment: order.kolEarning },
@@ -502,22 +740,44 @@ export class OrderService {
     });
   }
 
+  /** GET /advertisers/me 缓存含 orders_frozen_total，订单冻结变化时需失效 */
+  private async invalidateAdvertiserProfileCache(advertiserId: string): Promise<void> {
+    try {
+      const row = await prisma.advertiser.findUnique({
+        where: { id: advertiserId },
+        select: { userId: true },
+      });
+      if (row?.userId) {
+        await redisAdvertiserCache.delete(`advertiser:user:${row.userId}`);
+      }
+    } catch (e) {
+      logger.warn('invalidateAdvertiserProfileCache failed', { advertiserId, err: e });
+    }
+  }
+
   /**
    * Format order response
    */
-  private formatOrderResponse(order: any): OrderResponse {
-    return {
+  private formatOrderResponse(order: OrderForResponse): OrderResponse {
+    const pricing_model = order.pricingModel === 'cpm' ? 'cpm' : 'fixed';
+    const campaignTitle = order.campaign?.title;
+    const platformFromCampaign = order.campaign?.targetPlatforms?.[0];
+    const row: OrderResponse = {
       id: order.id,
       campaign_id: order.campaignId,
       kol_id: order.kolId,
       advertiser_id: order.advertiserId,
       order_no: order.orderNo,
+      pricing_model,
+      cpm_rate: order.cpmRate != null ? order.cpmRate.toNumber() : null,
+      cpm_budget_cap: order.cpmBudgetCap != null ? order.cpmBudgetCap.toNumber() : null,
+      frozen_amount: order.frozenAmount != null ? order.frozenAmount.toNumber() : 0,
       price: order.price.toNumber(),
       platform_fee: order.platformFee.toNumber(),
       kol_earning: order.kolEarning.toNumber(),
       content_type: order.contentType,
       content_count: order.contentCount,
-      content_description: order.contentDescription,
+      content_description: order.contentDescription ?? undefined,
       draft_urls: order.draftUrls || [],
       published_urls: order.publishedUrls || [],
       accepted_at: order.acceptedAt?.toISOString(),
@@ -527,12 +787,12 @@ export class OrderService {
       published_at: order.publishedAt?.toISOString(),
       completed_at: order.completedAt?.toISOString(),
       status: order.status,
-      review_notes: order.reviewNotes,
+      review_notes: order.reviewNotes ?? undefined,
       revision_count: order.revisionCount,
-      advertiser_rating: order.advertiserRating,
-      advertiser_review: order.advertiserReview,
-      kol_rating: order.kolRating,
-      kol_review: order.kolReview,
+      advertiser_rating: order.advertiserRating ?? undefined,
+      advertiser_review: order.advertiserReview ?? undefined,
+      kol_rating: order.kolRating ?? undefined,
+      kol_review: order.kolReview ?? undefined,
       views: order.views,
       likes: order.likes,
       comments: order.comments,
@@ -540,6 +800,26 @@ export class OrderService {
       created_at: order.createdAt.toISOString(),
       updated_at: order.updatedAt.toISOString(),
     };
+    if (campaignTitle !== undefined) {
+      row.campaign_title = campaignTitle;
+    }
+    if (platformFromCampaign) {
+      row.platform = platformFromCampaign;
+    } else if (order.kol?.platform) {
+      row.platform = String(order.kol.platform);
+    }
+    if (pricing_model === 'cpm') {
+      row.cpm_breakdown = buildCpmBreakdown(order);
+    }
+    if (order.kol) {
+      row.kol = {
+        platform_username: order.kol.platformUsername,
+        platform_display_name: order.kol.platformDisplayName,
+        platform_avatar_url: order.kol.platformAvatarUrl,
+        platform: String(order.kol.platform),
+      };
+    }
+    return row;
   }
 }
 

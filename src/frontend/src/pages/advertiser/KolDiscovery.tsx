@@ -13,7 +13,6 @@ import InputLabel from '@mui/material/InputLabel';
 import Select from '@mui/material/Select';
 import Chip from '@mui/material/Chip';
 import Grid from '@mui/material/Grid';
-import IconButton from '@mui/material/IconButton';
 import Slider from '@mui/material/Slider';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
@@ -25,38 +24,35 @@ import Rating from '@mui/material/Rating';
 import LinearProgress from '@mui/material/LinearProgress';
 import Alert from '@mui/material/Alert';
 import Snackbar from '@mui/material/Snackbar';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TableRow from '@mui/material/TableRow';
 import TablePagination from '@mui/material/TablePagination';
-import Tooltip from '@mui/material/Tooltip';
 import Divider from '@mui/material/Divider';
 import Autocomplete from '@mui/material/Autocomplete';
-import Checkbox from '@mui/material/Checkbox';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import FormGroup from '@mui/material/FormGroup';
 import Paper from '@mui/material/Paper';
 import { styled } from '@mui/material/styles';
 
 // Icons
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import StarIcon from '@mui/icons-material/Star';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import MessageIcon from '@mui/icons-material/Message';
-import CheckIcon from '@mui/icons-material/Check';
-import CloseIcon from '@mui/icons-material/Close';
 
 // Types
 import type { Kol } from '../../types';
+import { AdvertiserHubNav } from '../../components/advertiser/AdvertiserHubNav';
 
 // Services
-import { kolAPI } from '../../services/advertiserApi';
+import {
+  advertiserAPI,
+  advertiserBalanceQueryKey,
+  campaignAPI,
+  kolAPI,
+} from '../../services/advertiserApi';
+import type { KolRecommendationRow } from '../../services/advertiserApi';
+import { getApiErrorMessage } from '../../utils/apiError';
+import { usePublicUiConfig } from '../../hooks/usePublicUiConfig';
+import { AdvertiserLowBalanceAlert } from '../../components/advertiser/AdvertiserLowBalanceAlert';
 
 // Styled Components
 const KolCard = styled(Card)(({ theme }) => ({
@@ -77,6 +73,8 @@ const colors: Record<string, string> = {
   facebook: '#1877f2',
   twitter: '#1da1f2',
   linkedin: '#0a66c2',
+  xiaohongshu: '#ff2442',
+  weibo: '#e6162d',
 };
 
 const PlatformIcon = styled(Box)<{ platform: string }>(({ platform }) => ({
@@ -153,6 +151,7 @@ export const KolDiscoveryPage: React.FC = () => {
     1000, 100000,
   ]);
   const [minEngagementRate, setMinEngagementRate] = useState(0);
+  const [recommendCampaignId, setRecommendCampaignId] = useState('');
 
   // Snackbar state
   const [snackbar, setSnackbar] = useState<{
@@ -166,7 +165,7 @@ export const KolDiscoveryPage: React.FC = () => {
     data: kolsData,
     isLoading,
     error,
-    refetch,
+    refetch: refetchKols,
   } = useQuery({
     queryKey: [
       'kols',
@@ -183,14 +182,48 @@ export const KolDiscoveryPage: React.FC = () => {
       kolAPI.getKols({
         page: page + 1,
         page_size: pageSize,
-        platform: platformFilter[0],
+        platform: platformFilter.length ? platformFilter[0] : undefined,
         min_followers: followerRange[0],
         max_followers: followerRange[1],
-        category: categoryFilter[0],
-        country: countryFilter[0],
+        categories: categoryFilter.length
+          ? categoryFilter.join(',')
+          : undefined,
+        regions: countryFilter.length ? countryFilter.join(',') : undefined,
         min_engagement_rate: minEngagementRate,
         keyword: keyword || undefined,
       }),
+    retry: 1,
+  });
+
+  const { data: balance, refetch: refetchBalance } = useQuery({
+    queryKey: [...advertiserBalanceQueryKey],
+    queryFn: advertiserAPI.getBalance,
+    retry: 1,
+  });
+
+  const { data: publicUi } = usePublicUiConfig();
+
+  const {
+    data: campaignsForRecommend,
+    isError: campaignsPickerError,
+    isLoading: campaignsPickerLoading,
+    error: campaignsPickerErr,
+    refetch: refetchCampaignsPicker,
+  } = useQuery({
+    queryKey: ['campaigns', 'kol-discovery-picker'],
+    queryFn: () => campaignAPI.getCampaigns({ page: 1, page_size: 100 }),
+  });
+
+  const {
+    data: recommendData,
+    isLoading: recommendLoading,
+    isError: recommendError,
+    error: recommendErr,
+    refetch: refetchRecommendKols,
+  } = useQuery({
+    queryKey: ['kols-recommend', recommendCampaignId],
+    queryFn: () => kolAPI.getRecommendedKols(recommendCampaignId, 12),
+    enabled: Boolean(recommendCampaignId.trim()),
     retry: 1,
   });
 
@@ -270,14 +303,38 @@ export const KolDiscoveryPage: React.FC = () => {
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          KOL 发现
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          发现并联系适合您品牌的 KOL，开启成功的营销合作
-        </Typography>
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 2,
+          mb: 2,
+        }}
+      >
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="h4" gutterBottom>
+            KOL 发现
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            发现并联系适合您品牌的 KOL；下单后可在活动详情与订单中心跟踪合作、CPM 与结算。
+          </Typography>
+        </Box>
+        <AdvertiserHubNav
+          preset="kol-discovery"
+          onRefresh={() => {
+            void refetchKols();
+            void refetchBalance();
+            void refetchCampaignsPicker();
+            if (recommendCampaignId.trim()) void refetchRecommendKols();
+          }}
+        />
       </Box>
+      <AdvertiserLowBalanceAlert balance={balance} publicUi={publicUi} context="kol-discovery" sx={{ mb: 3 }} />
+      <Alert severity="info" sx={{ mb: 3 }}>
+        「智能推荐」需先选择进行中的活动；建单与冻结预算以活动及订单规则为准。
+      </Alert>
 
       {/* Filters */}
       <Card sx={{ mb: 3 }}>
@@ -464,12 +521,186 @@ export const KolDiscoveryPage: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* 活动维度智能推荐 */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: 1,
+              mb: 2,
+            }}
+          >
+            <TrendingUpIcon color="primary" />
+            <Typography variant="h6">活动智能推荐</Typography>
+            <Typography variant="body2" color="text.secondary">
+              选择活动后展示规则匹配分、理由与预估触达
+            </Typography>
+          </Box>
+          <FormControl size="small" sx={{ minWidth: 280, maxWidth: '100%' }}>
+            <InputLabel id="recommend-campaign-label">关联活动</InputLabel>
+            <Select
+              labelId="recommend-campaign-label"
+              label="关联活动"
+              value={recommendCampaignId}
+              onChange={(e) => setRecommendCampaignId(e.target.value)}
+            >
+              <MenuItem value="">
+                <em>请选择活动</em>
+              </MenuItem>
+              {(campaignsForRecommend?.items ?? []).map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.title}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {campaignsPickerLoading && (
+            <LinearProgress sx={{ mt: 2 }} />
+          )}
+          {campaignsPickerError && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              {getApiErrorMessage(
+                campaignsPickerErr,
+                '活动列表加载失败，无法选择关联活动'
+              )}
+            </Alert>
+          )}
+          {!campaignsPickerLoading &&
+            !campaignsPickerError &&
+            (campaignsForRecommend?.items?.length ?? 0) === 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                暂无活动，请先在「我的活动」中创建并保存活动后再使用智能推荐。
+              </Typography>
+            )}
+
+          {recommendCampaignId.trim() && recommendLoading && (
+            <LinearProgress sx={{ mt: 2 }} />
+          )}
+
+          {recommendCampaignId.trim() &&
+            !recommendLoading &&
+            recommendError && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {getApiErrorMessage(
+                  recommendErr,
+                  '推荐加载失败，请检查活动归属或稍后重试'
+                )}
+              </Alert>
+            )}
+
+          {recommendCampaignId.trim() && !recommendLoading && recommendData && (
+            <Box sx={{ mt: 2 }}>
+              {recommendData.recommendations.length === 0 ? (
+                <Typography color="text.secondary">
+                  暂无匹配推荐，可尝试调整活动定向或稍后再试
+                </Typography>
+              ) : (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    gap: 2,
+                    overflowX: 'auto',
+                    pb: 1,
+                    pt: 0.5,
+                  }}
+                >
+                  {recommendData.recommendations.map((row: KolRecommendationRow) => (
+                    <Card
+                      key={row.kol.id}
+                      variant="outlined"
+                      sx={{
+                        minWidth: 260,
+                        maxWidth: 280,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <CardContent>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                            mb: 1,
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <Avatar
+                              src={row.kol.platformAvatarUrl}
+                              sx={{ width: 40, height: 40 }}
+                            >
+                              {row.kol.platformUsername?.[0]}
+                            </Avatar>
+                            <Box>
+                              <Typography variant="subtitle2" fontWeight="bold" noWrap>
+                                {row.kol.platformDisplayName || row.kol.platformUsername}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" noWrap>
+                                {row.kol.category || row.kol.platform}
+                              </Typography>
+                            </Box>
+                          </Box>
+                          <Chip
+                            size="small"
+                            color="primary"
+                            label={`匹配 ${row.match_score.toFixed(1)}`}
+                          />
+                        </Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          预估触达 {formatNumber(row.estimated_reach)} · 预估互动{' '}
+                          {formatNumber(row.estimated_engagement)}
+                        </Typography>
+                        {row.match_reasons.length > 0 && (
+                          <Stack
+                            direction="row"
+                            spacing={0.5}
+                            flexWrap="wrap"
+                            useFlexGap
+                            sx={{ mt: 1 }}
+                          >
+                            {row.match_reasons.map((reason) => (
+                              <Chip key={reason} label={reason} size="small" variant="outlined" />
+                            ))}
+                          </Stack>
+                        )}
+                        <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => handleDetailOpen(row.kol)}
+                          >
+                            详情
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            onClick={() => {
+                              setSelectedKol(row.kol);
+                              handleContactOpen();
+                            }}
+                          >
+                            联系
+                          </Button>
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Box>
+              )}
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+
       {/* KOL Grid */}
       {isLoading && <LinearProgress sx={{ mb: 2 }} />}
 
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>
-          加载 KOL 列表失败，请稍后重试
+          {getApiErrorMessage(error, '加载 KOL 列表失败，请稍后重试')}
         </Alert>
       ) : kolsData?.items && kolsData.items.length > 0 ? (
         <>

@@ -12,12 +12,13 @@ describe('Orders API Tests', () => {
   let kolId: string;
   let campaignId: string;
   let orderId: string;
+  let cpmOrderId: string;
 
   beforeAll(async () => {
     // Create advertiser user
     const advertiserEmail = `advertiser_order_${Date.now()}@example.com`;
     const passwordHash = await hashPassword('SecurePass123!');
-    
+
     advertiserUser = await prisma.user.create({
       data: {
         email: advertiserEmail,
@@ -105,9 +106,7 @@ describe('Orders API Tests', () => {
     campaignId = campaignRes.body.data.id;
 
     // Submit campaign to make it active
-    await request(app)
-      .post(`/api/v1/campaigns/${campaignId}/submit`)
-      .set('Authorization', `Bearer ${advertiserToken}`);
+    await request(app).post(`/api/v1/campaigns/${campaignId}/submit`).set('Authorization', `Bearer ${advertiserToken}`);
 
     // Update campaign status to active for order creation
     await prisma.campaign.update({
@@ -118,6 +117,9 @@ describe('Orders API Tests', () => {
 
   afterAll(async () => {
     // Cleanup
+    if (cpmOrderId) {
+      await prisma.order.delete({ where: { id: cpmOrderId } }).catch(() => {});
+    }
     if (orderId) {
       await prisma.order.delete({ where: { id: orderId } });
     }
@@ -160,7 +162,30 @@ describe('Orders API Tests', () => {
       orderId = response.body.data.id;
     });
 
-    it('应该拒绝不存在的活动', async () => {
+    it('应能创建 CPM 订单并返回透明化字段', async () => {
+      const response = await request(app)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${advertiserToken}`)
+        .send({
+          campaign_id: campaignId,
+          kol_id: kolId,
+          pricing_model: 'cpm',
+          cpm_rate: 20,
+          offered_price: 800,
+          requirements: 'CPM 测试',
+        })
+        .expect(201);
+
+      expect(response.body.data.pricing_model).toBe('cpm');
+      expect(response.body.data.cpm_rate).toBe(20);
+      expect(response.body.data.cpm_budget_cap).toBe(800);
+      expect(response.body.data.price).toBe(0);
+      expect(response.body.data.cpm_breakdown).toBeDefined();
+      expect(response.body.data.cpm_breakdown.gross_spend).toBe(0);
+      cpmOrderId = response.body.data.id;
+    });
+
+    it('应拒绝不存在的活动', async () => {
       const response = await request(app)
         .post('/api/v1/orders')
         .set('Authorization', `Bearer ${advertiserToken}`)
@@ -236,6 +261,20 @@ describe('Orders API Tests', () => {
       expect(response.body.success).toBe(true);
       expect(response.body.data.pagination.page).toBe(1);
       expect(response.body.data.pagination.page_size).toBe(10);
+    });
+  });
+
+  describe('GET /api/v1/orders/:id/cpm-metrics', () => {
+    it('应返回 CPM 口径明细', async () => {
+      const response = await request(app)
+        .get(`/api/v1/orders/${cpmOrderId}/cpm-metrics`)
+        .set('Authorization', `Bearer ${advertiserToken}`)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.pricing_model).toBe('cpm');
+      expect(response.body.data.cpm_rate).toBe(20);
+      expect(response.body.data.gross_spend).toBe(0);
     });
   });
 

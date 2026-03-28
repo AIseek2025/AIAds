@@ -14,6 +14,7 @@ import {
   csrfErrorHandler,
   performanceMiddleware,
 } from './middleware';
+import { getCsrfToken } from './middleware/csrf';
 import { auditLog } from './middleware/auditLog';
 import { logger, httpLogger } from './utils/logger';
 import { initRedis } from './config/redis';
@@ -23,31 +24,30 @@ import { setRedisInstance } from './services/cache.service';
 const app: Application = express();
 
 // Security middleware - Helmet for security headers
-app.use(helmet({
-  hsts: {
-    maxAge: 31536000, // 1 year
-    includeSubDomains: true,
-    preload: true,
-  },
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:"],
-      scriptSrc: ["'self'"],
-      connectSrc: ["'self'", config.nodeEnv === 'production' ? 'https://' : 'http://localhost:3000'],
+app.use(
+  helmet({
+    hsts: {
+      maxAge: 31536000, // 1 year
+      includeSubDomains: true,
+      preload: true,
     },
-  },
-  crossOriginEmbedderPolicy: false, // Disable for development if needed
-}));
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+        imgSrc: ["'self'", 'data:', 'https:'],
+        scriptSrc: ["'self'"],
+        connectSrc: ["'self'", config.nodeEnv === 'production' ? 'https://' : 'http://localhost:3000'],
+      },
+    },
+    crossOriginEmbedderPolicy: false, // Disable for development if needed
+  })
+);
 
 // Force HTTPS redirect in production
 app.use((req: Request, res: Response, next: NextFunction): void => {
-  if (
-    config.nodeEnv === 'production' &&
-    req.header('x-forwarded-proto') !== 'https'
-  ) {
+  if (config.nodeEnv === 'production' && req.header('x-forwarded-proto') !== 'https') {
     logger.info('Redirecting to HTTPS', { path: req.path, ip: req.ip });
     res.redirect(`https://${req.header('host')}${req.url}`);
   } else {
@@ -82,11 +82,12 @@ app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// CSRF protection middleware (applies to state-changing requests)
-app.use(csrfProtection);
-
-// CSRF error handler (must be after csrfProtection)
-app.use(csrfErrorHandler);
+// CSRF protection (skipped under Jest / NODE_ENV=test so supertest can POST without X-CSRF-Token)
+const csrfDisabled = process.env.NODE_ENV === 'test' || typeof process.env.JEST_WORKER_ID !== 'undefined';
+if (!csrfDisabled) {
+  app.use(csrfProtection);
+  app.use(csrfErrorHandler);
+}
 
 // HTTP logging middleware
 app.use(
@@ -95,7 +96,7 @@ app.use(
       write: (message: string) => {
         const [ip, , method, url, status, duration] = message.split(' ');
         httpLogger.http('HTTP Request', {
-          ip: ip.replace(/[\[\]]/g, ''),
+          ip: ip.replace(/\[/g, '').replace(/\]/g, ''),
           method,
           url,
           status: parseInt(status),
@@ -106,9 +107,9 @@ app.use(
   })
 );
 
-// CSRF token endpoint
-import { getCsrfToken } from './middleware/csrf';
-app.get('/api/v1/csrf-token', getCsrfToken);
+if (!csrfDisabled) {
+  app.get('/api/v1/csrf-token', getCsrfToken);
+}
 
 // API routes
 app.use('/api/v1', routes);
@@ -123,7 +124,9 @@ app.use(errorHandler);
 let isShuttingDown = false;
 
 export function gracefulShutdown(signal: string): void {
-  if (isShuttingDown) return;
+  if (isShuttingDown) {
+    return;
+  }
   isShuttingDown = true;
 
   logger.info(`Received ${signal}, shutting down gracefully...`);
@@ -166,8 +169,9 @@ process.on('uncaughtException', (error: Error) => {
   gracefulShutdown('uncaughtException');
 });
 
-process.on('unhandledRejection', (reason: any) => {
-  logger.error('Unhandled Rejection', { reason });
+process.on('unhandledRejection', (reason: unknown) => {
+  const message = reason instanceof Error ? reason.message : String(reason);
+  logger.error('Unhandled Rejection', { reason: message });
   gracefulShutdown('unhandledRejection');
 });
 

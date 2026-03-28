@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { userService } from '../services/users.service';
 import { asyncHandler, errors } from '../middleware/errorHandler';
-import { validateBody } from '../middleware/validation';
+import { parseBodyOrRespond } from '../middleware/validation';
 import { updateUserSchema, changePasswordSchema } from '../utils/validator';
 import { maskUserData } from '../utils/mask';
 import { ApiResponse } from '../types';
@@ -59,7 +59,9 @@ export class UserController {
       throw errors.forbidden('没有权限修改此用户');
     }
 
-    validateBody(updateUserSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(updateUserSchema, req, res)) {
+      return;
+    }
 
     const user = await userService.updateUser(id as string, req.body);
 
@@ -106,7 +108,9 @@ export class UserController {
       throw errors.forbidden('没有权限修改此用户密码');
     }
 
-    validateBody(changePasswordSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(changePasswordSchema, req, res)) {
+      return;
+    }
 
     const { current_password, new_password } = req.body;
 

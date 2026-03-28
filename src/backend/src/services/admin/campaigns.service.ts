@@ -1,9 +1,13 @@
+import { CampaignStatus, OrderStatus, Prisma } from '@prisma/client';
 import prisma from '../../config/database';
 import { logger } from '../../utils/logger';
 import { ApiError } from '../../middleware/errorHandler';
 import { logAdminAction } from './audit.service';
 import { PaginationResponse } from '../../types';
 import { decimalToNumber } from '../../utils/decimal';
+import { sumFrozenAmountForCampaign, sumFrozenAmountForCampaigns } from '../order-frozen.util';
+import { notificationService } from '../notifications.service';
+import { getBudgetRiskThreshold } from '../../utils/budgetRiskThreshold';
 
 // Types and interfaces
 export interface CampaignListFilters {
@@ -38,6 +42,8 @@ export interface CampaignListItem {
   total_impressions: number;
   total_clicks: number;
   performance_score: string | null;
+  /** 本活动关联订单 frozen_amount 合计（列表批量聚合） */
+  orders_frozen_total: number;
   created_at: string;
 }
 
@@ -52,7 +58,7 @@ export interface CampaignDetail {
   budget_type: string;
   spent_amount: number;
   pricing_model: string | null;
-  target_audience: any;
+  target_audience: Prisma.JsonValue;
   target_platforms: string[];
   min_followers: number;
   max_followers: number;
@@ -78,6 +84,8 @@ export interface CampaignDetail {
     estimated_reach: number;
     actual_reach: number;
   };
+  /** 本活动关联订单 frozen_amount 合计 */
+  orders_frozen_total: number;
   created_at: string;
   updated_at: string;
 }
@@ -150,14 +158,32 @@ export interface AbnormalCampaignFilters {
   order?: 'asc' | 'desc';
 }
 
+export interface VerifyCampaignResponse {
+  id: string;
+  status: string;
+  reviewed_at: string | undefined;
+  reviewed_by: string;
+}
+
+export interface UpdateCampaignStatusResponse {
+  id: string;
+  status: string;
+  updated_at: string;
+}
+
+/** Fields used by performance score helper (list rows include these) */
+type CampaignPerformanceInput = {
+  totalViews: number;
+  totalLikes: number;
+  budget: Prisma.Decimal;
+  spentAmount: Prisma.Decimal;
+};
+
 export class AdminCampaignService {
   /**
    * Get campaign list with pagination and filters
    */
-  async getCampaignList(
-    filters: CampaignListFilters,
-    adminId: string
-  ): Promise<PaginationResponse<CampaignListItem>> {
+  async getCampaignList(filters: CampaignListFilters, adminId: string): Promise<PaginationResponse<CampaignListItem>> {
     const {
       page,
       pageSize,
@@ -176,7 +202,7 @@ export class AdminCampaignService {
     const take = pageSize;
 
     // Build where clause
-    const where: any = {};
+    const where: Prisma.CampaignWhereInput = {};
 
     if (keyword) {
       where.OR = [
@@ -186,7 +212,7 @@ export class AdminCampaignService {
     }
 
     if (status) {
-      where.status = status;
+      where.status = status as CampaignStatus;
     }
 
     if (advertiserId) {
@@ -194,24 +220,40 @@ export class AdminCampaignService {
     }
 
     if (minBudget !== undefined || maxBudget !== undefined) {
-      where.budget = {};
+      const budget: Prisma.DecimalFilter = {};
       if (minBudget !== undefined) {
-        where.budget.gte = minBudget;
+        budget.gte = new Prisma.Decimal(minBudget);
       }
       if (maxBudget !== undefined) {
-        where.budget.lte = maxBudget;
+        budget.lte = new Prisma.Decimal(maxBudget);
       }
+      where.budget = budget;
     }
 
     if (startDateAfter || startDateBefore) {
-      where.startDate = {};
+      const startDate: Prisma.DateTimeNullableFilter = {};
       if (startDateAfter) {
-        where.startDate.gte = new Date(startDateAfter);
+        startDate.gte = new Date(startDateAfter);
       }
       if (startDateBefore) {
-        where.startDate.lte = new Date(startDateBefore);
+        startDate.lte = new Date(startDateBefore);
       }
+      where.startDate = startDate;
     }
+
+    // Prisma 字段名为 camelCase；查询参数多为 snake_case
+    const sortKey =
+      sort === 'created_at' || sort === undefined || sort === null
+        ? 'createdAt'
+        : sort === 'updated_at'
+          ? 'updatedAt'
+          : sort === 'start_date'
+            ? 'startDate'
+            : sort === 'budget'
+              ? 'budget'
+              : sort === 'title'
+                ? 'title'
+                : 'createdAt';
 
     // Get total count
     const total = await prisma.campaign.count({ where });
@@ -221,7 +263,7 @@ export class AdminCampaignService {
       where,
       skip,
       take,
-      orderBy: { [sort ?? 'createdAt']: order ?? 'desc' } as Record<string, 'asc' | 'desc'>,
+      orderBy: { [sortKey]: order ?? 'desc' } as Record<string, 'asc' | 'desc'>,
       include: {
         advertiser: {
           select: {
@@ -232,6 +274,8 @@ export class AdminCampaignService {
     });
 
     const totalPages = Math.ceil(total / pageSize);
+
+    const frozenByCampaign = await sumFrozenAmountForCampaigns(items.map((c) => c.id));
 
     // Log admin action
     await logAdminAction({
@@ -268,6 +312,7 @@ export class AdminCampaignService {
         total_impressions: item.totalViews,
         total_clicks: item.totalLikes,
         performance_score: this.calculatePerformanceScore(item),
+        orders_frozen_total: frozenByCampaign.get(item.id) ?? 0,
         created_at: item.createdAt.toISOString(),
       })),
       pagination: {
@@ -324,6 +369,8 @@ export class AdminCampaignService {
       targetId: campaignId,
     });
 
+    const orders_frozen_total = await sumFrozenAmountForCampaign(campaignId);
+
     return {
       id: campaign.id,
       advertiser_id: campaign.advertiserId,
@@ -361,6 +408,7 @@ export class AdminCampaignService {
         estimated_reach: 0,
         actual_reach: 0,
       },
+      orders_frozen_total,
       created_at: campaign.createdAt.toISOString(),
       updated_at: campaign.updatedAt.toISOString(),
     };
@@ -374,7 +422,7 @@ export class AdminCampaignService {
     request: VerifyCampaignRequest,
     adminId: string,
     adminEmail: string
-  ): Promise<any> {
+  ): Promise<VerifyCampaignResponse> {
     const { action, note, rejection_reason } = request;
 
     const campaign = await prisma.campaign.findUnique({
@@ -385,7 +433,7 @@ export class AdminCampaignService {
       throw new ApiError('活动不存在', 404, 'NOT_FOUND');
     }
 
-    const updateData: any = {
+    const updateData: Prisma.CampaignUpdateInput = {
       reviewedAt: new Date(),
       reviewedBy: adminId,
     };
@@ -425,6 +473,20 @@ export class AdminCampaignService {
       changes: { action, note, rejection_reason },
     });
 
+    const adv = await prisma.advertiser.findUnique({
+      where: { id: campaign.advertiserId },
+      select: { userId: true },
+    });
+    if (adv?.userId) {
+      notificationService.notifyCampaignReviewForAdvertiser(
+        adv.userId,
+        campaignId,
+        campaign.title,
+        action === 'approve',
+        action === 'approve' ? note : rejection_reason || note
+      );
+    }
+
     return {
       id: campaignId,
       status: updatedCampaign.status,
@@ -441,7 +503,7 @@ export class AdminCampaignService {
     request: UpdateCampaignStatusRequest,
     adminId: string,
     adminEmail: string
-  ): Promise<any> {
+  ): Promise<UpdateCampaignStatusResponse> {
     const { status, reason } = request;
 
     const campaign = await prisma.campaign.findUnique({
@@ -455,7 +517,7 @@ export class AdminCampaignService {
     const updatedCampaign = await prisma.campaign.update({
       where: { id: campaignId },
       data: {
-        status,
+        status: status as CampaignStatus,
       },
     });
 
@@ -508,41 +570,46 @@ export class AdminCampaignService {
       throw new ApiError('活动不存在', 404, 'NOT_FOUND');
     }
 
-    // Calculate statistics
     const totalImpressions = campaign.totalViews;
     const totalClicks = campaign.totalLikes;
     const ctr = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
 
-    // Mock engagement data (can be enhanced with real data)
-    const totalEngagements = Math.floor(totalClicks * 0.7);
+    const totalEngagements = campaign.totalLikes + campaign.totalComments;
     const engagementRate = totalImpressions > 0 ? totalEngagements / totalImpressions : 0;
 
-    // Mock conversion data
-    const totalConversions = Math.floor(totalClicks * 0.02);
-    const conversionRate = totalClicks > 0 ? totalConversions / totalClicks : 0;
+    const orderCount = campaign.orders.length;
+    const completedOrders = campaign.orders.filter((o) => o.status === OrderStatus.completed);
+    const totalConversions = completedOrders.length;
+    const conversionRate = orderCount > 0 ? totalConversions / orderCount : 0;
 
     const totalCost = decimalToNumber(campaign.spentAmount);
-    const totalRevenue = totalCost * 3.85; // Mock ROI of 3.85
+    const totalRevenue = completedOrders.reduce((sum, o) => sum + decimalToNumber(o.price), 0);
     const roi = totalCost > 0 ? totalRevenue / totalCost : 0;
 
-    // KOL performance
-    const kolPerformance = campaign.orders.map((order) => ({
-      kol_id: order.kolId,
-      kol_name: order.kol?.platformUsername || 'Unknown',
-      impressions: Math.floor(totalImpressions / campaign.orders.length) || 0,
-      clicks: Math.floor(totalClicks / campaign.orders.length) || 0,
-      engagements: Math.floor(totalEngagements / campaign.orders.length) || 0,
-      conversions: Math.floor(totalConversions / campaign.orders.length) || 0,
-      performance_score: Math.floor(Math.random() * 20) + 80, // Mock score 80-100
-    }));
+    const kolPerformance = campaign.orders.map((order) => {
+      const v = Math.max(order.views, 0);
+      const likes = Math.max(order.likes, 0);
+      const comments = Math.max(order.comments, 0);
+      const engagements = likes + comments;
+      const conv = order.status === OrderStatus.completed ? 1 : 0;
+      const erLocal = v > 0 ? engagements / v : 0;
+      const performance_score = Math.min(100, Math.round(erLocal * 180 + conv * 28 + (v > 500 ? 12 : v > 0 ? 6 : 0)));
+      return {
+        kol_id: order.kolId,
+        kol_name: order.kol?.platformDisplayName || order.kol?.platformUsername || 'KOL',
+        impressions: order.views,
+        clicks: order.likes,
+        engagements,
+        conversions: conv,
+        performance_score,
+      };
+    });
 
-    // Mock trend data
     const trends = {
-      impressions: this.generateTrendData(totalImpressions, 7),
-      clicks: this.generateTrendData(totalClicks, 7),
+      impressions: this.generateDeterministicTrendData(totalImpressions, 7),
+      clicks: this.generateDeterministicTrendData(totalClicks, 7),
     };
 
-    // Log admin action
     await logAdminAction({
       adminId,
       action: 'view',
@@ -590,64 +657,159 @@ export class AdminCampaignService {
     const skip = (page - 1) * pageSize;
     const take = pageSize;
 
-    // Mock abnormal campaigns data (can be enhanced with real anomaly detection)
-    const mockAbnormalCampaigns: AbnormalCampaign[] = [
-      {
-        id: 'anomaly_1',
-        campaign_id: 'campaign_1',
-        kol_id: 'kol_1',
-        order_id: 'order_1',
-        anomaly_type: 'fake_impressions',
-        description: '检测到异常曝光数据，偏离正常值 300%',
-        severity: 'high',
-        expected_value: 10000,
-        actual_value: 50000,
-        deviation_rate: 4.0,
-        detected_at: new Date().toISOString(),
-        detection_method: 'ai_model',
-        status: 'pending',
-        handled_by: null,
-        handled_at: null,
-      },
-      {
-        id: 'anomaly_2',
-        campaign_id: 'campaign_2',
-        kol_id: 'kol_2',
-        order_id: 'order_2',
-        anomaly_type: 'click_fraud',
-        description: '检测到异常点击行为，点击率异常偏高',
-        severity: 'medium',
-        expected_value: 0.05,
-        actual_value: 0.25,
-        deviation_rate: 5.0,
-        detected_at: new Date(Date.now() - 86400000).toISOString(),
-        detection_method: 'rule_based',
-        status: 'investigating',
-        handled_by: 'admin_1',
-        handled_at: null,
-      },
-    ];
+    const items: AbnormalCampaign[] = [];
+    const now = Date.now();
+    const THRESH_BUDGET = 0.85;
+    const CTR_EXPECT = 0.08;
 
-    // Apply filters
-    let filtered = mockAbnormalCampaigns;
+    const campaigns = await prisma.campaign.findMany({
+      where: {
+        status: { in: [CampaignStatus.active, CampaignStatus.paused, CampaignStatus.completed] },
+      },
+      select: {
+        id: true,
+        title: true,
+        budget: true,
+        spentAmount: true,
+        totalViews: true,
+        totalLikes: true,
+        status: true,
+        createdAt: true,
+        selectedKols: true,
+        publishedVideos: true,
+      },
+      take: 300,
+      orderBy: { updatedAt: 'desc' },
+    });
 
+    for (const c of campaigns) {
+      const budgetN = decimalToNumber(c.budget);
+      const spentN = decimalToNumber(c.spentAmount);
+      const util = budgetN > 0 ? spentN / budgetN : 0;
+      if (util >= THRESH_BUDGET && budgetN > 0) {
+        items.push({
+          id: `anomaly_budget_${c.id}`,
+          campaign_id: c.id,
+          kol_id: null,
+          order_id: null,
+          anomaly_type: 'budget_overspend',
+          description: `活动「${c.title}」预算占用率 ${(util * 100).toFixed(1)}%（≥${THRESH_BUDGET * 100}%）`,
+          severity: util >= 0.98 ? 'high' : 'medium',
+          expected_value: THRESH_BUDGET,
+          actual_value: util,
+          deviation_rate: util / THRESH_BUDGET,
+          detected_at: new Date().toISOString(),
+          detection_method: 'rule_based',
+          status: 'pending',
+          handled_by: null,
+          handled_at: null,
+        });
+      }
+
+      const ageDays = (now - c.createdAt.getTime()) / 86400000;
+      if (c.status === CampaignStatus.active && c.totalViews === 0 && ageDays > 3 && c.selectedKols > 0) {
+        items.push({
+          id: `anomaly_zero_delivery_${c.id}`,
+          campaign_id: c.id,
+          kol_id: null,
+          order_id: null,
+          anomaly_type: 'other',
+          description: `活动「${c.title}」进行中但累计曝光为 0（已创建 ${Math.floor(ageDays)} 天）`,
+          severity: 'medium',
+          expected_value: 1,
+          actual_value: 0,
+          deviation_rate: 1,
+          detected_at: c.createdAt.toISOString(),
+          detection_method: 'rule_based',
+          status: 'pending',
+          handled_by: null,
+          handled_at: null,
+        });
+      }
+
+      if (c.totalViews > 5000 && c.totalLikes > 0) {
+        const ctr = c.totalLikes / c.totalViews;
+        if (ctr > 0.2) {
+          items.push({
+            id: `anomaly_ctr_campaign_${c.id}`,
+            campaign_id: c.id,
+            kol_id: null,
+            order_id: null,
+            anomaly_type: 'unusual_engagement',
+            description: `活动「${c.title}」全活动互动率（likes/views=${ctr.toFixed(3)}）偏高`,
+            severity: ctr > 0.35 ? 'high' : 'medium',
+            expected_value: CTR_EXPECT,
+            actual_value: ctr,
+            deviation_rate: ctr / CTR_EXPECT,
+            detected_at: new Date().toISOString(),
+            detection_method: 'rule_based',
+            status: 'pending',
+            handled_by: null,
+            handled_at: null,
+          });
+        }
+      }
+    }
+
+    const orders = await prisma.order.findMany({
+      where: { views: { gte: 100 } },
+      select: {
+        id: true,
+        campaignId: true,
+        kolId: true,
+        views: true,
+        likes: true,
+        comments: true,
+      },
+      take: 200,
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    for (const o of orders) {
+      const v = o.views;
+      const engagement = o.likes + o.comments;
+      if (v < 100) {
+        continue;
+      }
+      const er = engagement / v;
+      if (er > 0.35) {
+        items.push({
+          id: `anomaly_order_eng_${o.id}`,
+          campaign_id: o.campaignId,
+          kol_id: o.kolId,
+          order_id: o.id,
+          anomaly_type: 'unusual_engagement',
+          description: `订单 ${o.id.slice(0, 8)}… 互动率(赞+评)/曝光=${er.toFixed(3)}，高于常规阈值`,
+          severity: er > 0.5 ? 'high' : 'medium',
+          expected_value: 0.12,
+          actual_value: er,
+          deviation_rate: er / 0.12,
+          detected_at: new Date().toISOString(),
+          detection_method: 'rule_based',
+          status: 'pending',
+          handled_by: null,
+          handled_at: null,
+        });
+      }
+    }
+
+    let filtered = items;
     if (severity) {
       filtered = filtered.filter((item) => item.severity === severity);
     }
-
     if (status) {
       filtered = filtered.filter((item) => item.status === status);
     }
-
     if (type) {
       filtered = filtered.filter((item) => item.anomaly_type === type);
     }
 
+    filtered.sort((a, b) => new Date(b.detected_at).getTime() - new Date(a.detected_at).getTime());
+
     const total = filtered.length;
     const paginated = filtered.slice(skip, skip + take);
-    const totalPages = Math.ceil(total / pageSize);
+    const totalPages = Math.ceil(total / pageSize) || 1;
 
-    // Log admin action
     await logAdminAction({
       adminId,
       action: 'list',
@@ -678,39 +840,119 @@ export class AdminCampaignService {
   }
 
   /**
+   * 活动预算占用率 ≥ 阈值（spent / budget），供 Cron / 运营巡检；默认阈值 0.85
+   */
+  async getBudgetRiskCampaigns(
+    threshold: number,
+    adminId: string,
+    adminEmail: string
+  ): Promise<{
+    items: Array<{
+      id: string;
+      title: string;
+      budget: number;
+      spent_amount: number;
+      utilization: number;
+      status: string;
+    }>;
+    threshold: number;
+  }> {
+    const t = Number.isFinite(threshold) ? Math.min(1, Math.max(0, threshold)) : getBudgetRiskThreshold();
+    const rows = await prisma.campaign.findMany({
+      where: {
+        status: { in: ['active', 'paused'] },
+        budget: { gt: 0 },
+      },
+      select: {
+        id: true,
+        title: true,
+        budget: true,
+        spentAmount: true,
+        status: true,
+      },
+    });
+
+    const items = rows
+      .map((c) => {
+        const budget = decimalToNumber(c.budget);
+        const spent = decimalToNumber(c.spentAmount);
+        const utilization = budget > 0 ? spent / budget : 0;
+        return {
+          id: c.id,
+          title: c.title,
+          budget,
+          spent_amount: spent,
+          utilization,
+          status: c.status,
+        };
+      })
+      .filter((x) => x.utilization >= t)
+      .sort((a, b) => b.utilization - a.utilization);
+
+    await logAdminAction({
+      adminId,
+      adminEmail,
+      action: 'list_budget_risks',
+      resourceType: 'campaigns',
+      resourceId: 'aggregate',
+      resourceName: 'budget_risks',
+      requestMethod: 'GET',
+      requestPath: '/api/v1/admin/campaigns/budget-risks',
+      requestBody: JSON.stringify({ threshold: t }),
+      status: 'success',
+    });
+
+    logger.info('Admin budget risk campaigns', { adminId, count: items.length, threshold: t });
+
+    return { items, threshold: t };
+  }
+
+  /**
    * Helper method to calculate performance score
    */
-  private calculatePerformanceScore(campaign: any): string {
-    const { totalImpressions, totalClicks, budget, spentAmount } = campaign;
+  private calculatePerformanceScore(campaign: CampaignPerformanceInput): string {
+    const totalImpressions = campaign.totalViews;
+    const totalClicks = campaign.totalLikes;
+    const { budget, spentAmount } = campaign;
 
-    if (totalImpressions === 0) return 'poor';
+    if (totalImpressions === 0) {
+      return 'poor';
+    }
 
     const ctr = totalClicks / totalImpressions;
     const budgetUtilization = decimalToNumber(spentAmount) / decimalToNumber(budget);
 
-    if (ctr > 0.05 && budgetUtilization > 0.8) return 'excellent';
-    if (ctr > 0.03 && budgetUtilization > 0.6) return 'good';
-    if (ctr > 0.01) return 'average';
+    if (ctr > 0.05 && budgetUtilization > 0.8) {
+      return 'excellent';
+    }
+    if (ctr > 0.03 && budgetUtilization > 0.6) {
+      return 'good';
+    }
+    if (ctr > 0.01) {
+      return 'average';
+    }
     return 'poor';
   }
 
   /**
-   * Helper method to generate trend data
+   * 将累计值按天均分（余数摊到前若干天），保证与总量一致、可复现
    */
-  private generateTrendData(totalValue: number, days: number): Array<{ date: string; value: number }> {
+  private generateDeterministicTrendData(totalValue: number, days: number): Array<{ date: string; value: number }> {
     const trends: Array<{ date: string; value: number }> = [];
-    const avgPerDay = totalValue / days;
-
-    for (let i = days - 1; i >= 0; i--) {
+    if (days <= 0) {
+      return trends;
+    }
+    const base = Math.floor(totalValue / days);
+    const rem = totalValue - base * days;
+    for (let i = 0; i < days; i++) {
       const date = new Date();
-      date.setDate(date.getDate() - i);
-      const variance = Math.random() * 0.4 + 0.8; // 0.8 to 1.2
+      date.setDate(date.getDate() - (days - 1 - i));
+      const v = base + (i < rem ? 1 : 0);
       trends.push({
         date: date.toISOString().split('T')[0],
-        value: Math.floor(avgPerDay * variance),
+        value: v,
       });
     }
-
     return trends;
   }
 }

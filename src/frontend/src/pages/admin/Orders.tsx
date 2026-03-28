@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { adminOrderAPI } from '../../services/adminApi';
-import type { OrderListItem, OrderDetail, OrderListParams, OrderDispute } from '../../types';
+import { getApiErrorMessage } from '../../utils/apiError';
+import { getAdminOrdersActiveTab } from '../../utils/adminOrdersActiveTab';
+import type { OrderListItem, OrderListParams } from '../../types';
+
+type OrderStatusFilter = NonNullable<OrderListParams['status']>;
 
 // MUI Components
 import Box from '@mui/material/Box';
@@ -28,7 +33,6 @@ import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
-import Avatar from '@mui/material/Avatar';
 import Tooltip from '@mui/material/Tooltip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
@@ -40,16 +44,13 @@ import Tab from '@mui/material/Tab';
 import Grid from '@mui/material/Grid';
 import Divider from '@mui/material/Divider';
 import TableSortLabel from '@mui/material/TableSortLabel';
-import Link from '@mui/material/Link';
 import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import { AdminHubNav } from '../../components/admin/AdminHubNav';
 import Stepper from '@mui/material/Stepper';
 import Step from '@mui/material/Step';
 import StepLabel from '@mui/material/StepLabel';
 import StepContent from '@mui/material/StepContent';
-import List from '@mui/material/List';
-import ListItem from '@mui/material/ListItem';
-import ListItemText from '@mui/material/ListItemText';
-import ListItemAvatar from '@mui/material/ListItemAvatar';
 
 // Icons
 import SearchIcon from '@mui/icons-material/Search';
@@ -58,11 +59,8 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import DownloadIcon from '@mui/icons-material/Download';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
-import WarningIcon from '@mui/icons-material/Warning';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import GavelIcon from '@mui/icons-material/Gavel';
-import ResolveIcon from '@mui/icons-material/CheckCircleOutline';
-import EscalateIcon from '@mui/icons-material/ErrorOutline';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -83,11 +81,54 @@ const TabPanel: React.FC<TabPanelProps> = ({ children, value, index, ...other })
   );
 };
 
+const OrderStatusBadge = ({ status }: { status: string }) => {
+  const config: Record<string, { color: 'success' | 'warning' | 'error' | 'info' | 'default'; label: string; icon?: React.ReactElement }> = {
+    pending: { color: 'warning', label: '待处理', icon: <ScheduleIcon fontSize="small" /> },
+    in_progress: { color: 'info', label: '进行中' },
+    completed: { color: 'success', label: '已完成', icon: <CheckCircleIcon fontSize="small" /> },
+    cancelled: { color: 'error', label: '已取消' },
+    disputed: { color: 'error', label: '纠纷中', icon: <ErrorIcon fontSize="small" /> },
+  };
+  const conf = config[status] || { color: 'default' as const, label: status };
+  return (
+    <Chip
+      label={conf.label}
+      color={conf.color}
+      size="small"
+      sx={{ fontWeight: 500 }}
+      icon={conf.icon}
+    />
+  );
+};
+
+const OrderPlatformBadge = ({ platform }: { platform: string }) => {
+  const platformConfig: Record<string, { color: string; label: string }> = {
+    tiktok: { color: '#FF0050', label: 'TikTok' },
+    youtube: { color: '#FF0000', label: 'YouTube' },
+    instagram: { color: '#E4405F', label: 'Instagram' },
+  };
+  const cfg = platformConfig[platform] || { color: '#999', label: platform };
+  return (
+    <Chip
+      label={cfg.label}
+      size="small"
+      sx={{
+        bgcolor: `${cfg.color}15`,
+        color: cfg.color,
+        fontWeight: 500,
+      }}
+    />
+  );
+};
+
 const OrdersPage: React.FC = () => {
   const queryClient = useQueryClient();
 
   // State
+  const [searchParams, setSearchParams] = useSearchParams();
+  const disputeTabFromUrl = searchParams.get('tab') === 'disputes';
   const [tabValue, setTabValue] = useState(0);
+  const activeTab = getAdminOrdersActiveTab(disputeTabFromUrl, tabValue);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [keyword, setKeyword] = useState('');
@@ -100,8 +141,12 @@ const OrdersPage: React.FC = () => {
   const [disputeDialogOpen, setDisputeDialogOpen] = useState(false);
   const [newStatus, setNewStatus] = useState<string>('');
   const [statusReason, setStatusReason] = useState('');
-  const [disputeResolution, setDisputeResolution] = useState('');
-  const [disputeStatus, setDisputeStatus] = useState<'resolved' | 'escalated'>('resolved');
+  const [disputeOutcome, setDisputeOutcome] = useState<'refund_full' | 'refund_partial' | 'no_refund' | 'escalate'>(
+    'no_refund'
+  );
+  const [disputeRefundAmount, setDisputeRefundAmount] = useState('');
+  const [disputeRuling, setDisputeRuling] = useState('');
+  const [disputeNotifyParties, setDisputeNotifyParties] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [sortField, setSortField] = useState<string>('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -120,7 +165,7 @@ const OrdersPage: React.FC = () => {
   };
 
   if (keyword) queryParams.keyword = keyword;
-  if (statusFilter) queryParams.status = statusFilter as any;
+  if (statusFilter) queryParams.status = statusFilter as OrderStatusFilter;
   if (platformFilter) queryParams.platform = platformFilter;
   if (amountFilter) {
     if (amountFilter === 'low') {
@@ -134,16 +179,16 @@ const OrdersPage: React.FC = () => {
   }
 
   // Fetch orders
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch: refetchOrders } = useQuery({
     queryKey: ['adminOrders', queryParams],
     queryFn: () => adminOrderAPI.getOrders(queryParams),
   });
 
   // Fetch order disputes
-  const { data: disputes } = useQuery({
+  const { data: disputes, refetch: refetchDisputes } = useQuery({
     queryKey: ['adminOrderDisputes'],
     queryFn: () => adminOrderAPI.getOrderDisputes({ page: 1, page_size: 50, status: 'pending' }),
-    enabled: tabValue === 3,
+    enabled: activeTab === 3,
   });
 
   // Fetch order detail
@@ -166,32 +211,61 @@ const OrdersPage: React.FC = () => {
       setStatusReason('');
       setSelectedOrder(null);
     },
-    onError: (err: any) => {
-      setSnackbar({ open: true, message: err.response?.data?.error?.message || '操作失败', severity: 'error' });
+    onError: (err: unknown) => {
+      setSnackbar({
+        open: true,
+        message: getApiErrorMessage(err, '操作失败'),
+        severity: 'error',
+      });
     },
   });
 
   // Resolve dispute mutation
   const resolveDisputeMutation = useMutation({
-    mutationFn: (data: { orderId: string; resolution: string; status: 'resolved' | 'escalated' }) =>
-      adminOrderAPI.resolveOrderDispute(data.orderId, { resolution: data.resolution, status: data.status }),
+    mutationFn: (data: {
+      orderId: string;
+      resolution: 'refund_full' | 'refund_partial' | 'no_refund' | 'escalate';
+      refund_amount?: number;
+      ruling: string;
+      notify_parties?: boolean;
+    }) => {
+      const { orderId, ...body } = data;
+      return adminOrderAPI.resolveOrderDispute(orderId, body);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminOrders'] });
       queryClient.invalidateQueries({ queryKey: ['adminOrderDisputes'] });
       setSnackbar({ open: true, message: '纠纷已处理', severity: 'success' });
       setDisputeDialogOpen(false);
-      setDisputeResolution('');
+      setDisputeOutcome('no_refund');
+      setDisputeRefundAmount('');
+      setDisputeRuling('');
+      setDisputeNotifyParties(true);
       setSelectedOrder(null);
     },
-    onError: (err: any) => {
-      setSnackbar({ open: true, message: err.response?.data?.error?.message || '操作失败', severity: 'error' });
+    onError: (err: unknown) => {
+      setSnackbar({
+        open: true,
+        message: getApiErrorMessage(err, '操作失败'),
+        severity: 'error',
+      });
     },
   });
 
   // Handlers
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
     setPage(0);
+    if (searchParams.get('tab') === 'disputes') {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('tab');
+          return next;
+        },
+        { replace: true }
+      );
+    }
   };
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -251,14 +325,23 @@ const OrdersPage: React.FC = () => {
   };
 
   const handleDisputeSubmit = () => {
-    if (!selectedOrder || !disputeResolution) {
-      setSnackbar({ open: true, message: '请填写处理方案', severity: 'error' });
+    if (!selectedOrder || !disputeRuling.trim()) {
+      setSnackbar({ open: true, message: '请填写裁决说明', severity: 'error' });
       return;
+    }
+    if (disputeOutcome === 'refund_partial') {
+      const amt = parseFloat(disputeRefundAmount);
+      if (!Number.isFinite(amt) || amt <= 0) {
+        setSnackbar({ open: true, message: '部分退款须填写大于 0 的金额', severity: 'error' });
+        return;
+      }
     }
     resolveDisputeMutation.mutate({
       orderId: selectedOrder.id,
-      resolution: disputeResolution,
-      status: disputeStatus,
+      resolution: disputeOutcome,
+      refund_amount: disputeOutcome === 'refund_partial' ? parseFloat(disputeRefundAmount) : undefined,
+      ruling: disputeRuling.trim(),
+      notify_parties: disputeNotifyParties,
     });
   };
 
@@ -270,8 +353,12 @@ const OrdersPage: React.FC = () => {
       });
       window.open(result.download_url, '_blank');
       setSnackbar({ open: true, message: '导出成功', severity: 'success' });
-    } catch (err: any) {
-      setSnackbar({ open: true, message: '导出失败', severity: 'error' });
+    } catch (err: unknown) {
+      setSnackbar({
+        open: true,
+        message: getApiErrorMessage(err, '导出失败'),
+        severity: 'error',
+      });
     }
   };
 
@@ -289,8 +376,10 @@ const OrdersPage: React.FC = () => {
 
   const handleCloseDisputeDialog = () => {
     setDisputeDialogOpen(false);
-    setDisputeResolution('');
-    setDisputeStatus('resolved');
+    setDisputeOutcome('no_refund');
+    setDisputeRefundAmount('');
+    setDisputeRuling('');
+    setDisputeNotifyParties(true);
     setSelectedOrder(null);
   };
 
@@ -324,53 +413,28 @@ const OrdersPage: React.FC = () => {
     return `¥${amount.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  // Status badge
-  const StatusBadge = ({ status }: { status: string }) => {
-    const config: Record<string, { color: 'success' | 'warning' | 'error' | 'info' | 'default'; label: string; icon?: React.ReactElement }> = {
-      pending: { color: 'warning', label: '待处理', icon: <ScheduleIcon fontSize="small" /> },
-      in_progress: { color: 'info', label: '进行中' },
-      completed: { color: 'success', label: '已完成', icon: <CheckCircleIcon fontSize="small" /> },
-      cancelled: { color: 'error', label: '已取消' },
-      disputed: { color: 'error', label: '纠纷中', icon: <ErrorIcon fontSize="small" /> },
-    };
-    const conf = config[status] || { color: 'default' as const, label: status };
-    return (
-      <Chip
-        label={conf.label}
-        color={conf.color}
-        size="small"
-        sx={{ fontWeight: 500 }}
-        icon={conf.icon}
-      />
-    );
-  };
+  const orderItemCount = data?.items?.length ?? 0;
+  const allOrderRowsSelected = orderItemCount > 0 && selectedIds.length === orderItemCount;
 
-  // Platform badge
-  const PlatformBadge = ({ platform }: { platform: string }) => {
-    const platformConfig: Record<string, { color: string; label: string }> = {
-      tiktok: { color: '#FF0050', label: 'TikTok' },
-      youtube: { color: '#FF0000', label: 'YouTube' },
-      instagram: { color: '#E4405F', label: 'Instagram' },
-    };
-    const config = platformConfig[platform] || { color: '#999', label: platform };
-    return (
-      <Chip
-        label={config.label}
-        size="small"
-        sx={{
-          bgcolor: `${config.color}15`,
-          color: config.color,
-          fontWeight: 500,
-        }}
-      />
-    );
+  const handleHubRefresh = () => {
+    void refetchOrders();
+    void refetchDisputes();
   };
 
   return (
     <Box>
       {/* Page Header */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
+      <Box
+        sx={{
+          mb: 2,
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 2,
+        }}
+      >
+        <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="h4" fontWeight="bold" gutterBottom>
             订单管理
           </Typography>
@@ -378,16 +442,20 @@ const OrdersPage: React.FC = () => {
             管理订单全生命周期，包括状态跟踪和纠纷处理
           </Typography>
         </Box>
-        <Stack direction="row" spacing={2}>
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
           <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleExport} disabled={!data?.items?.length}>
             导出
           </Button>
         </Stack>
       </Box>
+      <AdminHubNav onRefresh={handleHubRefresh} />
+      <Alert severity="info" sx={{ mb: 3, mt: 2 }}>
+        与侧栏模块路径一致；导出为当前筛选与排序下的列表。刷新将重新拉取订单列表与纠纷数据。
+      </Alert>
 
       {/* Tabs */}
       <Paper sx={{ mb: 3 }}>
-        <Tabs value={tabValue} onChange={handleTabChange} variant="scrollable" scrollButtons="auto">
+        <Tabs value={activeTab} onChange={handleTabChange} variant="scrollable" scrollButtons="auto">
           <Tab label={`全部订单 (${data?.pagination.total || 0})`} />
           <Tab label="待处理" />
           <Tab label="进行中" />
@@ -396,7 +464,7 @@ const OrdersPage: React.FC = () => {
       </Paper>
 
       {/* Tab Panel 0 - All Orders */}
-      <TabPanel value={tabValue} index={0}>
+      <TabPanel value={activeTab} index={0}>
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', gap: 2 }}>
@@ -469,7 +537,7 @@ const OrdersPage: React.FC = () => {
                 <TableRow>
                   <TableCell padding="checkbox" sx={{ width: 50 }}>
                     <Checkbox
-                      checked={selectedIds.length === (data?.items?.length || 0) && data?.items?.length! > 0}
+                      checked={allOrderRowsSelected}
                       onChange={handleSelectAll}
                     />
                   </TableCell>
@@ -485,6 +553,8 @@ const OrdersPage: React.FC = () => {
                       金额
                     </TableSortLabel>
                   </TableCell>
+                  <TableCell>计价</TableCell>
+                  <TableCell>冻结预算</TableCell>
                   <TableCell>状态</TableCell>
                   <TableCell>
                     <TableSortLabel active={sortField === 'created_at'} direction={sortOrder} onClick={() => handleSort('created_at')}>
@@ -506,17 +576,21 @@ const OrdersPage: React.FC = () => {
                       <TableCell><CircularProgress size={20} /></TableCell>
                       <TableCell><CircularProgress size={20} /></TableCell>
                       <TableCell><CircularProgress size={20} /></TableCell>
+                      <TableCell><CircularProgress size={20} /></TableCell>
+                      <TableCell><CircularProgress size={20} /></TableCell>
                     </TableRow>
                   ))
                 ) : error ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
-                      <Alert severity="error">加载失败：{(error as Error).message}</Alert>
+                    <TableCell colSpan={10} align="center">
+                      <Alert severity="error">
+                        加载失败：{getApiErrorMessage(error, '请稍后重试')}
+                      </Alert>
                     </TableCell>
                   </TableRow>
                 ) : data?.items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={10} align="center">
                       <Typography color="text.secondary" py={4}>暂无数据</Typography>
                     </TableCell>
                   </TableRow>
@@ -546,7 +620,7 @@ const OrdersPage: React.FC = () => {
                         </Box>
                       </TableCell>
                       <TableCell>
-                        <PlatformBadge platform={order.kolPlatform} />
+                        <OrderPlatformBadge platform={order.kolPlatform} />
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" fontWeight="bold">
@@ -554,7 +628,20 @@ const OrdersPage: React.FC = () => {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <StatusBadge status={order.status} />
+                        <Chip
+                          size="small"
+                          label={(order.pricingModel || order.pricing_model || 'fixed') === 'cpm' ? 'CPM' : '固定价'}
+                          color={(order.pricingModel || order.pricing_model) === 'cpm' ? 'secondary' : 'default'}
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {formatCurrency(order.frozenAmount ?? order.frozen_amount ?? 0)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <OrderStatusBadge status={order.status} />
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" color="text.secondary">
@@ -601,21 +688,21 @@ const OrdersPage: React.FC = () => {
       </TabPanel>
 
       {/* Tab Panel 1 - Pending */}
-      <TabPanel value={tabValue} index={1}>
+      <TabPanel value={activeTab} index={1}>
         <Alert severity="info" sx={{ mb: 3 }}>
           待处理订单将显示在这里，请及时处理
         </Alert>
       </TabPanel>
 
       {/* Tab Panel 2 - In Progress */}
-      <TabPanel value={tabValue} index={2}>
+      <TabPanel value={activeTab} index={2}>
         <Alert severity="success" sx={{ mb: 3 }}>
           进行中的订单，实时跟踪执行进度
         </Alert>
       </TabPanel>
 
       {/* Tab Panel 3 - Disputes */}
-      <TabPanel value={tabValue} index={3}>
+      <TabPanel value={activeTab} index={3}>
         <Alert severity="warning" sx={{ mb: 3 }}>
           纠纷订单需要及时处理，确保平台和用户权益
         </Alert>
@@ -712,7 +799,7 @@ const OrdersPage: React.FC = () => {
                     {orderDetail.campaignName}
                   </Typography>
                 </Box>
-                <StatusBadge status={orderDetail.status} />
+                <OrderStatusBadge status={orderDetail.status} />
               </Box>
             </DialogTitle>
             <DialogContent dividers>
@@ -740,7 +827,7 @@ const OrdersPage: React.FC = () => {
                         </Box>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                           <Typography variant="body2" color="text.secondary">平台</Typography>
-                          <PlatformBadge platform={orderDetail.kolPlatform} />
+                          <OrderPlatformBadge platform={orderDetail.kolPlatform} />
                         </Box>
                       </Stack>
                     </CardContent>
@@ -928,7 +1015,7 @@ const OrdersPage: React.FC = () => {
               {selectedOrder && (
                 <Alert severity="info">
                   订单：{selectedOrder.orderNo}<br />
-                  当前状态：<StatusBadge status={selectedOrder.status} />
+                  当前状态：<OrderStatusBadge status={selectedOrder.status} />
                 </Alert>
               )}
               <FormControl fullWidth>
@@ -993,25 +1080,48 @@ const OrdersPage: React.FC = () => {
                     </Typography>
                   </Alert>
                   <FormControl fullWidth>
-                    <InputLabel>处理结果</InputLabel>
+                    <InputLabel>处理方式</InputLabel>
                     <Select
-                      value={disputeStatus}
-                      label="处理结果"
-                      onChange={(e) => setDisputeStatus(e.target.value as 'resolved' | 'escalated')}
+                      value={disputeOutcome}
+                      label="处理方式"
+                      onChange={(e) =>
+                        setDisputeOutcome(e.target.value as 'refund_full' | 'refund_partial' | 'no_refund' | 'escalate')
+                      }
                     >
-                      <MenuItem value="resolved">已解决</MenuItem>
-                      <MenuItem value="escalated">升级处理</MenuItem>
+                      <MenuItem value="no_refund">不予退款（结案）</MenuItem>
+                      <MenuItem value="refund_full">全额退款并取消订单</MenuItem>
+                      <MenuItem value="refund_partial">部分退款</MenuItem>
+                      <MenuItem value="escalate">升级跟进</MenuItem>
                     </Select>
                   </FormControl>
+                  {disputeOutcome === 'refund_partial' && (
+                    <TextField
+                      fullWidth
+                      label="退款金额（元）"
+                      type="number"
+                      value={disputeRefundAmount}
+                      onChange={(e) => setDisputeRefundAmount(e.target.value)}
+                      inputProps={{ min: 0, step: 0.01 }}
+                    />
+                  )}
                   <TextField
                     fullWidth
-                    label="处理方案"
+                    label="裁决说明"
                     multiline
                     rows={4}
-                    value={disputeResolution}
-                    onChange={(e) => setDisputeResolution(e.target.value)}
-                    placeholder="详细说明处理方案和裁决结果"
+                    value={disputeRuling}
+                    onChange={(e) => setDisputeRuling(e.target.value)}
+                    placeholder="说明事实认定、处理依据与结果（将同步通知双方）"
                     required
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={disputeNotifyParties}
+                        onChange={(e) => setDisputeNotifyParties(e.target.checked)}
+                      />
+                    }
+                    label="处理完成后通知广告主与 KOL（站内通知）"
                   />
                 </>
               )}
@@ -1024,7 +1134,7 @@ const OrdersPage: React.FC = () => {
             variant="contained"
             color="primary"
             onClick={handleDisputeSubmit}
-            disabled={resolveDisputeMutation.isPending || !disputeResolution}
+            disabled={resolveDisputeMutation.isPending || !disputeRuling.trim()}
           >
             {resolveDisputeMutation.isPending ? <CircularProgress size={24} /> : '确认处理'}
           </Button>

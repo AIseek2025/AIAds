@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { adminAuthService } from '../../services/admin/auth.service';
 import { asyncHandler, errors } from '../../middleware/errorHandler';
-import { validateBody } from '../../middleware/validation';
+import { parseBodyOrRespond } from '../../middleware/validation';
 import { ApiResponse } from '../../types';
 import { getClientIP } from '../../utils/helpers';
 import { z } from 'zod';
@@ -15,10 +15,10 @@ const adminLoginSchema = z.object({
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(8, '当前密码至少 8 位'),
-  newPassword: z.string().min(8, '新密码至少 8 位').regex(
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/,
-    '密码必须包含大小写字母和数字'
-  ),
+  newPassword: z
+    .string()
+    .min(8, '新密码至少 8 位')
+    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/, '密码必须包含大小写字母和数字'),
 });
 
 const resetPasswordSchema = z.object({
@@ -44,7 +44,9 @@ export class AdminAuthController {
    * Admin login
    */
   login = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(adminLoginSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(adminLoginSchema, req, res)) {
+      return;
+    }
 
     const result = await adminAuthService.login(req.body, getClientIP(req));
 
@@ -82,7 +84,9 @@ export class AdminAuthController {
    * Refresh access token
    */
   refreshToken = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(refreshTokenSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(refreshTokenSchema, req, res)) {
+      return;
+    }
 
     const result = await adminAuthService.refreshToken(req.body.refresh_token);
 
@@ -120,7 +124,9 @@ export class AdminAuthController {
    * Change admin password
    */
   changePassword = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(changePasswordSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(changePasswordSchema, req, res)) {
+      return;
+    }
 
     const adminId = req.admin?.id;
 
@@ -143,7 +149,9 @@ export class AdminAuthController {
    * Reset admin password (super admin only)
    */
   resetPassword = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(resetPasswordSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(resetPasswordSchema, req, res)) {
+      return;
+    }
 
     const adminId = req.admin?.id;
 
@@ -166,7 +174,9 @@ export class AdminAuthController {
    * Enable MFA for admin
    */
   enableMfa = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(enableMfaSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(enableMfaSchema, req, res)) {
+      return;
+    }
 
     const adminId = req.admin?.id;
 
@@ -215,7 +225,9 @@ export class AdminAuthController {
    * Verify MFA code
    */
   verifyMfa = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(verifyMfaSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(verifyMfaSchema, req, res)) {
+      return;
+    }
 
     const adminId = req.admin?.id;
 
@@ -238,7 +250,9 @@ export class AdminAuthController {
    * Disable MFA for admin
    */
   disableMfa = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(verifyMfaSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(verifyMfaSchema, req, res)) {
+      return;
+    }
 
     const adminId = req.admin?.id;
 

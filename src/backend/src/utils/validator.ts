@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z, type ZodObject, type ZodTypeAny } from 'zod';
 
 // Common validation schemas
 export const emailSchema = z
@@ -22,9 +22,7 @@ export const passwordSchema = z
   .regex(/[0-9]/, '密码必须包含数字')
   .regex(/[^A-Za-z0-9]/, '密码必须包含特殊字符');
 
-export const uuidSchema = z
-  .string()
-  .uuid('无效的 UUID 格式');
+export const uuidSchema = z.string().uuid('无效的 UUID 格式');
 
 export const paginationSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -40,6 +38,10 @@ export const registerSchema = z.object({
   phone: phoneSchema,
   role: z.enum(['advertiser', 'kol']).optional().default('advertiser'),
   nickname: z.string().min(1).max(100).optional(),
+  invite_code: z.preprocess(
+    (v) => (v === '' || v === undefined || v === null ? undefined : v),
+    z.string().min(4).max(64).optional()
+  ),
 });
 
 export const loginSchema = z.object({
@@ -65,9 +67,32 @@ export const refreshTokenSchema = z.object({
   refresh_token: z.string().min(1, 'Refresh Token 不能为空'),
 });
 
-export const verificationCodeSchema = z.object({
+/** 仅发送验证码（无需 code） */
+export const sendVerificationCodeSchema = z.object({
   type: z.enum(['email', 'phone']),
   target: z.string().min(1, '目标不能为空'),
+  purpose: z.enum(['register', 'reset_password', 'login']).optional().default('register'),
+});
+
+/** 校验验证码 */
+export const verifyCodeBodySchema = z.object({
+  type: z.enum(['email', 'phone']),
+  target: z.string().min(1, '目标不能为空'),
+  code: z.string().length(6, '验证码为 6 位数字'),
+  purpose: z.enum(['register', 'reset_password', 'verify', 'login']).optional().default('register'),
+});
+
+/** 重置密码（带新密码） */
+export const resetPasswordBodySchema = z.object({
+  type: z.enum(['email', 'phone']),
+  target: z.string().min(1, '目标不能为空'),
+  code: z.string().length(6, '验证码为 6 位数字'),
+  new_password: passwordSchema,
+});
+
+/** 邮箱验证码登录 */
+export const loginEmailCodeSchema = z.object({
+  email: emailSchema,
   code: z.string().length(6, '验证码为 6 位数字'),
 });
 
@@ -109,12 +134,14 @@ export const createCampaignSchema = z.object({
   objective: z.enum(['awareness', 'engagement', 'traffic', 'conversion', 'sales']).optional().default('awareness'),
   budget: z.number().positive(),
   budget_type: z.enum(['fixed', 'per_video']).optional().default('fixed'),
-  target_audience: z.object({
-    age_range: z.string().optional(),
-    gender: z.enum(['male', 'female', 'all']).optional(),
-    locations: z.array(z.string()).optional(),
-    interests: z.array(z.string()).optional(),
-  }).optional(),
+  target_audience: z
+    .object({
+      age_range: z.string().optional(),
+      gender: z.enum(['male', 'female', 'all']).optional(),
+      locations: z.array(z.string()).optional(),
+      interests: z.array(z.string()).optional(),
+    })
+    .optional(),
   target_platforms: z.array(z.enum(['tiktok', 'youtube', 'instagram', 'xiaohongshu', 'weibo'])).optional(),
   min_followers: z.number().int().positive().optional(),
   max_followers: z.number().int().positive().optional(),
@@ -134,12 +161,14 @@ export const updateCampaignSchema = z.object({
   objective: z.enum(['awareness', 'engagement', 'traffic', 'conversion', 'sales']).optional(),
   budget: z.number().positive().optional(),
   budget_type: z.enum(['fixed', 'per_video']).optional(),
-  target_audience: z.object({
-    age_range: z.string().optional(),
-    gender: z.enum(['male', 'female', 'all']).optional(),
-    locations: z.array(z.string()).optional(),
-    interests: z.array(z.string()).optional(),
-  }).optional(),
+  target_audience: z
+    .object({
+      age_range: z.string().optional(),
+      gender: z.enum(['male', 'female', 'all']).optional(),
+      locations: z.array(z.string()).optional(),
+      interests: z.array(z.string()).optional(),
+    })
+    .optional(),
   target_platforms: z.array(z.enum(['tiktok', 'youtube', 'instagram', 'xiaohongshu', 'weibo'])).optional(),
   min_followers: z.number().int().positive().optional(),
   max_followers: z.number().int().positive().optional(),
@@ -166,12 +195,42 @@ export const kolSearchSchema = z.object({
 });
 
 // Order related schemas
-export const createOrderSchema = z.object({
-  campaign_id: uuidSchema,
-  kol_id: uuidSchema,
-  offered_price: z.number().positive(),
-  requirements: z.string().max(2000).optional(),
-});
+export const createOrderSchema = z
+  .object({
+    campaign_id: uuidSchema,
+    kol_id: uuidSchema,
+    offered_price: z.number().positive().optional(),
+    pricing_model: z.enum(['fixed', 'cpm']).optional().default('fixed'),
+    cpm_rate: z.number().positive().optional(),
+    requirements: z.string().max(2000).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.pricing_model === 'fixed') {
+      if (data.offered_price === undefined || data.offered_price === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: '固定价订单必须提供 offered_price',
+          path: ['offered_price'],
+        });
+      }
+    }
+    if (data.pricing_model === 'cpm') {
+      if (data.cpm_rate == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'CPM 订单必须提供 cpm_rate',
+          path: ['cpm_rate'],
+        });
+      }
+      if (data.offered_price === undefined || data.offered_price === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'CPM 订单必须提供 offered_price 作为预算上限（用于冻结与超额保护）',
+          path: ['offered_price'],
+        });
+      }
+    }
+  });
 
 // KOL related schemas
 export const createKolSchema = z.object({
@@ -236,21 +295,28 @@ export const withdrawSchema = z.object({
 });
 
 // Generic API response schema
-export const apiResponseSchema = <T>(dataSchema: z.ZodSchema<T>) =>
-  z.object({
+export function apiResponseSchema<T>(dataSchema: z.ZodSchema<T>): ZodObject<Record<string, ZodTypeAny>> {
+  return z.object({
     success: z.boolean(),
     data: dataSchema.optional(),
-    error: z.object({
-      code: z.string(),
-      message: z.string(),
-      details: z.array(z.object({
-        field: z.string().optional(),
+    error: z
+      .object({
+        code: z.string(),
         message: z.string(),
-      })).optional(),
-    }).optional(),
+        details: z
+          .array(
+            z.object({
+              field: z.string().optional(),
+              message: z.string(),
+            })
+          )
+          .optional(),
+      })
+      .optional(),
     message: z.string().optional(),
     request_id: z.string().optional(),
   });
+}
 
 // Helper function to validate request body
 export function validateRequest<T>(schema: z.ZodSchema<T>, data: unknown): T {
@@ -258,7 +324,7 @@ export function validateRequest<T>(schema: z.ZodSchema<T>, data: unknown): T {
     return schema.parse(data);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const details = error.issues.map((err: any) => ({
+      const details = error.issues.map((err) => ({
         field: err.path.join('.'),
         message: err.message,
       }));

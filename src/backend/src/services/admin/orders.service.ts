@@ -1,3 +1,4 @@
+import type { OrderDispute } from '@prisma/client';
 import { OrderStatus, Prisma, TransactionStatus, TransactionType } from '@prisma/client';
 import prisma from '../../config/database';
 import { logger } from '../../utils/logger';
@@ -5,6 +6,13 @@ import { ApiError } from '../../middleware/errorHandler';
 import { logAdminAction } from './audit.service';
 import { PaginationResponse } from '../../types';
 import { decimalToNumber } from '../../utils/decimal';
+import {
+  genTransactionNo,
+  releaseFrozenBudgetTx,
+  releasePartialFrozenBudgetTx,
+  type OrderTx,
+} from '../order-budget.service';
+import { notificationService } from '../notifications.service';
 
 // Types and interfaces
 export interface OrderListFilters {
@@ -35,6 +43,9 @@ export interface OrderListItem {
   kol_name: string;
   kol_platform: string;
   amount: number;
+  pricing_model: string;
+  cpm_rate: number | null;
+  frozen_amount: number;
   status: string;
   created_at: string;
   updated_at: string;
@@ -54,10 +65,14 @@ export interface OrderDetail {
   kol_avatar_url: string | null;
   title: string;
   description: string | null;
-  deliverables: any;
+  deliverables: string[];
   amount: number;
   platform_fee: number;
   kol_earnings: number;
+  pricing_model: string;
+  cpm_rate: number | null;
+  cpm_budget_cap: number | null;
+  frozen_amount: number;
   status: string;
   accepted_at: string | null;
   submitted_at: string | null;
@@ -67,7 +82,7 @@ export interface OrderDetail {
   cancelled_at: string | null;
   cancellation_reason: string | null;
   cancelled_by: string | null;
-  dispute: any | null;
+  dispute: OrderDispute | null;
   created_at: string;
   updated_at: string;
 }
@@ -125,8 +140,26 @@ export interface ExportResult {
   total: number;
 }
 
+export interface UpdateOrderStatusResponse {
+  id: string;
+  status: string;
+  updated_at: string;
+}
+
+export interface HandleDisputeResponse {
+  id: string;
+  order_id: string;
+  status: string;
+  resolved_at: string | undefined;
+  resolved_by: string;
+  ruling: string | null;
+  refund_amount: number | null;
+}
+
 function parseEvidenceUrls(raw: string | null): string | string[] | null {
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   try {
     const p = JSON.parse(raw) as unknown;
     return Array.isArray(p) ? (p as string[]) : raw;
@@ -139,10 +172,7 @@ export class AdminOrderService {
   /**
    * Get order list with pagination and filters
    */
-  async getOrderList(
-    filters: OrderListFilters,
-    adminId: string
-  ): Promise<PaginationResponse<OrderListItem>> {
+  async getOrderList(filters: OrderListFilters, adminId: string): Promise<PaginationResponse<OrderListItem>> {
     const {
       page,
       pageSize,
@@ -151,7 +181,6 @@ export class AdminOrderService {
       campaignId,
       advertiserId,
       kolId,
-      platform: _platform,
       amountMin,
       amountMax,
       createdAfter,
@@ -164,7 +193,7 @@ export class AdminOrderService {
     const take = pageSize;
 
     // Build where clause
-    const where: any = {};
+    const where: Prisma.OrderWhereInput = {};
 
     if (keyword) {
       where.OR = [
@@ -174,7 +203,7 @@ export class AdminOrderService {
     }
 
     if (status) {
-      where.status = status;
+      where.status = status as OrderStatus;
     }
 
     if (campaignId) {
@@ -190,23 +219,25 @@ export class AdminOrderService {
     }
 
     if (amountMin !== undefined || amountMax !== undefined) {
-      where.price = {};
+      const price: Prisma.DecimalFilter = {};
       if (amountMin !== undefined) {
-        where.price.gte = amountMin;
+        price.gte = new Prisma.Decimal(amountMin);
       }
       if (amountMax !== undefined) {
-        where.price.lte = amountMax;
+        price.lte = new Prisma.Decimal(amountMax);
       }
+      where.price = price;
     }
 
     if (createdAfter || createdBefore) {
-      where.createdAt = {};
+      const createdAt: Prisma.DateTimeFilter = {};
       if (createdAfter) {
-        where.createdAt.gte = new Date(createdAfter);
+        createdAt.gte = new Date(createdAfter);
       }
       if (createdBefore) {
-        where.createdAt.lte = new Date(createdBefore);
+        createdAt.lte = new Date(createdBefore);
       }
+      where.createdAt = createdAt;
     }
 
     // Get total count
@@ -269,6 +300,9 @@ export class AdminOrderService {
         kol_name: item.kol.platformUsername,
         kol_platform: item.kol.platform,
         amount: decimalToNumber(item.price),
+        pricing_model: item.pricingModel ?? 'fixed',
+        cpm_rate: item.cpmRate != null ? decimalToNumber(item.cpmRate) : null,
+        frozen_amount: decimalToNumber(item.frozenAmount),
         status: item.status,
         created_at: item.createdAt.toISOString(),
         updated_at: item.updatedAt.toISOString(),
@@ -282,6 +316,185 @@ export class AdminOrderService {
         has_prev: page > 1,
       },
     };
+  }
+
+  /**
+   * 更新订单曝光/互动指标（拉数回填或人工校正，对齐需求文档「每 2 小时」口径的落库入口）
+   */
+  async updateOrderMetrics(
+    orderId: string,
+    request: {
+      views?: number;
+      likes?: number;
+      comments?: number;
+      shares?: number;
+    },
+    adminId: string,
+    adminEmail: string
+  ): Promise<{
+    id: string;
+    views: number;
+    likes: number;
+    comments: number;
+    shares: number;
+    updated_at: string;
+  }> {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new ApiError('订单不存在', 404, 'NOT_FOUND');
+    }
+
+    const data: Prisma.OrderUpdateInput = {};
+    if (request.views !== undefined) {
+      data.views = request.views;
+    }
+    if (request.likes !== undefined) {
+      data.likes = request.likes;
+    }
+    if (request.comments !== undefined) {
+      data.comments = request.comments;
+    }
+    if (request.shares !== undefined) {
+      data.shares = request.shares;
+    }
+
+    const updated = await prisma.$transaction(async (tx: OrderTx) => {
+      const campaignData: Prisma.CampaignUpdateInput = {};
+      if (request.views !== undefined) {
+        const delta = request.views - order.views;
+        if (delta !== 0) {
+          campaignData.totalViews = { increment: delta };
+        }
+      }
+      if (request.likes !== undefined) {
+        const delta = request.likes - order.likes;
+        if (delta !== 0) {
+          campaignData.totalLikes = { increment: delta };
+        }
+      }
+      if (request.comments !== undefined) {
+        const delta = request.comments - order.comments;
+        if (delta !== 0) {
+          campaignData.totalComments = { increment: delta };
+        }
+      }
+      if (Object.keys(campaignData).length > 0) {
+        await tx.campaign.update({
+          where: { id: order.campaignId },
+          data: campaignData,
+        });
+      }
+
+      const nextViews = request.views ?? order.views;
+      const nextLikes = request.likes ?? order.likes;
+      const nextComments = request.comments ?? order.comments;
+      const nextShares = request.shares ?? order.shares;
+      const magnitude =
+        Math.abs(nextViews - order.views) +
+        Math.abs(nextLikes - order.likes) +
+        Math.abs(nextComments - order.comments) +
+        Math.abs(nextShares - order.shares);
+
+      const ord = await tx.order.update({
+        where: { id: orderId },
+        data,
+      });
+
+      await tx.trackingEvent.create({
+        data: {
+          orderId: order.id,
+          eventType: 'metrics_sync',
+          eventValue: Math.max(1, magnitude),
+          eventData: {
+            source: 'admin',
+            admin_id: adminId,
+            previous: {
+              views: order.views,
+              likes: order.likes,
+              comments: order.comments,
+              shares: order.shares,
+            },
+            next: {
+              views: nextViews,
+              likes: nextLikes,
+              comments: nextComments,
+              shares: nextShares,
+            },
+          },
+        },
+      });
+
+      return ord;
+    });
+
+    await logAdminAction({
+      adminId,
+      adminEmail,
+      action: 'update_metrics',
+      resourceType: 'orders',
+      resourceId: orderId,
+      resourceName: order.orderNo,
+      requestMethod: 'PUT',
+      requestPath: `/api/v1/admin/orders/${orderId}/metrics`,
+      requestBody: JSON.stringify(request),
+      newValues: JSON.stringify(request),
+      status: 'success',
+    });
+
+    logger.info('Admin order metrics updated', { orderId, adminId });
+
+    return {
+      id: updated.id,
+      views: updated.views,
+      likes: updated.likes,
+      comments: updated.comments,
+      shares: updated.shares,
+      updated_at: updated.updatedAt.toISOString(),
+    };
+  }
+
+  /**
+   * 批量更新订单指标（供 Cron/拉数 worker 一次提交多笔，与单笔 PUT 行为一致）
+   */
+  async batchUpdateOrderMetrics(
+    items: Array<{
+      order_id: string;
+      views?: number;
+      likes?: number;
+      comments?: number;
+      shares?: number;
+    }>,
+    adminId: string,
+    adminEmail: string
+  ): Promise<{
+    processed: number;
+    errors: Array<{ order_id: string; message: string }>;
+  }> {
+    const errors: Array<{ order_id: string; message: string }> = [];
+    let processed = 0;
+    for (const item of items) {
+      try {
+        await this.updateOrderMetrics(
+          item.order_id,
+          {
+            views: item.views,
+            likes: item.likes,
+            comments: item.comments,
+            shares: item.shares,
+          },
+          adminId,
+          adminEmail
+        );
+        processed++;
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : '更新失败';
+        errors.push({ order_id: item.order_id, message: msg });
+      }
+    }
+    return { processed, errors };
   }
 
   /**
@@ -353,6 +566,10 @@ export class AdminOrderService {
       amount: decimalToNumber(order.price),
       platform_fee: decimalToNumber(order.platformFee),
       kol_earnings: decimalToNumber(order.kolEarning),
+      pricing_model: order.pricingModel ?? 'fixed',
+      cpm_rate: order.cpmRate != null ? decimalToNumber(order.cpmRate) : null,
+      cpm_budget_cap: order.cpmBudgetCap != null ? decimalToNumber(order.cpmBudgetCap) : null,
+      frozen_amount: decimalToNumber(order.frozenAmount),
       status: order.status,
       accepted_at: order.acceptedAt?.toISOString() || null,
       submitted_at: order.submittedAt?.toISOString() || null,
@@ -376,7 +593,7 @@ export class AdminOrderService {
     request: UpdateOrderStatusRequest,
     adminId: string,
     adminEmail: string
-  ): Promise<any> {
+  ): Promise<UpdateOrderStatusResponse> {
     const { status, reason } = request;
 
     const order = await prisma.order.findUnique({
@@ -387,7 +604,7 @@ export class AdminOrderService {
       throw new ApiError('订单不存在', 404, 'NOT_FOUND');
     }
 
-    const updateData: any = {
+    const updateData: Prisma.OrderUpdateInput = {
       status: status as OrderStatus,
     };
 
@@ -397,6 +614,7 @@ export class AdminOrderService {
         updateData.completedAt = new Date();
         break;
       case OrderStatus.cancelled:
+        updateData.frozenAmount = new Prisma.Decimal(0);
         break;
       case OrderStatus.accepted:
         updateData.acceptedAt = new Date();
@@ -411,10 +629,19 @@ export class AdminOrderService {
         break;
     }
 
-    const updatedOrder = await prisma.order.update({
-      where: { id: orderId },
-      data: updateData,
-    });
+    const updatedOrder =
+      status === OrderStatus.cancelled && order.frozenAmount.toNumber() > 0
+        ? await prisma.$transaction(async (tx: OrderTx) => {
+            await releaseFrozenBudgetTx(tx, order);
+            return tx.order.update({
+              where: { id: orderId },
+              data: updateData,
+            });
+          })
+        : await prisma.order.update({
+            where: { id: orderId },
+            data: updateData,
+          });
 
     // Update campaign stats if order is completed
     if (status === OrderStatus.completed && order.status !== OrderStatus.completed) {
@@ -449,6 +676,28 @@ export class AdminOrderService {
       changes: { status, reason },
     });
 
+    const nextStatus = status as OrderStatus;
+    if (order.status !== nextStatus) {
+      const parties = await prisma.order.findUnique({
+        where: { id: orderId },
+        select: {
+          orderNo: true,
+          advertiser: { select: { userId: true } },
+          kol: { select: { userId: true } },
+        },
+      });
+      if (parties) {
+        notificationService.notifyAfterAdminOrderStatusChange({
+          orderId,
+          orderNo: parties.orderNo,
+          next: nextStatus,
+          reason,
+          advertiserUserId: parties.advertiser?.userId ?? null,
+          kolUserId: parties.kol?.userId ?? null,
+        });
+      }
+    }
+
     return {
       id: orderId,
       status: updatedOrder.status,
@@ -469,7 +718,7 @@ export class AdminOrderService {
     const take = pageSize;
 
     // Build where clause
-    const where: any = {};
+    const where: Prisma.OrderDisputeWhereInput = {};
 
     if (status) {
       where.status = status;
@@ -566,8 +815,8 @@ export class AdminOrderService {
     request: DisputeOrderRequest,
     adminId: string,
     adminEmail: string
-  ): Promise<any> {
-    const { resolution, refund_amount, ruling } = request;
+  ): Promise<HandleDisputeResponse> {
+    const { resolution, refund_amount, ruling, notify_parties } = request;
 
     const order = await prisma.order.findUnique({
       where: { id: orderId },
@@ -584,51 +833,118 @@ export class AdminOrderService {
       throw new ApiError('该订单没有纠纷', 404, 'NOT_FOUND');
     }
 
-    const updateData: any = {
-      status: 'resolved',
-      resolvedAt: new Date(),
-      resolvedBy: adminId,
-      ruling,
-    };
-
-    // Handle refund based on resolution
-    if (resolution === 'refund_full' || resolution === 'refund_partial') {
-      const refundAmount =
-        resolution === 'refund_full'
-          ? decimalToNumber(order.price)
-          : refund_amount ?? 0;
-      updateData.refundAmount = new Prisma.Decimal(refundAmount);
-
-      // Create refund transaction
-      const transactionNo = `REF-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-      await prisma.transaction.create({
-        data: {
-          transactionNo,
-          advertiserId: order.advertiserId,
-          type: TransactionType.refund,
-          amount: new Prisma.Decimal(refundAmount),
-          currency: 'CNY',
-          orderId: order.id,
-          balanceBefore: new Prisma.Decimal(0),
-          balanceAfter: new Prisma.Decimal(0),
-          description: `订单纠纷退款：${order.orderNo}`,
-          status: TransactionStatus.completed,
-          completedAt: new Date(),
-        },
-      });
+    if (resolution === 'refund_partial') {
+      if (refund_amount == null || refund_amount <= 0) {
+        throw new ApiError('部分退款须指定大于 0 的 refund_amount', 400, 'INVALID_REQUEST');
+      }
+      const maxRef = decimalToNumber(order.frozenAmount);
+      if (refund_amount > maxRef) {
+        throw new ApiError(`部分退款金额不能超过当前订单冻结余额（${maxRef}）`, 400, 'INVALID_REQUEST');
+      }
     }
 
-    const updatedDispute = await prisma.orderDispute.update({
-      where: { id: order.dispute.id },
-      data: updateData,
-    });
+    let updatedDispute;
 
-    // Update order status if needed
-    if (resolution === 'refund_full') {
-      await prisma.order.update({
-        where: { id: orderId },
+    if (resolution === 'refund_full' || resolution === 'refund_partial') {
+      updatedDispute = await prisma.$transaction(async (tx: OrderTx) => {
+        let refundAmountDec: Prisma.Decimal;
+
+        if (resolution === 'refund_full') {
+          const frozenBefore = decimalToNumber(order.frozenAmount);
+          if (frozenBefore > 0) {
+            await releaseFrozenBudgetTx(tx, order);
+          }
+          await tx.order.update({
+            where: { id: orderId },
+            data: {
+              status: OrderStatus.cancelled,
+              frozenAmount: new Prisma.Decimal(0),
+            },
+          });
+          refundAmountDec = new Prisma.Decimal(frozenBefore);
+          if (frozenBefore > 0) {
+            const adv = await tx.advertiser.findUnique({ where: { id: order.advertiserId } });
+            if (!adv) {
+              throw new ApiError('广告主不存在', 404, 'NOT_FOUND');
+            }
+            const afterBal = decimalToNumber(adv.walletBalance);
+            const beforeBal = afterBal - frozenBefore;
+            await tx.transaction.create({
+              data: {
+                transactionNo: genTransactionNo(),
+                advertiserId: order.advertiserId,
+                type: TransactionType.refund,
+                amount: refundAmountDec,
+                currency: 'CNY',
+                orderId: order.id,
+                balanceBefore: new Prisma.Decimal(beforeBal),
+                balanceAfter: new Prisma.Decimal(afterBal),
+                description: `订单纠纷全额退款：${order.orderNo}`,
+                status: TransactionStatus.completed,
+                completedAt: new Date(),
+              },
+            });
+          }
+        } else {
+          const actual = await releasePartialFrozenBudgetTx(tx, order, new Prisma.Decimal(refund_amount as number));
+          refundAmountDec = new Prisma.Decimal(actual);
+          if (actual > 0) {
+            const adv = await tx.advertiser.findUnique({ where: { id: order.advertiserId } });
+            if (!adv) {
+              throw new ApiError('广告主不存在', 404, 'NOT_FOUND');
+            }
+            const afterBal = decimalToNumber(adv.walletBalance);
+            const beforeBal = afterBal - actual;
+            await tx.transaction.create({
+              data: {
+                transactionNo: genTransactionNo(),
+                advertiserId: order.advertiserId,
+                type: TransactionType.refund,
+                amount: refundAmountDec,
+                currency: 'CNY',
+                orderId: order.id,
+                balanceBefore: new Prisma.Decimal(beforeBal),
+                balanceAfter: new Prisma.Decimal(afterBal),
+                description: `订单纠纷部分退款：${order.orderNo}`,
+                status: TransactionStatus.completed,
+                completedAt: new Date(),
+              },
+            });
+          }
+        }
+
+        return tx.orderDispute.update({
+          where: { id: order.dispute!.id },
+          data: {
+            status: 'resolved',
+            resolvedAt: new Date(),
+            resolvedBy: adminId,
+            resolution,
+            ruling,
+            refundAmount: refundAmountDec,
+          },
+        });
+      });
+    } else if (resolution === 'escalate') {
+      updatedDispute = await prisma.orderDispute.update({
+        where: { id: order.dispute.id },
         data: {
-          status: OrderStatus.cancelled,
+          status: 'investigating',
+          resolution,
+          ruling,
+          resolvedAt: null,
+          resolvedBy: null,
+        },
+      });
+    } else {
+      updatedDispute = await prisma.orderDispute.update({
+        where: { id: order.dispute.id },
+        data: {
+          status: 'resolved',
+          resolvedAt: new Date(),
+          resolvedBy: adminId,
+          resolution,
+          ruling,
         },
       });
     }
@@ -644,7 +960,12 @@ export class AdminOrderService {
       requestMethod: 'PUT',
       requestPath: `/api/v1/admin/orders/${orderId}/dispute`,
       requestBody: JSON.stringify(request),
-      newValues: JSON.stringify(updateData),
+      newValues: JSON.stringify({
+        resolution,
+        refund_amount: updatedDispute.refundAmount,
+        ruling,
+        status: updatedDispute.status,
+      }),
       status: 'success',
     });
 
@@ -655,6 +976,24 @@ export class AdminOrderService {
       changes: { resolution, refund_amount, ruling },
     });
 
+    if (notify_parties !== false) {
+      const [adv, kol] = await Promise.all([
+        prisma.advertiser.findUnique({ where: { id: order.advertiserId }, select: { userId: true } }),
+        prisma.kol.findUnique({ where: { id: order.kolId }, select: { userId: true } }),
+      ]);
+      const refundNum =
+        updatedDispute.refundAmount != null ? decimalToNumber(updatedDispute.refundAmount) : null;
+      notificationService.notifyDisputeOutcomeForParties({
+        advertiserUserId: adv?.userId ?? null,
+        kolUserId: kol?.userId ?? null,
+        orderId,
+        orderNo: order.orderNo,
+        resolution,
+        ruling,
+        refundAmountYuan: refundNum,
+      });
+    }
+
     return {
       id: order.dispute.id,
       order_id: orderId,
@@ -662,32 +1001,28 @@ export class AdminOrderService {
       resolved_at: updatedDispute.resolvedAt?.toISOString(),
       resolved_by: adminId,
       ruling: updatedDispute.ruling,
-      refund_amount: updatedDispute.refundAmount,
+      refund_amount: updatedDispute.refundAmount != null ? decimalToNumber(updatedDispute.refundAmount) : null,
     };
   }
 
   /**
    * Export orders
    */
-  async exportOrders(
-    request: ExportOrdersRequest,
-    adminId: string,
-    adminEmail: string
-  ): Promise<ExportResult> {
+  async exportOrders(request: ExportOrdersRequest, adminId: string, adminEmail: string): Promise<ExportResult> {
     const { format, ...filters } = request;
 
     // Build where clause (similar to getOrderList)
-    const where: any = {};
+    const where: Prisma.OrderWhereInput = {};
 
     if (filters.keyword) {
       where.OR = [
         { orderNo: { contains: filters.keyword, mode: 'insensitive' } },
-        { title: { contains: filters.keyword, mode: 'insensitive' } },
+        { contentDescription: { contains: filters.keyword, mode: 'insensitive' } },
       ];
     }
 
     if (filters.status) {
-      where.status = filters.status;
+      where.status = filters.status as OrderStatus;
     }
 
     if (filters.campaign_id) {
@@ -703,23 +1038,25 @@ export class AdminOrderService {
     }
 
     if (filters.amount_min !== undefined || filters.amount_max !== undefined) {
-      where.amount = {};
+      const price: Prisma.DecimalFilter = {};
       if (filters.amount_min !== undefined) {
-        where.amount.gte = filters.amount_min;
+        price.gte = new Prisma.Decimal(filters.amount_min);
       }
       if (filters.amount_max !== undefined) {
-        where.amount.lte = filters.amount_max;
+        price.lte = new Prisma.Decimal(filters.amount_max);
       }
+      where.price = price;
     }
 
     if (filters.created_after || filters.created_before) {
-      where.createdAt = {};
+      const createdAt: Prisma.DateTimeFilter = {};
       if (filters.created_after) {
-        where.createdAt.gte = new Date(filters.created_after);
+        createdAt.gte = new Date(filters.created_after);
       }
       if (filters.created_before) {
-        where.createdAt.lte = new Date(filters.created_before);
+        createdAt.lte = new Date(filters.created_before);
       }
+      where.createdAt = createdAt;
     }
 
     // Get all matching orders

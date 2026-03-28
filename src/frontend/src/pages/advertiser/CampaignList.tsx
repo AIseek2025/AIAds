@@ -10,7 +10,6 @@ import IconButton from '@mui/material/IconButton';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Chip from '@mui/material/Chip';
-import Stack from '@mui/material/Stack';
 import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import Select from '@mui/material/Select';
@@ -22,7 +21,6 @@ import DialogContentText from '@mui/material/DialogContentText';
 import DialogActions from '@mui/material/DialogActions';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
-import CircularProgress from '@mui/material/CircularProgress';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
@@ -32,6 +30,7 @@ import TableRow from '@mui/material/TableRow';
 import TablePagination from '@mui/material/TablePagination';
 import LinearProgress from '@mui/material/LinearProgress';
 import Tooltip from '@mui/material/Tooltip';
+import Stack from '@mui/material/Stack';
 import { styled } from '@mui/material/styles';
 
 // Icons
@@ -42,14 +41,25 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import PauseIcon from '@mui/icons-material/Pause';
-
 // Types
 import type { Campaign } from '../../types';
 
 // Services
-import { campaignAPI } from '../../services/advertiserApi';
+import {
+  advertiserAPI,
+  advertiserBalanceQueryKey,
+  campaignAPI,
+} from '../../services/advertiserApi';
+import { getApiErrorMessage } from '../../utils/apiError';
+import { AdvertiserHubNav } from '../../components/advertiser/AdvertiserHubNav';
+import { AdvertiserLowBalanceAlert } from '../../components/advertiser/AdvertiserLowBalanceAlert';
+import {
+  ADVERTISER_ROUTE_SEG,
+  pathAdvertiser,
+  pathAdvertiserCampaign,
+  pathAdvertiserCampaignEdit,
+} from '../../constants/appPaths';
+import { usePublicUiConfig, isBudgetAtOrAboveRisk } from '../../hooks/usePublicUiConfig';
 
 // Styled Components
 const ActionButton = styled(IconButton)(({ theme }) => ({
@@ -59,35 +69,57 @@ const ActionButton = styled(IconButton)(({ theme }) => ({
   },
 }));
 
-const StatusChip = styled(Chip)(({ status }: { status: Campaign['status'] }) => {
-  const statusStyles = {
-    draft: {
-      bgcolor: 'grey.200',
-      color: 'grey.700',
-    },
-    active: {
-      bgcolor: 'success.light',
-      color: 'success.dark',
-    },
-    paused: {
-      bgcolor: 'warning.light',
-      color: 'warning.dark',
-    },
-    completed: {
-      bgcolor: 'info.light',
-      color: 'info.dark',
-    },
-    cancelled: {
-      bgcolor: 'error.light',
-      color: 'error.dark',
-    },
-  };
+/** 与活动详情页状态语义对齐；未知状态有兜底样式 */
+const StatusChip = styled(Chip)<{ status: Campaign['status'] }>(
+  ({ theme, status }) => {
+    const statusStyles: Record<
+      string,
+      { bgcolor: string; color: string }
+    > = {
+      draft: {
+        bgcolor: theme.palette.grey[200],
+        color: theme.palette.grey[800],
+      },
+      pending_review: {
+        bgcolor: theme.palette.warning.light,
+        color: theme.palette.warning.dark,
+      },
+      active: {
+        bgcolor: theme.palette.success.light,
+        color: theme.palette.success.dark,
+      },
+      paused: {
+        bgcolor: theme.palette.warning.light,
+        color: theme.palette.warning.dark,
+      },
+      completed: {
+        bgcolor: theme.palette.info.light,
+        color: theme.palette.info.dark,
+      },
+      cancelled: {
+        bgcolor: theme.palette.error.light,
+        color: theme.palette.error.dark,
+      },
+      rejected: {
+        bgcolor: theme.palette.error.light,
+        color: theme.palette.error.dark,
+      },
+    };
+    const s = statusStyles[status] ?? {
+      bgcolor: theme.palette.grey[300],
+      color: theme.palette.grey[900],
+    };
+    return { fontWeight: 600, bgcolor: s.bgcolor, color: s.color };
+  }
+);
 
-  return {
-    fontWeight: 600,
-    ...statusStyles[status],
-  };
-});
+function canEditCampaignStatus(status: Campaign['status']): boolean {
+  return status !== 'completed' && status !== 'cancelled';
+}
+
+function canDeleteCampaignStatus(status: Campaign['status']): boolean {
+  return status === 'draft' || status === 'cancelled';
+}
 
 // Query keys
 const queryKeys = {
@@ -114,6 +146,9 @@ export const CampaignListPage: React.FC = () => {
   }>({ open: false, severity: 'success', message: '' });
 
   // Fetch campaigns
+  const { data: publicUi } = usePublicUiConfig();
+  const budgetRiskTh = publicUi?.budget_risk_threshold ?? 0.85;
+
   const {
     data: campaignsData,
     isLoading,
@@ -134,7 +169,14 @@ export const CampaignListPage: React.FC = () => {
         page_size: pageSize,
         status: statusFilter || undefined,
         keyword: keyword || undefined,
+        objective: objectiveFilter || undefined,
       }),
+    retry: 1,
+  });
+
+  const balanceQ = useQuery({
+    queryKey: [...advertiserBalanceQueryKey],
+    queryFn: advertiserAPI.getBalance,
     retry: 1,
   });
 
@@ -151,11 +193,11 @@ export const CampaignListPage: React.FC = () => {
       setDeleteDialogOpen(false);
       setCampaignToDelete(null);
     },
-    onError: () => {
+    onError: (err: unknown) => {
       setSnackbar({
         open: true,
         severity: 'error',
-        message: '删除失败，请稍后重试',
+        message: getApiErrorMessage(err, '删除失败，请稍后重试'),
       });
     },
   });
@@ -204,12 +246,14 @@ export const CampaignListPage: React.FC = () => {
 
   // Get status label
   const getStatusLabel = (status: Campaign['status']) => {
-    const labels = {
+    const labels: Record<string, string> = {
       draft: '草稿',
+      pending_review: '待审核',
       active: '进行中',
       paused: '已暂停',
       completed: '已完成',
       cancelled: '已取消',
+      rejected: '已驳回',
     };
     return labels[status] || status;
   };
@@ -242,28 +286,46 @@ export const CampaignListPage: React.FC = () => {
       <Box
         sx={{
           display: 'flex',
+          flexWrap: 'wrap',
           justifyContent: 'space-between',
-          alignItems: 'center',
+          alignItems: 'flex-start',
+          gap: 2,
           mb: 4,
         }}
       >
-        <Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="h4" gutterBottom>
             活动管理
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            创建、管理和监控您的广告投放活动
+            创建、管理和监控您的广告投放活动；订单与消耗可在订单中心与数据分析中查看。
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          size="large"
-          startIcon={<AddIcon />}
-          onClick={() => navigate('/advertiser/campaigns/create')}
-        >
-          创建活动
-        </Button>
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+          <AdvertiserHubNav
+            preset="campaign-list-page"
+            onRefresh={() => {
+              void refetch();
+              void balanceQ.refetch();
+            }}
+          />
+          <Button
+            variant="contained"
+            size="large"
+            startIcon={<AddIcon />}
+            onClick={() => navigate(pathAdvertiser(ADVERTISER_ROUTE_SEG.campaignsCreate))}
+          >
+            创建活动
+          </Button>
+        </Stack>
       </Box>
+
+      <AdvertiserLowBalanceAlert
+        balance={balanceQ.data ?? null}
+        publicUi={publicUi}
+        context="campaign-list"
+        sx={{ mb: 3 }}
+      />
 
       {/* Filters */}
       <Card sx={{ mb: 3 }}>
@@ -293,10 +355,12 @@ export const CampaignListPage: React.FC = () => {
                 >
                   <MenuItem value="">全部</MenuItem>
                   <MenuItem value="draft">草稿</MenuItem>
+                  <MenuItem value="pending_review">待审核</MenuItem>
                   <MenuItem value="active">进行中</MenuItem>
                   <MenuItem value="paused">已暂停</MenuItem>
                   <MenuItem value="completed">已完成</MenuItem>
                   <MenuItem value="cancelled">已取消</MenuItem>
+                  <MenuItem value="rejected">已驳回</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -350,7 +414,7 @@ export const CampaignListPage: React.FC = () => {
         {error ? (
           <Box sx={{ p: 4, textAlign: 'center' }}>
             <Alert severity="error" sx={{ mb: 2 }}>
-              加载活动列表失败，请稍后重试
+              {getApiErrorMessage(error, '加载活动列表失败，请稍后重试')}
             </Alert>
             <Button variant="contained" onClick={() => refetch()}>
               重新加载
@@ -367,6 +431,8 @@ export const CampaignListPage: React.FC = () => {
                     <TableCell>目标</TableCell>
                     <TableCell align="right">预算</TableCell>
                     <TableCell align="right">已花费</TableCell>
+                    <TableCell align="center">占用率</TableCell>
+                    <TableCell align="right">订单冻结</TableCell>
                     <TableCell>开始日期</TableCell>
                     <TableCell>结束日期</TableCell>
                     <TableCell align="center">KOL 数</TableCell>
@@ -374,18 +440,29 @@ export const CampaignListPage: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {campaignsData.items.map((campaign: Campaign) => (
+                  {campaignsData.items.map((campaign: Campaign) => {
+                    const util =
+                      campaign.budget > 0
+                        ? ((campaign.spentAmount ?? 0) / campaign.budget) * 100
+                        : 0;
+                    const atRisk = isBudgetAtOrAboveRisk(
+                      campaign.budget,
+                      campaign.spentAmount ?? 0,
+                      budgetRiskTh
+                    );
+                    return (
                     <TableRow
                       key={campaign.id}
                       hover
                       sx={{
                         cursor: 'pointer',
+                        bgcolor: atRisk ? 'warning.light' : undefined,
                         '&:hover': {
                           backgroundColor: 'action.hover',
                         },
                       }}
                       onClick={() =>
-                        navigate(`/advertiser/campaigns/${campaign.id}`)
+                        navigate(pathAdvertiserCampaign(campaign.id))
                       }
                     >
                       <TableCell>
@@ -425,6 +502,24 @@ export const CampaignListPage: React.FC = () => {
                           {formatCurrency(campaign.spentAmount || 0)}
                         </Typography>
                       </TableCell>
+                      <TableCell align="center" onClick={(e) => e.stopPropagation()}>
+                        <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center" flexWrap="wrap" useFlexGap>
+                          <Typography variant="body2" fontWeight={atRisk ? 600 : 400}>
+                            {campaign.budget > 0 ? `${util.toFixed(1)}%` : '—'}
+                          </Typography>
+                          {atRisk ? (
+                            <Chip size="small" color="warning" label="预警" variant="outlined" />
+                          ) : null}
+                        </Stack>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography
+                          variant="body2"
+                          color={(campaign.ordersFrozenTotal ?? 0) > 0 ? 'primary.main' : 'text.secondary'}
+                        >
+                          {formatCurrency(campaign.ordersFrozenTotal ?? 0)}
+                        </Typography>
+                      </TableCell>
                       <TableCell>
                         <Typography variant="body2">
                           {new Date(campaign.startDate).toLocaleDateString('zh-CN')}
@@ -448,36 +543,53 @@ export const CampaignListPage: React.FC = () => {
                           <ActionButton
                             size="small"
                             onClick={() =>
-                              navigate(`/advertiser/campaigns/${campaign.id}`)
+                              navigate(pathAdvertiserCampaign(campaign.id))
                             }
                           >
                             <VisibilityIcon fontSize="small" />
                           </ActionButton>
                         </Tooltip>
-                        <Tooltip title="编辑">
-                          <ActionButton
-                            size="small"
-                            onClick={() =>
-                              navigate(
-                                `/advertiser/campaigns/edit/${campaign.id}`
-                              )
-                            }
-                          >
-                            <EditIcon fontSize="small" />
-                          </ActionButton>
+                        <Tooltip
+                          title={
+                            canEditCampaignStatus(campaign.status)
+                              ? '编辑'
+                              : '已完成或已取消的活动不可编辑'
+                          }
+                        >
+                          <span>
+                            <ActionButton
+                              size="small"
+                              disabled={!canEditCampaignStatus(campaign.status)}
+                              onClick={() =>
+                                navigate(pathAdvertiserCampaignEdit(campaign.id))
+                              }
+                            >
+                              <EditIcon fontSize="small" />
+                            </ActionButton>
+                          </span>
                         </Tooltip>
-                        <Tooltip title="删除">
-                          <ActionButton
-                            size="small"
-                            color="error"
-                            onClick={() => handleDeleteClick(campaign.id)}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </ActionButton>
+                        <Tooltip
+                          title={
+                            canDeleteCampaignStatus(campaign.status)
+                              ? '删除'
+                              : '仅草稿或已取消的活动可删除'
+                          }
+                        >
+                          <span>
+                            <ActionButton
+                              size="small"
+                              color="error"
+                              disabled={!canDeleteCampaignStatus(campaign.status)}
+                              onClick={() => handleDeleteClick(campaign.id)}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </ActionButton>
+                          </span>
                         </Tooltip>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -524,7 +636,7 @@ export const CampaignListPage: React.FC = () => {
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}
-                onClick={() => navigate('/advertiser/campaigns/create')}
+                onClick={() => navigate(pathAdvertiser(ADVERTISER_ROUTE_SEG.campaignsCreate))}
               >
                 创建活动
               </Button>

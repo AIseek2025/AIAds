@@ -22,7 +22,7 @@ describe('Admin Dashboard API Tests', () => {
     testRoleId = role.id;
 
     const email = `admin_dashboard_${Date.now()}@aiads.com`;
-    
+
     const admin = await prisma.admin.create({
       data: {
         email,
@@ -34,12 +34,10 @@ describe('Admin Dashboard API Tests', () => {
     });
     testAdminId = admin.id;
 
-    const loginRes = await request(app)
-      .post('/api/v1/admin/auth/login')
-      .send({
-        username: email,
-        password: 'AdminPass123!',
-      });
+    const loginRes = await request(app).post('/api/v1/admin/auth/login').send({
+      username: email,
+      password: 'AdminPass123!',
+    });
 
     adminAccessToken = loginRes.body.data.tokens.access_token;
   };
@@ -103,7 +101,7 @@ describe('Admin Dashboard API Tests', () => {
 
     it('应该支持周期参数', async () => {
       const periods = ['today', 'week', 'month', 'quarter', 'year'];
-      
+
       for (const period of periods) {
         const response = await request(app)
           .get(`/api/v1/admin/dashboard/stats?period=${period}`)
@@ -135,9 +133,7 @@ describe('Admin Dashboard API Tests', () => {
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .get('/api/v1/admin/dashboard/stats')
-        .expect(401);
+      const response = await request(app).get('/api/v1/admin/dashboard/stats').expect(401);
 
       expect(response.body.success).toBe(false);
       expect(response.body.error.code).toBe('AUTH_REQUIRED');
@@ -203,7 +199,7 @@ describe('Admin Dashboard API Tests', () => {
 
     it('应该支持周期参数', async () => {
       const periods = ['week', 'month', 'quarter', 'year'];
-      
+
       for (const period of periods) {
         const response = await request(app)
           .get(`/api/v1/admin/dashboard/analytics?metric=all&period=${period}`)
@@ -215,9 +211,7 @@ describe('Admin Dashboard API Tests', () => {
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .get('/api/v1/admin/dashboard/analytics')
-        .expect(401);
+      const response = await request(app).get('/api/v1/admin/dashboard/analytics').expect(401);
 
       expect(response.body.success).toBe(false);
     });
@@ -276,9 +270,7 @@ describe('Admin Dashboard API Tests', () => {
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .get('/api/v1/admin/dashboard/kol-rankings')
-        .expect(401);
+      const response = await request(app).get('/api/v1/admin/dashboard/kol-rankings').expect(401);
 
       expect(response.body.success).toBe(false);
     });

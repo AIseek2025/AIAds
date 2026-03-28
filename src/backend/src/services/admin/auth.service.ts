@@ -1,6 +1,12 @@
 import prisma from '../../config/database';
 import { logger } from '../../utils/logger';
-import { verifyPassword, hashPassword, generateAdminTokens, verifyToken } from '../../utils/crypto';
+import {
+  verifyPassword,
+  hashPassword,
+  generateAdminTokens,
+  verifyToken,
+  type AdminJwtPayload,
+} from '../../utils/crypto';
 import { ApiError } from '../../middleware/errorHandler';
 import { cacheService } from '../../config/redis';
 import { logAdminAction } from './audit.service';
@@ -198,7 +204,7 @@ export class AdminAuthService {
   async logout(adminId: string, token?: string): Promise<void> {
     if (token) {
       try {
-        const decoded = verifyToken(token, 'admin_access') as any;
+        const decoded = verifyToken(token, 'admin_access') as AdminJwtPayload;
         const jti = decoded.jti;
 
         // Calculate remaining time for token
@@ -219,9 +225,11 @@ export class AdminAuthService {
   /**
    * Refresh access token
    */
-  async refreshToken(refreshToken: string) {
+  async refreshToken(
+    refreshToken: string
+  ): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
     try {
-      const decoded = verifyToken(refreshToken, 'admin_refresh') as any;
+      const decoded = verifyToken(refreshToken, 'admin_refresh') as AdminJwtPayload;
 
       // Check if token is blacklisted
       const isBlacklisted = await cacheService.get(`admin_blacklist:${decoded.jti}`);
@@ -259,7 +267,7 @@ export class AdminAuthService {
         refresh_token: tokens.refreshToken,
         expires_in: tokens.expiresIn,
       };
-    } catch (error) {
+    } catch {
       throw new ApiError('Refresh Token 无效', 401, 'TOKEN_INVALID');
     }
   }

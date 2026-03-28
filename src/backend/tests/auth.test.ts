@@ -2,6 +2,7 @@ import request from 'supertest';
 import app from '../src/app';
 import prisma from '../src/config/database';
 import { cacheService } from '../src/config/redis';
+import { maskEmail } from '../src/utils/mask';
 
 describe('Auth API Tests', () => {
   // Mock cache service
@@ -19,10 +20,7 @@ describe('Auth API Tests', () => {
         nickname: '测试用户',
       };
 
-      const response = await request(app)
-        .post('/api/v1/auth/register')
-        .send(registerData)
-        .expect(201);
+      const response = await request(app).post('/api/v1/auth/register').send(registerData).expect(201);
 
       expect(response.body.success).toBe(true);
       expect(response.body.data.user).toBeDefined();
@@ -50,10 +48,7 @@ describe('Auth API Tests', () => {
       await request(app).post('/api/v1/auth/register').send(registerData);
 
       // Second registration with same email
-      const response = await request(app)
-        .post('/api/v1/auth/register')
-        .send(registerData)
-        .expect(409);
+      const response = await request(app).post('/api/v1/auth/register').send(registerData).expect(409);
 
       expect(response.body.success).toBe(false);
       expect(response.body.error.code).toBe('EMAIL_EXISTS');
@@ -69,10 +64,7 @@ describe('Auth API Tests', () => {
         role: 'advertiser' as const,
       };
 
-      const response = await request(app)
-        .post('/api/v1/auth/register')
-        .send(registerData)
-        .expect(422);
+      const response = await request(app).post('/api/v1/auth/register').send(registerData).expect(422);
 
       expect(response.body.success).toBe(false);
       expect(response.body.error.code).toBe('VALIDATION_ERROR');
@@ -85,10 +77,7 @@ describe('Auth API Tests', () => {
         role: 'advertiser' as const,
       };
 
-      const response = await request(app)
-        .post('/api/v1/auth/register')
-        .send(registerData)
-        .expect(422);
+      const response = await request(app).post('/api/v1/auth/register').send(registerData).expect(422);
 
       expect(response.body.success).toBe(false);
       expect(response.body.error.code).toBe('VALIDATION_ERROR');
@@ -101,10 +90,7 @@ describe('Auth API Tests', () => {
         role: 'invalid_role',
       };
 
-      const response = await request(app)
-        .post('/api/v1/auth/register')
-        .send(registerData)
-        .expect(422);
+      const response = await request(app).post('/api/v1/auth/register').send(registerData).expect(422);
 
       expect(response.body.success).toBe(false);
     });
@@ -116,10 +102,7 @@ describe('Auth API Tests', () => {
         role: 'advertiser' as const,
       };
 
-      const response = await request(app)
-        .post('/api/v1/auth/register')
-        .send(registerData)
-        .expect(422);
+      const response = await request(app).post('/api/v1/auth/register').send(registerData).expect(422);
 
       expect(response.body.success).toBe(false);
     });
@@ -131,10 +114,7 @@ describe('Auth API Tests', () => {
         password: 'SecurePass123!',
       };
 
-      const response = await request(app)
-        .post('/api/v1/auth/register')
-        .send(registerData)
-        .expect(201);
+      const response = await request(app).post('/api/v1/auth/register').send(registerData).expect(201);
 
       expect(response.body.data.user.role).toBe('advertiser');
 
@@ -150,10 +130,7 @@ describe('Auth API Tests', () => {
         role: 'kol' as const,
       };
 
-      const response = await request(app)
-        .post('/api/v1/auth/register')
-        .send(registerData)
-        .expect(201);
+      const response = await request(app).post('/api/v1/auth/register').send(registerData).expect(201);
 
       expect(response.body.data.user.status).toBe('pending');
 
@@ -165,32 +142,33 @@ describe('Auth API Tests', () => {
   describe('POST /api/v1/auth/login', () => {
     beforeEach(async () => {
       // Create test user
-      await request(app).post('/api/v1/auth/register').send({
-        email: `login_${Date.now()}@example.com`,
-        password: 'SecurePass123!',
-        role: 'advertiser' as const,
-      });
+      await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email: `login_${Date.now()}@example.com`,
+          password: 'SecurePass123!',
+          role: 'advertiser' as const,
+        });
     });
 
     it('应该成功登录并返回 Token', async () => {
       const email = `login_${Date.now()}@example.com`;
 
       // Register first
-      await request(app).post('/api/v1/auth/register').send({
-        email,
-        password: 'SecurePass123!',
-        role: 'advertiser' as const,
-      });
+      await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email,
+          password: 'SecurePass123!',
+          role: 'advertiser' as const,
+        });
 
       const loginData = {
         email,
         password: 'SecurePass123!',
       };
 
-      const response = await request(app)
-        .post('/api/v1/auth/login')
-        .send(loginData)
-        .expect(200);
+      const response = await request(app).post('/api/v1/auth/login').send(loginData).expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.data.user).toBeDefined();
@@ -205,21 +183,20 @@ describe('Auth API Tests', () => {
     it('应该拒绝错误密码', async () => {
       const email = `wrongpass_${Date.now()}@example.com`;
 
-      await request(app).post('/api/v1/auth/register').send({
-        email,
-        password: 'SecurePass123!',
-        role: 'advertiser' as const,
-      });
+      await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email,
+          password: 'SecurePass123!',
+          role: 'advertiser' as const,
+        });
 
       const loginData = {
         email,
         password: 'WrongPassword123!',
       };
 
-      const response = await request(app)
-        .post('/api/v1/auth/login')
-        .send(loginData)
-        .expect(401);
+      const response = await request(app).post('/api/v1/auth/login').send(loginData).expect(401);
 
       expect(response.body.success).toBe(false);
       expect(response.body.error.code).toBe('INVALID_CREDENTIALS');
@@ -234,10 +211,7 @@ describe('Auth API Tests', () => {
         password: 'SecurePass123!',
       };
 
-      const response = await request(app)
-        .post('/api/v1/auth/login')
-        .send(loginData)
-        .expect(401);
+      const response = await request(app).post('/api/v1/auth/login').send(loginData).expect(401);
 
       expect(response.body.success).toBe(false);
       expect(response.body.error.code).toBe('INVALID_CREDENTIALS');
@@ -246,11 +220,13 @@ describe('Auth API Tests', () => {
     it('应该拒绝已删除用户登录', async () => {
       const email = `deleted_${Date.now()}@example.com`;
 
-      await request(app).post('/api/v1/auth/register').send({
-        email,
-        password: 'SecurePass123!',
-        role: 'advertiser' as const,
-      });
+      await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email,
+          password: 'SecurePass123!',
+          role: 'advertiser' as const,
+        });
 
       // Delete user
       await prisma.user.update({
@@ -263,10 +239,7 @@ describe('Auth API Tests', () => {
         password: 'SecurePass123!',
       };
 
-      const response = await request(app)
-        .post('/api/v1/auth/login')
-        .send(loginData)
-        .expect(401);
+      const response = await request(app).post('/api/v1/auth/login').send(loginData).expect(401);
 
       expect(response.body.error.code).toBe('USER_DELETED');
 
@@ -277,11 +250,13 @@ describe('Auth API Tests', () => {
     it('应该拒绝已暂停用户登录', async () => {
       const email = `suspended_${Date.now()}@example.com`;
 
-      await request(app).post('/api/v1/auth/register').send({
-        email,
-        password: 'SecurePass123!',
-        role: 'advertiser' as const,
-      });
+      await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email,
+          password: 'SecurePass123!',
+          role: 'advertiser' as const,
+        });
 
       // Suspend user
       await prisma.user.update({
@@ -294,10 +269,7 @@ describe('Auth API Tests', () => {
         password: 'SecurePass123!',
       };
 
-      const response = await request(app)
-        .post('/api/v1/auth/login')
-        .send(loginData)
-        .expect(403);
+      const response = await request(app).post('/api/v1/auth/login').send(loginData).expect(403);
 
       expect(response.body.error.code).toBe('USER_SUSPENDED');
 
@@ -311,10 +283,7 @@ describe('Auth API Tests', () => {
         // Missing password
       };
 
-      const response = await request(app)
-        .post('/api/v1/auth/login')
-        .send(loginData)
-        .expect(422);
+      const response = await request(app).post('/api/v1/auth/login').send(loginData).expect(422);
 
       expect(response.body.success).toBe(false);
     });
@@ -322,21 +291,20 @@ describe('Auth API Tests', () => {
     it('应该更新最后登录时间', async () => {
       const email = `lastlogin_${Date.now()}@example.com`;
 
-      await request(app).post('/api/v1/auth/register').send({
-        email,
-        password: 'SecurePass123!',
-        role: 'advertiser' as const,
-      });
+      await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email,
+          password: 'SecurePass123!',
+          role: 'advertiser' as const,
+        });
 
       const loginData = {
         email,
         password: 'SecurePass123!',
       };
 
-      await request(app)
-        .post('/api/v1/auth/login')
-        .send(loginData)
-        .expect(200);
+      await request(app).post('/api/v1/auth/login').send(loginData).expect(200);
 
       // Verify lastLoginAt is updated
       const user = await prisma.user.findUnique({
@@ -356,18 +324,18 @@ describe('Auth API Tests', () => {
       const email = `refresh_${Date.now()}@example.com`;
 
       // Register and login
-      await request(app).post('/api/v1/auth/register').send({
-        email,
-        password: 'SecurePass123!',
-        role: 'advertiser' as const,
-      });
-
-      const loginRes = await request(app)
-        .post('/api/v1/auth/login')
+      await request(app)
+        .post('/api/v1/auth/register')
         .send({
           email,
           password: 'SecurePass123!',
+          role: 'advertiser' as const,
         });
+
+      const loginRes = await request(app).post('/api/v1/auth/login').send({
+        email,
+        password: 'SecurePass123!',
+      });
 
       const refreshToken = loginRes.body.data.tokens.refresh_token;
 
@@ -397,10 +365,7 @@ describe('Auth API Tests', () => {
     });
 
     it('应该拒绝无效 Token', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/refresh')
-        .send({ refresh_token: 'invalid' })
-        .expect(401);
+      const response = await request(app).post('/api/v1/auth/refresh').send({ refresh_token: 'invalid' }).expect(401);
 
       expect(response.body.success).toBe(false);
     });
@@ -408,37 +373,33 @@ describe('Auth API Tests', () => {
     it('应该拒绝已删除用户的 Token', async () => {
       const email = `deletedrefresh_${Date.now()}@example.com`;
 
-      await request(app).post('/api/v1/auth/register').send({
+      await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email,
+          password: 'SecurePass123!',
+          role: 'advertiser' as const,
+        });
+
+      const loginRes = await request(app).post('/api/v1/auth/login').send({
         email,
         password: 'SecurePass123!',
-        role: 'advertiser' as const,
       });
 
-      // Delete user
+      const refreshToken = loginRes.body.data.tokens.refresh_token;
+
       await prisma.user.update({
         where: { email },
         data: { status: 'deleted' },
       });
 
-      // Get token
-      const loginRes = await request(app)
-        .post('/api/v1/auth/login')
-        .send({
-          email,
-          password: 'SecurePass123!',
-        });
-
-      const refreshToken = loginRes.body.data.tokens.refresh_token;
-
-      // Refresh should fail
       const response = await request(app)
         .post('/api/v1/auth/refresh')
         .send({ refresh_token: refreshToken })
         .expect(401);
 
-      expect(response.body.error.code).toBe('USER_NOT_FOUND');
+      expect(response.body.error.code).toBe('USER_INVALID');
 
-      // Cleanup
       await prisma.user.delete({ where: { email } });
     });
   });
@@ -464,7 +425,7 @@ describe('Auth API Tests', () => {
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data.email).toBe(email);
+      expect(response.body.data.email).toBe(maskEmail(email));
       expect(response.body.data.role).toBe('advertiser');
 
       // Cleanup
@@ -472,9 +433,7 @@ describe('Auth API Tests', () => {
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .get('/api/v1/auth/me')
-        .expect(401);
+      const response = await request(app).get('/api/v1/auth/me').expect(401);
 
       expect(response.body.success).toBe(false);
       expect(response.body.error.code).toBe('AUTH_REQUIRED');
@@ -501,10 +460,7 @@ describe('Auth API Tests', () => {
         purpose: 'register',
       };
 
-      const response = await request(app)
-        .post('/api/v1/auth/verification-code')
-        .send(data)
-        .expect(200);
+      const response = await request(app).post('/api/v1/auth/verification-code').send(data).expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.message).toBe('验证码已发送');
@@ -517,10 +473,7 @@ describe('Auth API Tests', () => {
         purpose: 'register',
       };
 
-      const response = await request(app)
-        .post('/api/v1/auth/verification-code')
-        .send(data)
-        .expect(422);
+      const response = await request(app).post('/api/v1/auth/verification-code').send(data).expect(422);
 
       expect(response.body.success).toBe(false);
     });
@@ -538,10 +491,7 @@ describe('Auth API Tests', () => {
         purpose: 'register',
       };
 
-      const response = await request(app)
-        .post('/api/v1/auth/verify-code')
-        .send(verifyData)
-        .expect(400);
+      const response = await request(app).post('/api/v1/auth/verify-code').send(verifyData).expect(400);
 
       expect(response.body.error.code).toBe('CODE_EXPIRED');
     });
@@ -551,16 +501,16 @@ describe('Auth API Tests', () => {
     it('应该成功重置密码', async () => {
       const email = `reset_${Date.now()}@example.com`;
 
-      await request(app).post('/api/v1/auth/register').send({
-        email,
-        password: 'OldPass123!',
-        role: 'advertiser' as const,
-      });
+      await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email,
+          password: 'OldPass123!',
+          role: 'advertiser' as const,
+        });
 
       // Mock verification code
-      jest.mocked(cacheService.get).mockResolvedValue(
-        Buffer.from('123456').toString('base64')
-      );
+      jest.mocked(cacheService.get).mockResolvedValue(Buffer.from('123456').toString('base64'));
       jest.mocked(cacheService.delete).mockResolvedValue(true);
 
       const resetData = {
@@ -570,10 +520,7 @@ describe('Auth API Tests', () => {
         new_password: 'NewPass123!',
       };
 
-      const response = await request(app)
-        .post('/api/v1/auth/reset-password')
-        .send(resetData)
-        .expect(200);
+      const response = await request(app).post('/api/v1/auth/reset-password').send(resetData).expect(200);
 
       expect(response.body.success).toBe(true);
 

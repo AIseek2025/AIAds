@@ -2,10 +2,8 @@ import request from 'supertest';
 import app from '../../src/app';
 import prisma from '../../src/config/database';
 
-
 describe('Admin Auth API Tests', () => {
   let adminAccessToken: string;
-  let adminRefreshToken: string;
   let testAdminId: string;
   let testRoleId: string;
 
@@ -18,19 +16,34 @@ describe('Admin Auth API Tests', () => {
       create: {
         name: 'Test Admin',
         description: 'Test admin role',
-        permissions: ['user:view', 'user:ban', 'kol:view', 'kol:approve', 'kol:reject', 'content:view', 'content:approve', 'content:reject', 'finance:view', 'withdrawal:review', 'withdrawal:approve', 'withdrawal:reject', 'dashboard:view', 'analytics:view'],
+        permissions: [
+          'user:view',
+          'user:ban',
+          'kol:view',
+          'kol:approve',
+          'kol:reject',
+          'content:view',
+          'content:approve',
+          'content:reject',
+          'finance:view',
+          'withdrawal:review',
+          'withdrawal:approve',
+          'withdrawal:reject',
+          'dashboard:view',
+          'analytics:view',
+        ],
         isSystem: false,
       },
     });
     testRoleId = role.id;
 
     const email = `admin_${Date.now()}@aiads.com`;
-    
+
     // Create admin user
     const admin = await prisma.admin.create({
       data: {
         email,
-        passwordHash: '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYzS3MebAJu', // 'AdminPass123!'
+        passwordHash: '$2b$12$uuRgZ0.Rgdl.rndcIxy09u6l59s.HWifE3Tho9mV7SGR9WljzU4uW', // 'AdminPass123!'
         name: 'Test Admin',
         roleId: testRoleId,
         status: 'active',
@@ -39,15 +52,12 @@ describe('Admin Auth API Tests', () => {
     testAdminId = admin.id;
 
     // Login
-    const loginRes = await request(app)
-      .post('/api/v1/admin/auth/login')
-      .send({
-        username: email,
-        password: 'AdminPass123!',
-      });
+    const loginRes = await request(app).post('/api/v1/admin/auth/login').send({
+      email: email,
+      password: 'AdminPass123!',
+    });
 
     adminAccessToken = loginRes.body.data.tokens.access_token;
-    adminRefreshToken = loginRes.body.data.tokens.refresh_token;
 
     return { admin, email };
   };
@@ -68,11 +78,11 @@ describe('Admin Auth API Tests', () => {
   describe('POST /api/v1/admin/auth/login', () => {
     it('应该成功登录管理员账号', async () => {
       const email = `login_${Date.now()}@aiads.com`;
-      
+
       await prisma.admin.create({
         data: {
           email,
-          passwordHash: '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYzS3MebAJu',
+          passwordHash: '$2b$12$uuRgZ0.Rgdl.rndcIxy09u6l59s.HWifE3Tho9mV7SGR9WljzU4uW',
           name: 'Login Test Admin',
           roleId: testRoleId,
           status: 'active',
@@ -82,7 +92,7 @@ describe('Admin Auth API Tests', () => {
       const response = await request(app)
         .post('/api/v1/admin/auth/login')
         .send({
-          username: email,
+          email: email,
           password: 'AdminPass123!',
         })
         .expect(200);
@@ -99,11 +109,11 @@ describe('Admin Auth API Tests', () => {
 
     it('应该拒绝错误密码', async () => {
       const email = `wrongpass_${Date.now()}@aiads.com`;
-      
+
       await prisma.admin.create({
         data: {
           email,
-          passwordHash: '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYzS3MebAJu',
+          passwordHash: '$2b$12$uuRgZ0.Rgdl.rndcIxy09u6l59s.HWifE3Tho9mV7SGR9WljzU4uW',
           name: 'Wrong Pass Admin',
           roleId: testRoleId,
           status: 'active',
@@ -113,7 +123,7 @@ describe('Admin Auth API Tests', () => {
       const response = await request(app)
         .post('/api/v1/admin/auth/login')
         .send({
-          username: email,
+          email: email,
           password: 'WrongPassword123!',
         })
         .expect(401);
@@ -129,7 +139,7 @@ describe('Admin Auth API Tests', () => {
       const response = await request(app)
         .post('/api/v1/admin/auth/login')
         .send({
-          username: 'notexist@aiads.com',
+          email: 'notexist@aiads.com',
           password: 'AdminPass123!',
         })
         .expect(401);
@@ -140,11 +150,11 @@ describe('Admin Auth API Tests', () => {
 
     it('应该拒绝已禁用的管理员账号', async () => {
       const email = `disabled_${Date.now()}@aiads.com`;
-      
+
       await prisma.admin.create({
         data: {
           email,
-          passwordHash: '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYzS3MebAJu',
+          passwordHash: '$2b$12$uuRgZ0.Rgdl.rndcIxy09u6l59s.HWifE3Tho9mV7SGR9WljzU4uW',
           name: 'Disabled Admin',
           roleId: testRoleId,
           status: 'inactive',
@@ -154,7 +164,7 @@ describe('Admin Auth API Tests', () => {
       const response = await request(app)
         .post('/api/v1/admin/auth/login')
         .send({
-          username: email,
+          email: email,
           password: 'AdminPass123!',
         })
         .expect(403);
@@ -170,7 +180,7 @@ describe('Admin Auth API Tests', () => {
       const response = await request(app)
         .post('/api/v1/admin/auth/login')
         .send({
-          username: 'test@aiads.com',
+          email: 'test@aiads.com',
           // Missing password
         })
         .expect(422);
@@ -195,9 +205,7 @@ describe('Admin Auth API Tests', () => {
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .get('/api/v1/admin/auth/me')
-        .expect(401);
+      const response = await request(app).get('/api/v1/admin/auth/me').expect(401);
 
       expect(response.body.success).toBe(false);
       expect(response.body.error.code).toBe('AUTH_REQUIRED');
@@ -226,9 +234,7 @@ describe('Admin Auth API Tests', () => {
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .post('/api/v1/admin/auth/logout')
-        .expect(401);
+      const response = await request(app).post('/api/v1/admin/auth/logout').expect(401);
 
       expect(response.body.success).toBe(false);
     });

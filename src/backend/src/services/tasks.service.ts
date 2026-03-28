@@ -1,7 +1,26 @@
 import prisma from '../config/database';
+import { buildCpmBreakdown } from './cpm-metrics.service';
 import { logger } from '../utils/logger';
 import { errors, ApiError } from '../middleware/errorHandler';
 import { TaskResponse, ApplyTaskRequest, KolOrderResponse } from '../types';
+import { Prisma, type Campaign, type CampaignStatus, type KolPlatform } from '@prisma/client';
+
+const orderWithCampaignAdvertiser = Prisma.validator<Prisma.OrderDefaultArgs>()({
+  include: {
+    campaign: {
+      select: {
+        title: true,
+      },
+    },
+    advertiser: {
+      select: {
+        companyName: true,
+      },
+    },
+  },
+});
+
+type OrderWithCampaignAdvertiser = Prisma.OrderGetPayload<typeof orderWithCampaignAdvertiser>;
 
 export class TasksService {
   /**
@@ -26,43 +45,44 @@ export class TasksService {
       throw errors.notFound('KOL 不存在');
     }
 
-    const where: any = {
+    const where: Prisma.CampaignWhereInput = {
       status: 'active',
     };
 
     // Platform filter - match KOL's platform
     if (filters?.platform) {
-      where.targetPlatforms = { has: filters.platform };
+      where.targetPlatforms = { has: filters.platform as KolPlatform };
     } else if (kol.platform) {
       where.targetPlatforms = { has: kol.platform };
     }
 
     // Budget filter
+    let budgetFilter: Prisma.DecimalFilter | undefined;
     if (filters?.min_budget !== undefined) {
-      where.budget = { ...where.budget, gte: filters.min_budget };
+      budgetFilter = { ...budgetFilter, gte: filters.min_budget };
     }
     if (filters?.max_budget !== undefined) {
-      where.budget = { ...where.budget, lte: filters.max_budget };
+      budgetFilter = { ...budgetFilter, lte: filters.max_budget };
+    }
+    if (budgetFilter) {
+      where.budget = budgetFilter;
     }
 
     // Status filter
     if (filters?.status) {
-      where.status = filters.status;
+      where.status = filters.status as CampaignStatus;
     }
 
     // Filter by KOL's followers and engagement rate
-    const kolFilters: any[] = [];
-    
+    const kolFilters: Prisma.CampaignWhereInput[] = [];
+
     if (kol.followers) {
       // Campaigns where KOL meets follower requirements
       kolFilters.push({
         AND: [
           { minFollowers: { lte: kol.followers } },
           {
-            OR: [
-              { maxFollowers: { gte: kol.followers } },
-              { maxFollowers: null },
-            ],
+            OR: [{ maxFollowers: { gte: kol.followers } }, { maxFollowers: null }],
           },
         ],
       });
@@ -71,15 +91,14 @@ export class TasksService {
     if (kol.engagementRate) {
       const kolEngagementRate = kol.engagementRate.toNumber();
       kolFilters.push({
-        OR: [
-          { minEngagementRate: { lte: kolEngagementRate } },
-          { minEngagementRate: null },
-        ],
+        OR: [{ minEngagementRate: { lte: kolEngagementRate } }, { minEngagementRate: null }],
       });
     }
 
     if (kolFilters.length > 0) {
-      where.AND = [...(where.AND || []), ...kolFilters];
+      const existingAnd = where.AND;
+      const prev = Array.isArray(existingAnd) ? existingAnd : existingAnd ? [existingAnd] : [];
+      where.AND = [...prev, ...kolFilters];
     }
 
     // Exclude campaigns where KOL already has an order
@@ -203,18 +222,7 @@ export class TasksService {
         status: 'pending',
         deadline: campaign.deadline,
       },
-      include: {
-        campaign: {
-          select: {
-            title: true,
-          },
-        },
-        advertiser: {
-          select: {
-            companyName: true,
-          },
-        },
-      },
+      ...orderWithCampaignAdvertiser,
     });
 
     // Update campaign applied_kols count
@@ -237,25 +245,25 @@ export class TasksService {
   /**
    * Format task response
    */
-  private formatTaskResponse(campaign: any): TaskResponse {
+  private formatTaskResponse(campaign: Campaign): TaskResponse {
     return {
       id: campaign.id,
       campaign_id: campaign.id,
       advertiser_id: campaign.advertiserId,
       title: campaign.title,
-      description: campaign.description,
+      description: campaign.description ?? undefined,
       objective: campaign.objective,
       platform: campaign.targetPlatforms?.[0] || '',
       content_type: 'video',
       content_count: 1,
       budget: campaign.budget.toNumber(),
-      min_followers: campaign.minFollowers,
-      max_followers: campaign.maxFollowers,
+      min_followers: campaign.minFollowers ?? undefined,
+      max_followers: campaign.maxFollowers ?? undefined,
       min_engagement_rate: campaign.minEngagementRate?.toNumber(),
       required_categories: campaign.requiredCategories || [],
       target_countries: campaign.targetCountries || [],
-      content_requirements: campaign.contentRequirements,
-      content_guidelines: campaign.contentGuidelines,
+      content_requirements: campaign.contentRequirements ?? undefined,
+      content_guidelines: campaign.contentGuidelines ?? undefined,
       required_hashtags: campaign.requiredHashtags || [],
       required_mentions: campaign.requiredMentions || [],
       start_date: campaign.startDate?.toISOString(),
@@ -274,20 +282,25 @@ export class TasksService {
   /**
    * Format KOL order response
    */
-  private formatKolOrderResponse(order: any): KolOrderResponse {
-    return {
+  private formatKolOrderResponse(order: OrderWithCampaignAdvertiser): KolOrderResponse {
+    const pricing_model = order.pricingModel === 'cpm' ? 'cpm' : 'fixed';
+    const row: KolOrderResponse = {
       id: order.id,
       campaign_id: order.campaignId,
       campaign_title: order.campaign?.title || '',
       advertiser_id: order.advertiserId,
-      advertiser_name: order.advertiser?.companyName,
+      advertiser_name: order.advertiser?.companyName ?? undefined,
       order_no: order.orderNo,
+      pricing_model,
+      cpm_rate: order.cpmRate != null ? order.cpmRate.toNumber() : null,
+      cpm_budget_cap: order.cpmBudgetCap != null ? order.cpmBudgetCap.toNumber() : null,
+      frozen_amount: order.frozenAmount != null ? order.frozenAmount.toNumber() : 0,
       price: order.price.toNumber(),
       platform_fee: order.platformFee.toNumber(),
       kol_earning: order.kolEarning.toNumber(),
       content_type: order.contentType,
       content_count: order.contentCount,
-      content_description: order.contentDescription,
+      content_description: order.contentDescription ?? undefined,
       draft_urls: order.draftUrls || [],
       published_urls: order.publishedUrls || [],
       accepted_at: order.acceptedAt?.toISOString(),
@@ -297,12 +310,12 @@ export class TasksService {
       published_at: order.publishedAt?.toISOString(),
       completed_at: order.completedAt?.toISOString(),
       status: order.status,
-      review_notes: order.reviewNotes,
+      review_notes: order.reviewNotes ?? undefined,
       revision_count: order.revisionCount,
-      advertiser_rating: order.advertiserRating,
-      advertiser_review: order.advertiserReview,
-      kol_rating: order.kolRating,
-      kol_review: order.kolReview,
+      advertiser_rating: order.advertiserRating ?? undefined,
+      advertiser_review: order.advertiserReview ?? undefined,
+      kol_rating: order.kolRating ?? undefined,
+      kol_review: order.kolReview ?? undefined,
       views: order.views,
       likes: order.likes,
       comments: order.comments,
@@ -310,6 +323,10 @@ export class TasksService {
       created_at: order.createdAt.toISOString(),
       updated_at: order.updatedAt.toISOString(),
     };
+    if (pricing_model === 'cpm') {
+      row.cpm_breakdown = buildCpmBreakdown(order);
+    }
+    return row;
   }
 }
 

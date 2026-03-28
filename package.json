@@ -1,0 +1,16 @@
+{
+  "name": "aiads",
+  "private": true,
+  "description": "AIAds 仓库聚合脚本（子项目在 src/backend、src/frontend、tests）",
+  "scripts": {
+    "check:backend": "npm --prefix src/backend run typecheck && npm --prefix src/backend run lint && npm --prefix src/backend test",
+    "check:frontend": "npm --prefix src/frontend run lint && npm --prefix src/frontend run typecheck && npm --prefix src/frontend run test:run",
+    "check:lint": "npm --prefix src/backend run lint && npm --prefix src/frontend run lint",
+    "check": "npm run check:backend && npm run check:frontend",
+    "metrics:batch-payload": "npm --prefix src/backend run metrics:batch-payload",
+    "metrics:batch-from-db": "bash scripts/run-order-metrics-batch-from-db.sh",
+    "metrics:batch-sync": "npm --prefix src/backend run metrics:batch-sync",
+    "test:e2e:api": "npm --prefix tests run test:e2e:api",
+    "test:e2e:api:chromium": "npm --prefix tests run test:e2e:api:chromium"
+  }
+}

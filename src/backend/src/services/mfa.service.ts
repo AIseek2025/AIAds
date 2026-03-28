@@ -169,10 +169,7 @@ export async function disableMFA(userId: string, token: string): Promise<boolean
 /**
  * Generate email/SMS verification code
  */
-export async function generateVerificationCode(
-  userId: string,
-  type: 'email' | 'phone'
-): Promise<string> {
+export async function generateVerificationCode(userId: string, type: 'email' | 'phone'): Promise<string> {
   const code = crypto.randomInt(100000, 999999).toString();
   const redis = getRedis();
 
@@ -188,11 +185,7 @@ export async function generateVerificationCode(
 /**
  * Verify email/SMS verification code
  */
-export async function verifyVerificationCode(
-  userId: string,
-  type: 'email' | 'phone',
-  code: string
-): Promise<boolean> {
+export async function verifyVerificationCode(userId: string, type: 'email' | 'phone', code: string): Promise<boolean> {
   const redis = getRedis();
 
   if (!redis) {
@@ -222,14 +215,10 @@ export async function verifyVerificationCode(
  * Generate backup codes for MFA recovery
  */
 export async function generateBackupCodes(userId: string): Promise<string[]> {
-  const codes = Array.from({ length: 10 }, () =>
-    crypto.randomBytes(5).toString('hex')
-  );
+  const codes = Array.from({ length: 10 }, () => crypto.randomBytes(5).toString('hex'));
 
   // Hash and store backup codes
-  const hashedCodes = codes.map((code) =>
-    crypto.createHash('sha256').update(code).digest('hex')
-  );
+  const hashedCodes = codes.map((code) => crypto.createHash('sha256').update(code).digest('hex'));
 
   await prisma.user.update({
     where: { id: userId },
@@ -245,10 +234,7 @@ export async function generateBackupCodes(userId: string): Promise<string[]> {
 /**
  * Verify and consume a backup code
  */
-export async function verifyBackupCode(
-  userId: string,
-  code: string
-): Promise<boolean> {
+export async function verifyBackupCode(userId: string, code: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { mfaBackupCodes: true },

@@ -1,5 +1,7 @@
 import winston from 'winston';
+import type { TransformableInfo } from 'logform';
 import path from 'path';
+import os from 'os';
 
 const { combine, timestamp, printf, colorize, errors } = winston.format;
 
@@ -15,15 +17,17 @@ const { combine, timestamp, printf, colorize, errors } = winston.format;
  * - Tokens
  * - Credit card numbers
  */
-const sensitiveFilter = winston.format((info: any) => {
+const sensitiveFilter = winston.format((info: TransformableInfo) => {
   // Filter verification codes (6-digit numbers)
-  if (info.message && typeof info.message === 'string') {
+  const message = info.message;
+  if (typeof message === 'string') {
     // Replace 6-digit codes with asterisks
-    info.message = info.message.replace(/\b\d{6}\b/g, '******');
-    // Replace patterns like "code: 123456" or "code=123456"
-    info.message = info.message.replace(/(code["']?\s*[:=]\s*)\d+/gi, '$1******');
-    // Replace patterns like "verification_code: 123456"
-    info.message = info.message.replace(/(verification[_-]?code["']?\s*[:=]\s*)\d+/gi, '$1******');
+    info.message = message
+      .replace(/\b\d{6}\b/g, '******')
+      // Replace patterns like "code: 123456" or "code=123456"
+      .replace(/(code["']?\s*[:=]\s*)\d+/gi, '$1******')
+      // Replace patterns like "verification_code: 123456"
+      .replace(/(verification[_-]?code["']?\s*[:=]\s*)\d+/gi, '$1******');
   }
 
   // Filter metadata
@@ -53,50 +57,52 @@ const sensitiveFilter = winston.format((info: any) => {
  * P3 Fix: Add common fields to all logs
  * Ensures consistent format across all log entries
  */
-const addCommonFields = winston.format((info: any) => {
+const addCommonFields = winston.format((info: TransformableInfo) => {
   // Add service name
   info.service = info.service || 'aiads-backend';
-  
+
   // Add environment
   info.environment = info.environment || process.env.NODE_ENV || 'development';
-  
+
   // Add version
   info.version = info.version || process.env.APP_VERSION || '1.0.0';
-  
+
   // Add hostname
-  info.hostname = info.hostname || require('os').hostname();
-  
+  info.hostname = info.hostname || os.hostname();
+
   // Ensure timestamp is ISO format
   if (info.timestamp && typeof info.timestamp === 'string') {
     info.timestamp = new Date(info.timestamp).toISOString();
   }
-  
+
   return info;
 });
 
 // Custom log format - P3 Fix: Unified format with all required fields
-const logFormat = printf(({ level, message, timestamp, stack, requestId, service, environment, ...metadata }) => {
-  let msg = `${timestamp} [${level}] ${service || 'aiads-backend'} ${requestId ? `[${requestId}]` : ''}: ${message}`;
+const logFormat = printf(
+  ({ level, message, timestamp, stack, requestId, service, environment: _environment, ...metadata }) => {
+    let msg = `${timestamp} [${level}] ${service || 'aiads-backend'} ${requestId ? `[${requestId}]` : ''}: ${message}`;
 
-  if (Object.keys(metadata).length > 0) {
-    // Filter out already included fields
-    const filteredMetadata: any = {};
-    for (const [key, value] of Object.entries(metadata)) {
-      if (!['timestamp', 'level', 'message', 'stack', 'requestId', 'service', 'environment'].includes(key)) {
-        filteredMetadata[key] = value;
+    if (Object.keys(metadata).length > 0) {
+      // Filter out already included fields
+      const filteredMetadata: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(metadata)) {
+        if (!['timestamp', 'level', 'message', 'stack', 'requestId', 'service', 'environment'].includes(key)) {
+          filteredMetadata[key] = value;
+        }
+      }
+      if (Object.keys(filteredMetadata).length > 0) {
+        msg += ` ${JSON.stringify(filteredMetadata)}`;
       }
     }
-    if (Object.keys(filteredMetadata).length > 0) {
-      msg += ` ${JSON.stringify(filteredMetadata)}`;
+
+    if (stack) {
+      msg += `\n${stack}`;
     }
-  }
 
-  if (stack) {
-    msg += `\n${stack}`;
+    return msg;
   }
-
-  return msg;
-});
+);
 
 // Create logger instance
 const logger = winston.createLogger({

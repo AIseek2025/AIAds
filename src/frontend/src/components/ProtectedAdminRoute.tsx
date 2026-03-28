@@ -1,33 +1,33 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAdminAuthStore } from '../stores/adminStore';
-import { Loading } from '../components/common';
+import type { AdminPermission } from '../types';
+import { APP_PATHS, ADMIN_ROUTE_SEG, pathAdmin } from '../constants/appPaths';
 
 interface ProtectedAdminRouteProps {
   children: React.ReactNode;
-  requiredPermission?: string;
+  requiredPermission?: AdminPermission;
 }
 
 export const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({
   children,
   requiredPermission,
 }) => {
-  const { isAuthenticated, isLoading, hasPermission } = useAdminAuthStore();
+  const { isAuthenticated, hasPermission } = useAdminAuthStore();
   const location = useLocation();
 
-  // Show loading while checking auth status
-  if (isLoading) {
-    return <Loading open />;
-  }
+  useEffect(() => {
+    useAdminAuthStore.getState().checkAuth();
+  }, []);
 
   // Redirect to admin login if not authenticated
   if (!isAuthenticated) {
-    return <Navigate to="/admin/login" state={{ from: location }} replace />;
+    return <Navigate to={APP_PATHS.adminLogin} state={{ from: location }} replace />;
   }
 
   // Check permission-based access if required
-  if (requiredPermission && !hasPermission(requiredPermission as any)) {
-    return <Navigate to="/admin/dashboard" replace />;
+  if (requiredPermission && !hasPermission(requiredPermission)) {
+    return <Navigate to={pathAdmin(ADMIN_ROUTE_SEG.dashboard)} replace />;
   }
 
   return <>{children}</>;

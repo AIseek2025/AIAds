@@ -1,3 +1,4 @@
+import type Redis from 'ioredis';
 import { getRedis } from '../config/redis';
 import crypto from 'crypto';
 import { logger } from '../utils/logger';
@@ -10,10 +11,7 @@ const REFRESH_TOKEN_TTL = 7 * 24 * 60 * 60; // 7 days
  * Rotate refresh token - generate new token and invalidate old one
  * Detects and prevents token reuse attacks
  */
-export async function rotateRefreshToken(
-  oldToken: string,
-  userId: string
-): Promise<string> {
+export async function rotateRefreshToken(oldToken: string, userId: string): Promise<string> {
   const redis = getRedis();
   if (!redis) {
     throw new Error('Redis not available for token rotation');
@@ -53,7 +51,7 @@ export async function rotateRefreshToken(
       throw error;
     }
     logger.error('Error rotating refresh token', { userId, error });
-    throw new Error('Failed to rotate refresh token');
+    throw new Error('Failed to rotate refresh token', { cause: error });
   }
 }
 
@@ -88,10 +86,7 @@ export async function validateRefreshToken(token: string): Promise<string | null
 /**
  * Store a new refresh token
  */
-export async function storeRefreshToken(
-  token: string,
-  userId: string
-): Promise<void> {
+export async function storeRefreshToken(token: string, userId: string): Promise<void> {
   const redis = getRedis();
   if (!redis) {
     logger.warn('Redis not available, cannot store refresh token', { userId });
@@ -163,7 +158,7 @@ function hashToken(token: string): string {
 /**
  * Scan Redis keys matching pattern
  */
-async function scanKeys(redis: any, pattern: string): Promise<string[]> {
+async function scanKeys(redis: Redis, pattern: string): Promise<string[]> {
   const keys: string[] = [];
   let cursor = '0';
 

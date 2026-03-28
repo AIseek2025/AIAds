@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminKolAPI } from '../../services/adminApi';
+import { getApiErrorMessage } from '../../utils/apiError';
 import type { KolApplication, KolListParams } from '../../types';
+
+type KolStatusFilter = NonNullable<KolListParams['status']>;
 
 // MUI Components
 import Box from '@mui/material/Box';
@@ -38,16 +41,59 @@ import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import Paper from '@mui/material/Paper';
 import Grid from '@mui/material/Grid';
-import Rating from '@mui/material/Rating';
+import { AdminHubNav } from '../../components/admin/AdminHubNav';
 
 // Icons
 import SearchIcon from '@mui/icons-material/Search';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
-import BlockIcon from '@mui/icons-material/Block';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
+
+const KolsPlatformBadge = ({ platform }: { platform: string }) => {
+  const platformConfig: Record<string, { color: string; label: string }> = {
+    tiktok: { color: '#FF0050', label: 'TikTok' },
+    youtube: { color: '#FF0000', label: 'YouTube' },
+    instagram: { color: '#E4405F', label: 'Instagram' },
+  };
+
+  const config = platformConfig[platform] || { color: '#999', label: platform };
+
+  return (
+    <Chip
+      label={config.label}
+      size="small"
+      sx={{
+        bgcolor: `${config.color}15`,
+        color: config.color,
+        fontWeight: 500,
+      }}
+    />
+  );
+};
+
+const KolsStatusBadge = ({ status }: { status: string }) => {
+  const statusConfig: Record<string, { color: 'success' | 'warning' | 'error' | 'default'; label: string }> = {
+    pending: { color: 'warning', label: '待审核' },
+    active: { color: 'success', label: '已激活' },
+    verified: { color: 'success', label: '已认证' },
+    suspended: { color: 'error', label: '已暂停' },
+    banned: { color: 'error', label: '黑名单' },
+    rejected: { color: 'default', label: '已拒绝' },
+  };
+
+  const config = statusConfig[status] || { color: 'default' as const, label: status };
+
+  return (
+    <Chip
+      label={config.label}
+      color={config.color}
+      size="small"
+      sx={{ fontWeight: 500 }}
+    />
+  );
+};
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -67,6 +113,9 @@ const TabPanel: React.FC<TabPanelProps> = ({ children, value, index, ...other })
     </div>
   );
 };
+
+const formatCny = (n: number) =>
+  new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: 0 }).format(n);
 
 const KolsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -100,10 +149,10 @@ const KolsPage: React.FC = () => {
 
   if (keyword) queryParams.keyword = keyword;
   if (platformFilter) queryParams.platform = platformFilter;
-  if (statusFilter) queryParams.status = statusFilter as any;
+  if (statusFilter) queryParams.status = statusFilter as KolStatusFilter;
 
   // Fetch KOLs based on tab
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch: refetchKols } = useQuery({
     queryKey: ['adminKols', queryParams, tabValue],
     queryFn: () => {
       if (tabValue === 0) {
@@ -127,8 +176,12 @@ const KolsPage: React.FC = () => {
       setReviewNote('');
       setSelectedKol(null);
     },
-    onError: (err: any) => {
-      setSnackbar({ open: true, message: err.response?.data?.error?.message || '操作失败', severity: 'error' });
+    onError: (err: unknown) => {
+      setSnackbar({
+        open: true,
+        message: getApiErrorMessage(err, '操作失败'),
+        severity: 'error',
+      });
     },
   });
 
@@ -144,8 +197,12 @@ const KolsPage: React.FC = () => {
       setReviewNote('');
       setSelectedKol(null);
     },
-    onError: (err: any) => {
-      setSnackbar({ open: true, message: err.response?.data?.error?.message || '操作失败', severity: 'error' });
+    onError: (err: unknown) => {
+      setSnackbar({
+        open: true,
+        message: getApiErrorMessage(err, '操作失败'),
+        severity: 'error',
+      });
     },
   });
 
@@ -225,52 +282,6 @@ const KolsPage: React.FC = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  // Platform badge component
-  const PlatformBadge = ({ platform }: { platform: string }) => {
-    const platformConfig: Record<string, { color: string; label: string }> = {
-      tiktok: { color: '#FF0050', label: 'TikTok' },
-      youtube: { color: '#FF0000', label: 'YouTube' },
-      instagram: { color: '#E4405F', label: 'Instagram' },
-    };
-
-    const config = platformConfig[platform] || { color: '#999', label: platform };
-
-    return (
-      <Chip
-        label={config.label}
-        size="small"
-        sx={{
-          bgcolor: `${config.color}15`,
-          color: config.color,
-          fontWeight: 500,
-        }}
-      />
-    );
-  };
-
-  // Status badge component
-  const StatusBadge = ({ status }: { status: string }) => {
-    const statusConfig: Record<string, { color: 'success' | 'warning' | 'error' | 'default'; label: string }> = {
-      pending: { color: 'warning', label: '待审核' },
-      active: { color: 'success', label: '已激活' },
-      verified: { color: 'success', label: '已认证' },
-      suspended: { color: 'error', label: '已暂停' },
-      banned: { color: 'error', label: '黑名单' },
-      rejected: { color: 'default', label: '已拒绝' },
-    };
-
-    const config = statusConfig[status] || { color: 'default', label: status };
-
-    return (
-      <Chip
-        label={config.label}
-        color={config.color}
-        size="small"
-        sx={{ fontWeight: 500 }}
-      />
-    );
-  };
-
   const commonFilters = (
     <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', gap: 2 }}>
       <TextField
@@ -316,7 +327,7 @@ const KolsPage: React.FC = () => {
           </Select>
         </FormControl>
       )}
-      <IconButton onClick={() => queryClient.invalidateQueries({ queryKey: ['adminKols'] })}>
+      <IconButton onClick={() => void refetchKols()} aria-label="刷新列表">
         <RefreshIcon />
       </IconButton>
     </Stack>
@@ -325,7 +336,7 @@ const KolsPage: React.FC = () => {
   return (
     <Box>
       {/* Page Header */}
-      <Box sx={{ mb: 4 }}>
+      <Box sx={{ mb: 2 }}>
         <Typography variant="h4" fontWeight="bold" gutterBottom>
           KOL 管理
         </Typography>
@@ -333,6 +344,10 @@ const KolsPage: React.FC = () => {
           管理 KOL 认证申请和信息
         </Typography>
       </Box>
+      <AdminHubNav onRefresh={() => void refetchKols()} />
+      <Alert severity="info" sx={{ mb: 3, mt: 2 }}>
+        「待审核」与「KOL 列表」分表展示；与「KOL 审核」专页互为补充。刷新将按当前标签与筛选重拉数据。
+      </Alert>
 
       {/* Tabs */}
       <Paper sx={{ mb: 3 }}>
@@ -360,6 +375,7 @@ const KolsPage: React.FC = () => {
                   <TableCell>账号</TableCell>
                   <TableCell align="right">粉丝数</TableCell>
                   <TableCell align="right">互动率</TableCell>
+                  <TableCell align="right">订单冻结</TableCell>
                   <TableCell>分类</TableCell>
                   <TableCell>提交时间</TableCell>
                   <TableCell align="right">操作</TableCell>
@@ -377,17 +393,20 @@ const KolsPage: React.FC = () => {
                       <TableCell><CircularProgress size={20} /></TableCell>
                       <TableCell><CircularProgress size={20} /></TableCell>
                       <TableCell><CircularProgress size={20} /></TableCell>
+                      <TableCell><CircularProgress size={20} /></TableCell>
                     </TableRow>
                   ))
                 ) : error ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
-                      <Alert severity="error">加载失败：{(error as Error).message}</Alert>
+                    <TableCell colSpan={9} align="center">
+                      <Alert severity="error">
+                      加载失败：{getApiErrorMessage(error, '请稍后重试')}
+                    </Alert>
                     </TableCell>
                   </TableRow>
                 ) : data?.items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={9} align="center">
                       <Typography color="text.secondary" py={4}>暂无待审核申请</Typography>
                     </TableCell>
                   </TableRow>
@@ -410,7 +429,7 @@ const KolsPage: React.FC = () => {
                         </Box>
                       </TableCell>
                       <TableCell>
-                        <PlatformBadge platform={kol.platform} />
+                        <KolsPlatformBadge platform={kol.platform} />
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">{kol.platformUsername}</Typography>
@@ -421,6 +440,14 @@ const KolsPage: React.FC = () => {
                       <TableCell align="right">
                         <Typography variant="body2">
                           {kol.engagementRate ? `${(kol.engagementRate * 100).toFixed(2)}%` : '-'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography
+                          variant="body2"
+                          color={(kol.ordersFrozenTotal ?? 0) > 0 ? 'info.main' : 'text.secondary'}
+                        >
+                          {formatCny(kol.ordersFrozenTotal ?? 0)}
                         </Typography>
                       </TableCell>
                       <TableCell>
@@ -496,6 +523,7 @@ const KolsPage: React.FC = () => {
                   <TableCell>账号</TableCell>
                   <TableCell align="right">粉丝数</TableCell>
                   <TableCell align="right">互动率</TableCell>
+                  <TableCell align="right">订单冻结</TableCell>
                   <TableCell>状态</TableCell>
                   <TableCell>认证</TableCell>
                   <TableCell align="right">操作</TableCell>
@@ -513,17 +541,20 @@ const KolsPage: React.FC = () => {
                       <TableCell><CircularProgress size={20} /></TableCell>
                       <TableCell><CircularProgress size={20} /></TableCell>
                       <TableCell><CircularProgress size={20} /></TableCell>
+                      <TableCell><CircularProgress size={20} /></TableCell>
                     </TableRow>
                   ))
                 ) : error ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
-                      <Alert severity="error">加载失败：{(error as Error).message}</Alert>
+                    <TableCell colSpan={9} align="center">
+                      <Alert severity="error">
+                      加载失败：{getApiErrorMessage(error, '请稍后重试')}
+                    </Alert>
                     </TableCell>
                   </TableRow>
                 ) : data?.items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={9} align="center">
                       <Typography color="text.secondary" py={4}>暂无数据</Typography>
                     </TableCell>
                   </TableRow>
@@ -543,7 +574,7 @@ const KolsPage: React.FC = () => {
                         </Box>
                       </TableCell>
                       <TableCell>
-                        <PlatformBadge platform={kol.platform} />
+                        <KolsPlatformBadge platform={kol.platform} />
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">{kol.platformUsername}</Typography>
@@ -556,8 +587,16 @@ const KolsPage: React.FC = () => {
                           {kol.engagementRate ? `${(kol.engagementRate * 100).toFixed(2)}%` : '-'}
                         </Typography>
                       </TableCell>
+                      <TableCell align="right">
+                        <Typography
+                          variant="body2"
+                          color={(kol.ordersFrozenTotal ?? 0) > 0 ? 'info.main' : 'text.secondary'}
+                        >
+                          {formatCny(kol.ordersFrozenTotal ?? 0)}
+                        </Typography>
+                      </TableCell>
                       <TableCell>
-                        <StatusBadge status={kol.status} />
+                        <KolsStatusBadge status={kol.status} />
                       </TableCell>
                       <TableCell>
                         {kol.verified ? (
@@ -614,13 +653,42 @@ const KolsPage: React.FC = () => {
                         <Typography variant="h6">{selectedKol.user?.nickname || '未设置'}</Typography>
                         <Typography variant="body2" color="text.secondary">{selectedKol.user?.email}</Typography>
                         <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                          <PlatformBadge platform={selectedKol.platform} />
-                          <StatusBadge status={selectedKol.status} />
+                          <KolsPlatformBadge platform={selectedKol.platform} />
+                          <KolsStatusBadge status={selectedKol.status} />
                         </Box>
                       </Box>
                     </Box>
 
                     <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+                      <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                        资金与订单冻结
+                      </Typography>
+                      <Stack spacing={1} sx={{ mb: 2 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography variant="body2" color="text.secondary">
+                            累计收益
+                          </Typography>
+                          <Typography variant="body2">
+                            {selectedKol.totalEarnings != null ? formatCny(selectedKol.totalEarnings) : '—'}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography variant="body2" color="text.secondary">
+                            可用余额
+                          </Typography>
+                          <Typography variant="body2">
+                            {selectedKol.availableBalance != null ? formatCny(selectedKol.availableBalance) : '—'}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography variant="body2" color="text.secondary">
+                            订单冻结合计
+                          </Typography>
+                          <Typography variant="body2" color="info.main" fontWeight={600}>
+                            {selectedKol.ordersFrozenTotal != null ? formatCny(selectedKol.ordersFrozenTotal) : '—'}
+                          </Typography>
+                        </Box>
+                      </Stack>
                       <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                         基本信息
                       </Typography>

@@ -1,7 +1,6 @@
 import React from 'react';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import AppRouter from './AppRouter';
-import { AuthLayout } from './components/layout';
 
 // Create custom theme
 const theme = createTheme({

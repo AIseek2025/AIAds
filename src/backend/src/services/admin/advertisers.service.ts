@@ -1,10 +1,11 @@
-import { Prisma, TransactionStatus, TransactionType } from '@prisma/client';
+import { PaymentMethod, Prisma, TransactionStatus, TransactionType, VerificationStatus } from '@prisma/client';
 import prisma from '../../config/database';
 import { logger } from '../../utils/logger';
 import { ApiError } from '../../middleware/errorHandler';
 import { logAdminAction } from './audit.service';
 import { PaginationResponse } from '../../types';
 import { decimalToNumber } from '../../utils/decimal';
+import { sumFrozenAmountForAdvertiser, sumFrozenAmountForAdvertisers } from '../order-frozen.util';
 
 // Types and interfaces
 export interface AdvertiserListFilters {
@@ -31,6 +32,8 @@ export interface AdvertiserListItem {
   verification_status: string;
   wallet_balance: number;
   frozen_balance: number;
+  /** 该广告主全部订单 frozen_amount 合计（列表批量聚合） */
+  orders_frozen_total: number;
   active_campaigns: number;
   created_at: string;
 }
@@ -57,6 +60,8 @@ export interface AdvertiserDetail {
   frozen_balance: number;
   total_recharged: number;
   total_spent: number;
+  /** 该广告主全部订单 frozen_amount 合计（区别于账户冻结 frozen_balance） */
+  orders_frozen_total: number;
   statistics: {
     total_campaigns: number;
     active_campaigns: number;
@@ -136,6 +141,37 @@ export interface ConsumptionFilters {
   createdBefore?: string;
 }
 
+export interface VerifyAdvertiserResponse {
+  id: string;
+  verification_status: string;
+  verified_at: string | undefined;
+  verified_by: string;
+}
+
+export interface BalanceAdjustmentResponse {
+  id: string;
+  advertiser_id: string;
+  amount: number;
+  type: BalanceAdjustmentRequest['type'];
+  before_balance: number;
+  after_balance: number;
+  admin_id: string;
+  created_at: string;
+}
+
+export interface FreezeAccountResponse {
+  id: string;
+  frozen_balance: number;
+  frozen_at: string;
+  frozen_reason: string;
+}
+
+export interface UnfreezeAccountResponse {
+  id: string;
+  frozen_balance: number;
+  unfrozen_at: string;
+}
+
 export class AdminAdvertiserService {
   /**
    * Get advertiser list with pagination and filters
@@ -162,7 +198,7 @@ export class AdminAdvertiserService {
     const take = pageSize;
 
     // Build where clause
-    const where: any = {};
+    const where: Prisma.AdvertiserWhereInput = {};
 
     if (keyword) {
       where.OR = [
@@ -173,7 +209,7 @@ export class AdminAdvertiserService {
     }
 
     if (verificationStatus) {
-      where.verificationStatus = verificationStatus;
+      where.verificationStatus = verificationStatus as VerificationStatus;
     }
 
     if (industry) {
@@ -181,24 +217,37 @@ export class AdminAdvertiserService {
     }
 
     if (minBalance !== undefined || maxBalance !== undefined) {
-      where.walletBalance = {};
+      const walletBalance: Prisma.DecimalFilter = {};
       if (minBalance !== undefined) {
-        where.walletBalance.gte = minBalance;
+        walletBalance.gte = new Prisma.Decimal(minBalance);
       }
       if (maxBalance !== undefined) {
-        where.walletBalance.lte = maxBalance;
+        walletBalance.lte = new Prisma.Decimal(maxBalance);
       }
+      where.walletBalance = walletBalance;
     }
 
     if (createdAfter || createdBefore) {
-      where.createdAt = {};
+      const createdAt: Prisma.DateTimeFilter = {};
       if (createdAfter) {
-        where.createdAt.gte = new Date(createdAfter);
+        createdAt.gte = new Date(createdAfter);
       }
       if (createdBefore) {
-        where.createdAt.lte = new Date(createdBefore);
+        createdAt.lte = new Date(createdBefore);
       }
+      where.createdAt = createdAt;
     }
+
+    const sortKey =
+      sort === 'created_at' || sort === undefined || sort === null
+        ? 'createdAt'
+        : sort === 'updated_at'
+          ? 'updatedAt'
+          : sort === 'wallet_balance'
+            ? 'walletBalance'
+            : sort === 'company_name'
+              ? 'companyName'
+              : 'createdAt';
 
     // Get total count
     const total = await prisma.advertiser.count({ where });
@@ -208,7 +257,7 @@ export class AdminAdvertiserService {
       where,
       skip,
       take,
-      orderBy: { [sort ?? 'createdAt']: order ?? 'desc' } as Record<string, 'asc' | 'desc'>,
+      orderBy: { [sortKey]: order ?? 'desc' } as Record<string, 'asc' | 'desc'>,
       select: {
         id: true,
         userId: true,
@@ -225,6 +274,8 @@ export class AdminAdvertiserService {
     });
 
     const totalPages = Math.ceil(total / pageSize);
+
+    const frozenByAdvertiser = await sumFrozenAmountForAdvertisers(items.map((a) => a.id));
 
     // Log admin action
     await logAdminAction({
@@ -254,6 +305,7 @@ export class AdminAdvertiserService {
         verification_status: item.verificationStatus,
         wallet_balance: decimalToNumber(item.walletBalance),
         frozen_balance: decimalToNumber(item.frozenBalance),
+        orders_frozen_total: frozenByAdvertiser.get(item.id) ?? 0,
         active_campaigns: item.activeCampaigns,
         created_at: item.createdAt.toISOString(),
       })),
@@ -319,6 +371,8 @@ export class AdminAdvertiserService {
       targetId: advertiserId,
     });
 
+    const orders_frozen_total = await sumFrozenAmountForAdvertiser(advertiserId);
+
     return {
       id: advertiser.id,
       user_id: advertiser.userId,
@@ -341,6 +395,7 @@ export class AdminAdvertiserService {
       frozen_balance: decimalToNumber(advertiser.frozenBalance),
       total_recharged: decimalToNumber(advertiser.totalRecharged),
       total_spent: decimalToNumber(advertiser.totalSpent),
+      orders_frozen_total,
       statistics: {
         total_campaigns: totalCampaigns,
         active_campaigns: activeCampaigns,
@@ -360,7 +415,7 @@ export class AdminAdvertiserService {
     request: VerifyAdvertiserRequest,
     adminId: string,
     adminEmail: string
-  ): Promise<any> {
+  ): Promise<VerifyAdvertiserResponse> {
     const { action, note, rejection_reason } = request;
 
     const advertiser = await prisma.advertiser.findUnique({
@@ -371,7 +426,7 @@ export class AdminAdvertiserService {
       throw new ApiError('广告主不存在', 404, 'NOT_FOUND');
     }
 
-    const updateData: any = {
+    const updateData: Prisma.AdvertiserUpdateInput = {
       verifiedAt: new Date(),
       verifiedBy: adminId,
     };
@@ -442,27 +497,28 @@ export class AdminAdvertiserService {
     }
 
     // Build where clause
-    const where: any = {
+    const where: Prisma.TransactionWhereInput = {
       advertiserId,
       type: TransactionType.recharge,
     };
 
     if (status) {
-      where.status = status;
+      where.status = status as TransactionStatus;
     }
 
     if (paymentMethod) {
-      where.paymentMethod = paymentMethod;
+      where.paymentMethod = paymentMethod as PaymentMethod;
     }
 
     if (createdAfter || createdBefore) {
-      where.createdAt = {};
+      const createdAt: Prisma.DateTimeFilter = {};
       if (createdAfter) {
-        where.createdAt.gte = new Date(createdAfter);
+        createdAt.gte = new Date(createdAfter);
       }
       if (createdBefore) {
-        where.createdAt.lte = new Date(createdBefore);
+        createdAt.lte = new Date(createdBefore);
       }
+      where.createdAt = createdAt;
     }
 
     // Get total count
@@ -555,7 +611,7 @@ export class AdminAdvertiserService {
     }
 
     // Build where clause
-    const where: any = {
+    const where: Prisma.TransactionWhereInput = {
       advertiserId,
       type: {
         in: [TransactionType.order_payment, TransactionType.platform_fee],
@@ -563,21 +619,22 @@ export class AdminAdvertiserService {
     };
 
     if (type) {
-      where.type = type;
+      where.type = type as TransactionType;
     }
 
     if (status) {
-      where.status = status;
+      where.status = status as TransactionStatus;
     }
 
     if (createdAfter || createdBefore) {
-      where.createdAt = {};
+      const createdAt: Prisma.DateTimeFilter = {};
       if (createdAfter) {
-        where.createdAt.gte = new Date(createdAfter);
+        createdAt.gte = new Date(createdAfter);
       }
       if (createdBefore) {
-        where.createdAt.lte = new Date(createdBefore);
+        createdAt.lte = new Date(createdBefore);
       }
+      where.createdAt = createdAt;
     }
 
     // Get total count
@@ -659,7 +716,7 @@ export class AdminAdvertiserService {
     request: BalanceAdjustmentRequest,
     adminId: string,
     adminEmail: string
-  ): Promise<any> {
+  ): Promise<BalanceAdjustmentResponse> {
     const { amount, type, reason } = request;
 
     const advertiser = await prisma.advertiser.findUnique({
@@ -746,7 +803,7 @@ export class AdminAdvertiserService {
     request: FreezeAccountRequest,
     adminId: string,
     adminEmail: string
-  ): Promise<any> {
+  ): Promise<FreezeAccountResponse> {
     const { reason, freeze_amount } = request;
 
     const advertiser = await prisma.advertiser.findUnique({
@@ -814,7 +871,7 @@ export class AdminAdvertiserService {
     request: UnfreezeAccountRequest,
     adminId: string,
     adminEmail: string
-  ): Promise<any> {
+  ): Promise<UnfreezeAccountResponse> {
     const { reason, unfreeze_amount } = request;
 
     const advertiser = await prisma.advertiser.findUnique({

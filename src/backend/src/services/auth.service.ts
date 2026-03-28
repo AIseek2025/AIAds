@@ -1,12 +1,38 @@
 import prisma from '../config/database';
 import { logger } from '../utils/logger';
-import { hashPassword, verifyPassword, generateTokens, verifyToken, generateVerificationCode, TokenPair } from '../utils/crypto';
+import {
+  hashPassword,
+  verifyPassword,
+  generateTokens,
+  verifyToken,
+  generateVerificationCode,
+  TokenPair,
+} from '../utils/crypto';
 import { ApiError } from '../middleware/errorHandler';
 import { RegisterRequest, LoginRequest, AuthResponse, UserResponse, TokenResponse } from '../types';
 import { cacheService } from '../config/redis';
 import { isAccountLocked, recordLoginFailure, resetLoginFailures } from './accountLock.service';
 import { rotateRefreshToken, storeRefreshToken, validateRefreshToken } from './tokenRotation.service';
 import { isMFARequired } from './mfa.service';
+import type { User, UserRole, UserStatus } from '@prisma/client';
+import { inviteCodeService } from './invite-code.service';
+
+/** formatUserResponse 输入：全量 User 或注册等场景的部分 select */
+type UserResponseSource = Pick<User, 'id' | 'email' | 'role' | 'status' | 'emailVerified' | 'createdAt' | 'updatedAt'> &
+  Partial<
+    Pick<
+      User,
+      | 'phone'
+      | 'nickname'
+      | 'avatarUrl'
+      | 'realName'
+      | 'phoneVerified'
+      | 'language'
+      | 'timezone'
+      | 'currency'
+      | 'lastLoginAt'
+    >
+  >;
 
 // Helper function to convert TokenPair to TokenResponse
 function toTokenResponse(tokens: TokenPair): TokenResponse {
@@ -31,30 +57,65 @@ export class AuthService {
       throw new ApiError('邮箱已被注册', 409, 'EMAIL_EXISTS');
     }
 
+    const role = (data.role || 'advertiser') as UserRole;
+    const inviteRef = await inviteCodeService.resolveForRegister(role, data.invite_code);
+
     // Hash password
     const passwordHash = await hashPassword(data.password);
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        email: data.email,
-        phone: data.phone,
-        passwordHash,
-        nickname: data.nickname,
-        role: data.role || 'advertiser',
-        status: 'pending',
-      },
-      select: {
-        id: true,
-        email: true,
-        phone: true,
-        nickname: true,
-        role: true,
-        status: true,
-        emailVerified: true,
-        createdAt: true,
-      },
-    });
+    const userSelect = {
+      id: true,
+      email: true,
+      phone: true,
+      nickname: true,
+      role: true,
+      status: true,
+      emailVerified: true,
+      createdAt: true,
+      updatedAt: true,
+    } as const;
+
+    let user: {
+      id: string;
+      email: string;
+      phone: string | null;
+      nickname: string | null;
+      role: UserRole;
+      status: UserStatus;
+      emailVerified: boolean;
+      createdAt: Date;
+      updatedAt: Date;
+    };
+
+    if (inviteRef) {
+      user = await prisma.$transaction(async (tx) => {
+        await inviteCodeService.assertRedeemSlot(tx, inviteRef.inviteId);
+        return tx.user.create({
+          data: {
+            email: data.email,
+            phone: data.phone,
+            passwordHash,
+            nickname: data.nickname,
+            role,
+            status: 'pending',
+            inviteCodeId: inviteRef.inviteId,
+          },
+          select: userSelect,
+        });
+      });
+    } else {
+      user = await prisma.user.create({
+        data: {
+          email: data.email,
+          phone: data.phone,
+          passwordHash,
+          nickname: data.nickname,
+          role,
+          status: 'pending',
+        },
+        select: userSelect,
+      });
+    }
 
     logger.info('User registered', { userId: user.id, email: user.email });
 
@@ -107,7 +168,7 @@ export class AuthService {
     if (!isValidPassword) {
       // M02: Record failed login attempt
       await recordLoginFailure(user.id);
-      
+
       // Also increment failed login attempts in database
       await prisma.user.update({
         where: { id: user.id },
@@ -164,13 +225,85 @@ export class AuthService {
   }
 
   /**
+   * 邮箱验证码登录（验证码 purpose 须为 login，与发送接口一致）
+   */
+  async loginWithEmailCode(
+    email: string,
+    code: string,
+    ipAddress?: string
+  ): Promise<AuthResponse & { requiresMFA?: boolean }> {
+    await this.verifyCode('email', email, code, 'login');
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      throw new ApiError('用户不存在', 404, 'USER_NOT_FOUND');
+    }
+
+    if (user.status === 'deleted') {
+      throw new ApiError('用户已被删除', 401, 'USER_DELETED');
+    }
+
+    if (user.status === 'suspended') {
+      throw new ApiError('用户已被暂停', 403, 'USER_SUSPENDED');
+    }
+
+    const locked = await isAccountLocked(user.id);
+    if (locked) {
+      logger.warn('Email-code login on locked account', { userId: user.id, email: user.email });
+      throw new ApiError('账户已锁定，请 15 分钟后再试', 403, 'ACCOUNT_LOCKED');
+    }
+
+    await resetLoginFailures(user.id);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        failedLoginAttempts: 0,
+        lastLoginAt: new Date(),
+        lastLoginIp: ipAddress,
+      },
+    });
+
+    const requiresMFA = await isMFARequired(user.id);
+    if (requiresMFA) {
+      logger.info('MFA required for email-code login', { userId: user.id });
+      return {
+        user: this.formatUserResponse(user),
+        tokens: { access_token: '', refresh_token: '', expires_in: 0 },
+        requiresMFA: true,
+      } as AuthResponse & { requiresMFA: boolean };
+    }
+
+    const tokens = generateTokens({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    await storeRefreshToken(tokens.refreshToken, user.id);
+
+    logger.info('User logged in via email code', { userId: user.id, email: user.email });
+
+    return {
+      user: this.formatUserResponse(user),
+      tokens: toTokenResponse(tokens),
+      requiresMFA: false,
+    } as AuthResponse & { requiresMFA: boolean };
+  }
+
+  /**
    * Refresh access token with token rotation (M03)
    */
-  async refreshToken(refreshToken: string): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
+  async refreshToken(
+    refreshToken: string
+  ): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
     try {
       // M03: Validate refresh token before JWT verification
       await validateRefreshToken(refreshToken);
-      
+
       // Verify JWT refresh token
       const payload = verifyToken(refreshToken, 'refresh');
 
@@ -202,7 +335,7 @@ export class AuthService {
 
       // M03: Rotate refresh token
       const newRefreshToken = await rotateRefreshToken(refreshToken, user.id);
-      
+
       logger.info('Token refreshed with rotation', { userId: user.id });
 
       return {
@@ -250,6 +383,18 @@ export class AuthService {
    * Send verification code
    */
   async sendVerificationCode(type: 'email' | 'phone', target: string, purpose: string): Promise<void> {
+    if (purpose === 'login') {
+      const user = await prisma.user.findUnique({
+        where: type === 'email' ? { email: target } : { phone: target },
+      });
+      if (!user) {
+        throw new ApiError('该邮箱未注册', 404, 'USER_NOT_FOUND');
+      }
+      if (user.status === 'deleted' || user.status === 'suspended') {
+        throw new ApiError('账户状态异常，无法登录', 403, 'USER_INVALID');
+      }
+    }
+
     // Generate verification code
     const code = generateVerificationCode();
     const codeHash = Buffer.from(code).toString('base64');
@@ -336,14 +481,14 @@ export class AuthService {
   /**
    * Format user response
    */
-  private formatUserResponse(user: any): UserResponse {
+  private formatUserResponse(user: UserResponseSource): UserResponse {
     return {
       id: user.id,
       email: user.email,
-      phone: user.phone,
-      nickname: user.nickname,
-      avatar_url: user.avatarUrl,
-      real_name: user.realName,
+      phone: user.phone ?? undefined,
+      nickname: user.nickname ?? undefined,
+      avatar_url: user.avatarUrl ?? undefined,
+      real_name: user.realName ?? undefined,
       role: user.role,
       status: user.status,
       email_verified: user.emailVerified,

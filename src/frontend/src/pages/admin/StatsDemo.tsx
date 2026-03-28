@@ -1,5 +1,6 @@
 import React from 'react';
 import { mockDashboardStats } from '../../data/mockData';
+import type { DashboardStats } from '../../types';
 
 // MUI Components
 import Box from '@mui/material/Box';
@@ -18,40 +19,41 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 
 const StatsDemoPage: React.FC = () => {
+  const s: DashboardStats = mockDashboardStats;
   const stats = [
     {
       title: '总用户数',
-      value: (mockDashboardStats as any).totalUsers?.toLocaleString() || '0',
+      value: s.totalUsers?.toLocaleString() ?? '0',
       icon: <PeopleIcon />,
       color: '#1976d2',
     },
     {
       title: '广告主数量',
-      value: (mockDashboardStats as any).totalAdvertisers?.toLocaleString() || '0',
+      value: s.totalAdvertisers?.toLocaleString() ?? '0',
       icon: <BusinessIcon />,
       color: '#2e7d32',
     },
     {
       title: 'KOL 数量',
-      value: (mockDashboardStats as any).totalKols?.toLocaleString() || '0',
+      value: s.totalKols?.toLocaleString() ?? '0',
       icon: <StarIcon />,
       color: '#ed6c02',
     },
     {
       title: '活动总数',
-      value: (mockDashboardStats as any).totalCampaigns?.toLocaleString() || '0',
+      value: s.totalCampaigns?.toLocaleString() ?? '0',
       icon: <CampaignIcon />,
       color: '#9c27b0',
     },
     {
       title: '总 GMV',
-      value: `¥${((mockDashboardStats as any).totalGmv || 0) / 10000}万`,
+      value: `¥${(s.totalGmv ?? 0) / 10000}万`,
       icon: <TrendingUpIcon />,
       color: '#d32f2f',
     },
     {
       title: '平台收入',
-      value: `¥${((mockDashboardStats as any).totalRevenue || 0) / 10000}万`,
+      value: `¥${(s.totalRevenue ?? 0) / 10000}万`,
       icon: <AttachMoneyIcon />,
       color: '#00796b',
     },

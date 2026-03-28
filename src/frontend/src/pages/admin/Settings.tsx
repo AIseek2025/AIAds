@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { adminSettingsAPI, adminDashboardAPI } from '../../services/adminApi';
-import type { SystemSettings, AdminRoleDefinition, AuditLog } from '../../types';
+import { adminSettingsAPI } from '../../services/adminApi';
+import { getApiErrorMessage } from '../../utils/apiError';
+import type { SystemSettings, AdminRoleDefinition } from '../../types';
+import { AdminHubNav } from '../../components/admin/AdminHubNav';
 
 // MUI Components
 import Box from '@mui/material/Box';
@@ -21,10 +23,6 @@ import InputAdornment from '@mui/material/InputAdornment';
 import IconButton from '@mui/material/IconButton';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Select, { SelectChangeEvent } from '@mui/material/Select';
-import MenuItem from '@mui/material/MenuItem';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -46,8 +44,6 @@ import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
-import OutlinedInput from '@mui/material/OutlinedInput';
-import Checkbox from '@mui/material/Checkbox';
 
 // Icons
 import SearchIcon from '@mui/icons-material/Search';
@@ -55,8 +51,6 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import SaveIcon from '@mui/icons-material/Save';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SecurityIcon from '@mui/icons-material/Security';
 import PeopleIcon from '@mui/icons-material/People';
@@ -104,7 +98,8 @@ const SettingsPage: React.FC = () => {
   });
   const [selectedRole, setSelectedRole] = useState<AdminRoleDefinition | null>(null);
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
-  const [selectedLogs, setSelectedLogs] = useState<string[]>([]);
+  const [newRoleName, setNewRoleName] = useState('');
+  const [newRoleDescription, setNewRoleDescription] = useState('');
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
     open: false,
     message: '',
@@ -112,25 +107,44 @@ const SettingsPage: React.FC = () => {
   });
 
   // Fetch settings
-  const { data: settingsData, isLoading: settingsLoading } = useQuery({
+  const { data: settingsData, isLoading: settingsLoading, refetch: refetchSettings } = useQuery({
     queryKey: ['adminSettings'],
     queryFn: () => adminSettingsAPI.getSettings(),
   });
 
+  useEffect(() => {
+    if (!settingsData) return;
+    // 将服务端配置合并到本地可编辑表单（加载完成后一次性同步）
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- controlled form needs snapshot from query
+    setSettings((prev) => ({
+      ...prev,
+      siteName: settingsData.siteName ?? settingsData.platform?.name ?? prev.siteName,
+      siteUrl: settingsData.siteUrl ?? prev.siteUrl,
+      logoUrl: settingsData.logoUrl ?? settingsData.platform?.logoUrl ?? prev.logoUrl,
+      faviconUrl: settingsData.faviconUrl ?? prev.faviconUrl,
+      emailFrom: settingsData.emailFrom ?? settingsData.platform?.supportEmail ?? prev.emailFrom,
+      enableRegistration: settingsData.enableRegistration ?? prev.enableRegistration,
+      enableEmailVerification: settingsData.enableEmailVerification ?? prev.enableEmailVerification,
+      enableMaintenanceMode:
+        settingsData.enableMaintenanceMode ?? settingsData.platform?.maintenanceMode ?? prev.enableMaintenanceMode,
+      maintenanceMessage: settingsData.maintenanceMessage ?? prev.maintenanceMessage,
+    }));
+  }, [settingsData]);
+
   // Fetch roles
-  const { data: roles } = useQuery({
+  const { data: roles, refetch: refetchRoles } = useQuery({
     queryKey: ['adminRoles'],
     queryFn: () => adminSettingsAPI.getRoles(),
   });
 
   // Fetch audit logs
-  const { data: auditLogs, isLoading: logsLoading } = useQuery({
+  const { data: auditLogs, isLoading: logsLoading, refetch: refetchAuditLogs } = useQuery({
     queryKey: ['adminAuditLogs', page, pageSize],
     queryFn: () => adminSettingsAPI.getAuditLogs({ page: page + 1, page_size: pageSize }),
   });
 
   // Fetch admins
-  const { data: admins } = useQuery({
+  const { data: admins, refetch: refetchAdmins } = useQuery({
     queryKey: ['adminAdmins'],
     queryFn: () => adminSettingsAPI.getAdmins(),
   });
@@ -142,8 +156,12 @@ const SettingsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['adminSettings'] });
       setSnackbar({ open: true, message: '设置已保存', severity: 'success' });
     },
-    onError: (err: any) => {
-      setSnackbar({ open: true, message: err.response?.data?.error?.message || '保存失败', severity: 'error' });
+    onError: (err: unknown) => {
+      setSnackbar({
+        open: true,
+        message: getApiErrorMessage(err, '保存失败'),
+        severity: 'error',
+      });
     },
   });
 
@@ -155,9 +173,15 @@ const SettingsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['adminRoles'] });
       setSnackbar({ open: true, message: '角色创建成功', severity: 'success' });
       setRoleDialogOpen(false);
+      setNewRoleName('');
+      setNewRoleDescription('');
     },
-    onError: (err: any) => {
-      setSnackbar({ open: true, message: err.response?.data?.error?.message || '创建失败', severity: 'error' });
+    onError: (err: unknown) => {
+      setSnackbar({
+        open: true,
+        message: getApiErrorMessage(err, '创建失败'),
+        severity: 'error',
+      });
     },
   });
 
@@ -166,8 +190,18 @@ const SettingsPage: React.FC = () => {
     setTabValue(newValue);
   };
 
-  const handleSettingsChange = (key: keyof SystemSettings, value: any) => {
+  const handleSettingsChange = <K extends keyof SystemSettings>(key: K, value: SystemSettings[K]) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleCreateRole = () => {
+    const name = newRoleName.trim();
+    if (!name) return;
+    createRoleMutation.mutate({
+      name,
+      description: newRoleDescription.trim(),
+      permissions: [],
+    });
   };
 
   const handleSaveSettings = () => {
@@ -192,9 +226,36 @@ const SettingsPage: React.FC = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
+  const handleHubRefresh = () => {
+    void refetchSettings();
+    void refetchRoles();
+    void refetchAuditLogs();
+    void refetchAdmins();
+  };
+
+  const exportAuditLogsMutation = useMutation({
+    mutationFn: () => adminSettingsAPI.exportAuditLogsReport({ format: 'csv' }),
+    onSuccess: (blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const d = new Date().toISOString().slice(0, 10);
+      a.download = `audit_logs_${d}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setSnackbar({ open: true, message: '审计日志已开始下载', severity: 'success' });
+    },
+    onError: (err: unknown) => {
+      setSnackbar({
+        open: true,
+        message: getApiErrorMessage(err, '导出失败（需超级管理员权限）'),
+        severity: 'error',
+      });
+    },
+  });
+
   const handleExportLogs = () => {
-    // Implement export functionality
-    console.log('Exporting logs...');
+    exportAuditLogsMutation.mutate();
   };
 
   // Permission categories
@@ -232,6 +293,10 @@ const SettingsPage: React.FC = () => {
           管理系统配置、管理员、角色权限和操作日志
         </Typography>
       </Box>
+      <AdminHubNav onRefresh={handleHubRefresh} />
+      <Alert severity="info" sx={{ mb: 3, mt: 2 }}>
+        刷新将重新拉取系统配置、角色列表、管理员列表与当前页操作日志；未保存的表单修改仍以本地编辑为准。
+      </Alert>
 
       {/* Tabs */}
       <Paper sx={{ mb: 3 }}>
@@ -250,6 +315,11 @@ const SettingsPage: React.FC = () => {
             <Card>
               <CardHeader title="基本设置" />
               <CardContent>
+                {settingsLoading ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                    <CircularProgress />
+                  </Box>
+                ) : (
                 <Stack spacing={3}>
                   <TextField
                     fullWidth
@@ -282,6 +352,7 @@ const SettingsPage: React.FC = () => {
                     placeholder="https://..."
                   />
                 </Stack>
+                )}
               </CardContent>
             </Card>
           </Grid>
@@ -554,6 +625,8 @@ const SettingsPage: React.FC = () => {
                   label="角色名称"
                   size="small"
                   placeholder="例如：运营专员"
+                  value={newRoleName}
+                  onChange={(e) => setNewRoleName(e.target.value)}
                 />
                 <TextField
                   fullWidth
@@ -562,13 +635,21 @@ const SettingsPage: React.FC = () => {
                   multiline
                   rows={2}
                   placeholder="描述该角色的职责和权限范围"
+                  value={newRoleDescription}
+                  onChange={(e) => setNewRoleDescription(e.target.value)}
                 />
               </Stack>
             </Box>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setRoleDialogOpen(false)}>取消</Button>
-            <Button variant="contained">创建</Button>
+            <Button
+              variant="contained"
+              onClick={handleCreateRole}
+              disabled={createRoleMutation.isPending || !newRoleName.trim()}
+            >
+              创建
+            </Button>
           </DialogActions>
         </Dialog>
       </TabPanel>
@@ -598,8 +679,9 @@ const SettingsPage: React.FC = () => {
                   variant="outlined"
                   startIcon={<DownloadIcon />}
                   onClick={handleExportLogs}
+                  disabled={exportAuditLogsMutation.isPending}
                 >
-                  导出日志
+                  {exportAuditLogsMutation.isPending ? '导出中…' : '导出日志'}
                 </Button>
               </Stack>
             }

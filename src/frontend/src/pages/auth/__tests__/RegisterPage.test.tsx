@@ -1,8 +1,9 @@
-/// <reference types="vitest" />
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { RegisterPage } from '../RegisterPage';
+import { APP_PATHS } from '../../../constants/appPaths';
 import { authAPI } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
 
@@ -35,10 +36,14 @@ describe('RegisterPage', () => {
 
   it('应该渲染注册表单', () => {
     renderWithRouter(<RegisterPage />);
-    
+
     expect(screen.getByText(/选择您的角色/i)).toBeInTheDocument();
-    expect(screen.getByText(/广告主/i)).toBeInTheDocument();
-    expect(screen.getByText(/KOL/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('radio', { name: /我想投放 KOL 广告/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('radio', { name: /我想接广告赚钱/i })
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /下一步/i })).toBeInTheDocument();
   });
 
@@ -50,7 +55,7 @@ describe('RegisterPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /下一步/i }));
     
     // Enter weak password
-    fireEvent.change(screen.getByLabelText(/密码/i), {
+    fireEvent.change(screen.getByPlaceholderText(/请设置 8 位以上密码/), {
       target: { value: '123' },
     });
     
@@ -83,7 +88,7 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByLabelText(/邮箱/i), {
       target: { value: 'test@example.com' },
     });
-    fireEvent.change(screen.getByLabelText(/密码/i), {
+    fireEvent.change(screen.getByPlaceholderText(/请设置 8 位以上密码/), {
       target: { value: 'SecurePass123!' },
     });
     
@@ -111,14 +116,15 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByLabelText(/邮箱/i), {
       target: { value: 'test@example.com' },
     });
-    fireEvent.change(screen.getByLabelText(/密码/i), {
+    fireEvent.change(screen.getByPlaceholderText(/请设置 8 位以上密码/), {
       target: { value: 'SecurePass123!' },
     });
     fireEvent.click(screen.getByLabelText(/我已阅读并同意/i));
     fireEvent.click(screen.getByRole('button', { name: /下一步/i }));
-    
-    // Step 3: Enter verification code
-    fireEvent.change(screen.getByLabelText(/验证码/i), {
+
+    // Step 3: Enter verification code (after sendVerificationCode + setActiveStep)
+    const codeField = await screen.findByPlaceholderText(/请输入 6 位验证码/);
+    fireEvent.change(codeField, {
       target: { value: '123456' },
     });
     fireEvent.click(screen.getByRole('button', { name: /完成注册/i }));
@@ -129,6 +135,7 @@ describe('RegisterPage', () => {
         password: 'SecurePass123!',
         phone: '',
         role: 'advertiser',
+        inviteCode: '',
         verificationCode: '123456',
         agreeTerms: true,
       });
@@ -148,12 +155,14 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByLabelText(/邮箱/i), {
       target: { value: 'test@example.com' },
     });
-    fireEvent.change(screen.getByLabelText(/密码/i), {
+    fireEvent.change(screen.getByPlaceholderText(/请设置 8 位以上密码/), {
       target: { value: 'SecurePass123!' },
     });
     fireEvent.click(screen.getByLabelText(/我已阅读并同意/i));
     fireEvent.click(screen.getByRole('button', { name: /下一步/i }));
-    
+
+    await screen.findByPlaceholderText(/请输入 6 位验证码/);
+
     fireEvent.click(screen.getByRole('button', { name: /重新发送/i }));
     
     expect(await screen.findByText(/验证码已发送/i)).toBeInTheDocument();
@@ -172,14 +181,15 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByLabelText(/邮箱/i), {
       target: { value: 'test@example.com' },
     });
-    fireEvent.change(screen.getByLabelText(/密码/i), {
+    fireEvent.change(screen.getByPlaceholderText(/请设置 8 位以上密码/), {
       target: { value: 'SecurePass123!' },
     });
     fireEvent.click(screen.getByLabelText(/我已阅读并同意/i));
     fireEvent.click(screen.getByRole('button', { name: /下一步/i }));
-    
+
+    const otpInput = await screen.findByPlaceholderText(/请输入 6 位验证码/);
     // Enter wrong length verification code
-    fireEvent.change(screen.getByLabelText(/验证码/i), {
+    fireEvent.change(otpInput, {
       target: { value: '123' },
     });
     fireEvent.click(screen.getByRole('button', { name: /完成注册/i }));
@@ -205,10 +215,10 @@ describe('RegisterPage', () => {
     fireEvent.click(screen.getByLabelText(/广告主/i));
     fireEvent.click(screen.getByRole('button', { name: /下一步/i }));
     
-    const passwordInput = screen.getByLabelText(/密码/i);
+    const passwordInput = screen.getByPlaceholderText(/请设置 8 位以上密码/);
     expect(passwordInput).toHaveAttribute('type', 'password');
     
-    const visibilityButton = screen.getByRole('button', { name: /visibility/i });
+    const visibilityButton = screen.getByRole('button', { name: /显示密码/i });
     fireEvent.click(visibilityButton);
     
     expect(passwordInput).toHaveAttribute('type', 'text');
@@ -221,11 +231,12 @@ describe('RegisterPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /下一步/i }));
     
     // Enter strong password
-    fireEvent.change(screen.getByLabelText(/密码/i), {
+    fireEvent.change(screen.getByPlaceholderText(/请设置 8 位以上密码/), {
       target: { value: 'SecurePass123!' },
     });
-    
-    expect(await screen.findByText(/强/i)).toBeInTheDocument();
+
+    expect(await screen.findByText(/密码强度/i)).toBeInTheDocument();
+    expect(await screen.findByText(/^强$/)).toBeInTheDocument();
   });
 
   it('应该显示注册步骤', () => {
@@ -238,20 +249,23 @@ describe('RegisterPage', () => {
 
   it('应该显示错误当注册失败', async () => {
     (authAPI.register as vi.Mock).mockRejectedValue(new Error('邮箱已被注册'));
-    
+    (authAPI.sendVerificationCode as vi.Mock).mockResolvedValue({});
+
     renderWithRouter(<RegisterPage />);
-    
+
     fireEvent.click(screen.getByLabelText(/广告主/i));
     fireEvent.click(screen.getByRole('button', { name: /下一步/i }));
     fireEvent.change(screen.getByLabelText(/邮箱/i), {
       target: { value: 'test@example.com' },
     });
-    fireEvent.change(screen.getByLabelText(/密码/i), {
+    fireEvent.change(screen.getByPlaceholderText(/请设置 8 位以上密码/), {
       target: { value: 'SecurePass123!' },
     });
     fireEvent.click(screen.getByLabelText(/我已阅读并同意/i));
     fireEvent.click(screen.getByRole('button', { name: /下一步/i }));
-    fireEvent.change(screen.getByLabelText(/验证码/i), {
+
+    const codeInput = await screen.findByPlaceholderText(/请输入 6 位验证码/);
+    fireEvent.change(codeInput, {
       target: { value: '123456' },
     });
     fireEvent.click(screen.getByRole('button', { name: /完成注册/i }));
@@ -262,7 +276,9 @@ describe('RegisterPage', () => {
   it('应该跳转到登录页面', () => {
     renderWithRouter(<RegisterPage />);
     
-    const loginLink = screen.getByText(/立即登录/i);
-    expect(loginLink).toHaveAttribute('href', '/login');
+    expect(screen.getByRole('link', { name: /立即登录/i })).toHaveAttribute(
+      'href',
+      APP_PATHS.login
+    );
   });
 });

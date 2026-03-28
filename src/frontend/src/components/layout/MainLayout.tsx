@@ -2,12 +2,13 @@ import React from 'react';
 import Box from '@mui/material/Box';
 import CssBaseline from '@mui/material/CssBaseline';
 import { styled } from '@mui/material/styles';
+import { Outlet } from 'react-router-dom';
 import Header from './Header';
 import Sidebar, { PersistentSidebar } from './Sidebar';
 import Footer from './Footer';
+import { KolProfileGate } from '../kol/KolProfileGate';
 
 interface MainLayoutProps {
-  children: React.ReactNode;
   role?: 'advertiser' | 'kol' | 'admin';
 }
 
@@ -17,7 +18,7 @@ const MainContainer = styled(Box)({
   flexDirection: 'column',
 });
 
-const ContentWrapper = styled(Box)(({ theme }) => ({
+const ContentWrapper = styled(Box)(() => ({
   display: 'flex',
   flex: 1,
   marginTop: 64, // Header height
@@ -30,7 +31,7 @@ const MainContent = styled(Box)(({ theme }) => ({
   minHeight: 'calc(100vh - 64px)',
 }));
 
-export const MainLayout: React.FC<MainLayoutProps> = ({ children, role }) => {
+export const MainLayout: React.FC<MainLayoutProps> = ({ role }) => {
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
   const handleDrawerToggle = () => {
@@ -40,12 +41,18 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children, role }) => {
   return (
     <MainContainer>
       <CssBaseline />
-      <Header onMenuClick={handleDrawerToggle} />
+      <Header onMenuClick={handleDrawerToggle} appRole={role === 'admin' ? undefined : role} />
       <ContentWrapper>
         <Sidebar open={mobileOpen} onClose={handleDrawerToggle} role={role} />
         <PersistentSidebar role={role} />
         <MainContent>
-          {children}
+          {role === 'kol' ? (
+            <KolProfileGate>
+              <Outlet />
+            </KolProfileGate>
+          ) : (
+            <Outlet />
+          )}
         </MainContent>
       </ContentWrapper>
       <Footer />

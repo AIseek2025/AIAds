@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
+import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -25,6 +25,7 @@ import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import Divider from '@mui/material/Divider';
 import Tooltip from '@mui/material/Tooltip';
+import Link from '@mui/material/Link';
 import Skeleton from '@mui/material/Skeleton';
 import { styled } from '@mui/material/styles';
 
@@ -36,18 +37,56 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import PeopleIcon from '@mui/icons-material/People';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ScheduleIcon from '@mui/icons-material/Schedule';
-import RefreshIcon from '@mui/icons-material/Refresh';
-
 // Types
-import type { Campaign, Kol } from '../../types';
+import type { Campaign } from '../../types';
 
 // Services
-import { campaignAPI, kolAPI } from '../../services/advertiserApi';
+import { AdvertiserHubNav } from '../../components/advertiser/AdvertiserHubNav';
+import {
+  ADVERTISER_ROUTE_SEG,
+  pathAdvertiser,
+  pathAdvertiserCampaignEdit,
+  pathAdvertiserOrder,
+} from '../../constants/appPaths';
+import {
+  advertiserAPI,
+  advertiserBalanceQueryKey,
+  campaignAPI,
+  orderAPI,
+} from '../../services/advertiserApi';
+import { AdvertiserLowBalanceAlert } from '../../components/advertiser/AdvertiserLowBalanceAlert';
+import { getApiErrorMessage } from '../../utils/apiError';
+import { advertiserOrderFrozenCny, advertiserOrderGrossSpendCny } from '../../utils/advertiserOrderGross';
+import { usePublicUiConfig, isBudgetAtOrAboveRisk } from '../../hooks/usePublicUiConfig';
+
+/** GET /orders 行（snake_case，含可选 kol / cpm_breakdown） */
+interface AdvertiserOrderRow {
+  id: string;
+  order_no?: string;
+  pricing_model?: string;
+  price?: number;
+  status?: string;
+  views?: number;
+  content_count?: number;
+  content_type?: string;
+  created_at?: string;
+  kol?: {
+    platform_username: string;
+    platform_display_name: string | null;
+    platform_avatar_url: string | null;
+    platform: string;
+  };
+  cpm_breakdown?: {
+    gross_spend: number;
+    billable_impressions?: number;
+    raw_views?: number;
+  };
+  frozen_amount?: number;
+}
 
 // Styled Components
-const StatCard = styled(Card)(({ theme }) => ({
+const StatCard = styled(Card)(() => ({
   height: '100%',
   transition: 'transform 0.2s',
   '&:hover': {
@@ -95,69 +134,13 @@ function a11yProps(index: number) {
   };
 }
 
-// Mock data for orders and KOLs (will be replaced with real API calls)
-const mockOrders = [
-  {
-    id: '1',
-    kolName: '美妆达人小李',
-    kolAvatar: '',
-    platform: 'tiktok',
-    status: 'completed',
-    amount: 500,
-    deliverables: '2 视频 + 3 故事',
-    createdAt: '2026-03-20',
-  },
-  {
-    id: '2',
-    kolName: '科技评测王',
-    kolAvatar: '',
-    platform: 'youtube',
-    status: 'in_progress',
-    amount: 800,
-    deliverables: '1 视频 + 1 故事',
-    createdAt: '2026-03-21',
-  },
-  {
-    id: '3',
-    kolName: '时尚博主 Anna',
-    kolAvatar: '',
-    platform: 'instagram',
-    status: 'pending',
-    amount: 600,
-    deliverables: '3 帖子',
-    createdAt: '2026-03-22',
-  },
-];
+function canEditCampaignByStatus(status: Campaign['status']): boolean {
+  return status !== 'completed' && status !== 'cancelled';
+}
 
-const mockKols: Partial<Kol>[] = [
-  {
-    id: '1',
-    platformUsername: '@beautyguru',
-    platformDisplayName: 'Beauty Guru',
-    platformAvatarUrl: '',
-    followers: 15000,
-    engagementRate: 0.045,
-    basePrice: 300,
-  },
-  {
-    id: '2',
-    platformUsername: '@techreview',
-    platformDisplayName: 'Tech Review',
-    platformAvatarUrl: '',
-    followers: 25000,
-    engagementRate: 0.038,
-    basePrice: 500,
-  },
-  {
-    id: '3',
-    platformUsername: '@fashionista',
-    platformDisplayName: 'Fashionista',
-    platformAvatarUrl: '',
-    followers: 18000,
-    engagementRate: 0.052,
-    basePrice: 400,
-  },
-];
+function canDeleteCampaignByStatus(status: Campaign['status']): boolean {
+  return status === 'draft' || status === 'cancelled';
+}
 
 export const CampaignDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -179,12 +162,57 @@ export const CampaignDetailPage: React.FC = () => {
   });
 
   // Fetch campaign stats
-  const { data: stats } = useQuery({
+  const { data: stats, refetch: refetchStats } = useQuery({
     queryKey: ['campaignStats', id],
     queryFn: () => campaignAPI.getCampaignStats(id!),
     enabled: !!id,
     retry: 1,
   });
+
+  const { data: ordersData, isLoading: ordersLoading, refetch: refetchOrders } = useQuery({
+    queryKey: ['campaignOrders', id],
+    queryFn: () => orderAPI.getOrders({ campaign_id: id!, page_size: 100 }),
+    enabled: !!id,
+    retry: 1,
+  });
+  const orders = useMemo(
+    () => (ordersData?.items ?? []) as unknown as AdvertiserOrderRow[],
+    [ordersData]
+  );
+
+  const { data: publicUi } = usePublicUiConfig();
+  const budgetRiskTh = publicUi?.budget_risk_threshold ?? 0.85;
+
+  const balanceQ = useQuery({
+    queryKey: [...advertiserBalanceQueryKey],
+    queryFn: advertiserAPI.getBalance,
+    retry: 1,
+  });
+  const campaignBudgetAtRisk = useMemo(() => {
+    if (!campaign) return false;
+    if (campaign.status !== 'active') return false;
+    return isBudgetAtOrAboveRisk(
+      campaign.budget,
+      campaign.spentAmount ?? 0,
+      budgetRiskTh
+    );
+  }, [campaign, budgetRiskTh]);
+
+  /** 订单列表中按 KOL 去重，用于「合作 KOL」页签 */
+  const uniqueKolsFromOrders = useMemo(() => {
+    const seen = new Set<string>();
+    const out: AdvertiserOrderRow[] = [];
+    for (const o of orders) {
+      const k = o.kol;
+      const key = k
+        ? `${k.platform}:${k.platform_username ?? ''}`
+        : o.id;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(o);
+    }
+    return out;
+  }, [orders]);
 
   // Create mutation
   const deleteMutation = useMutation({
@@ -195,13 +223,32 @@ export const CampaignDetailPage: React.FC = () => {
         severity: 'success',
         message: '活动删除成功',
       });
-      setTimeout(() => navigate('/advertiser/campaigns'), 1000);
+      setTimeout(() => navigate(pathAdvertiser(ADVERTISER_ROUTE_SEG.campaigns)), 1000);
     },
-    onError: () => {
+    onError: (err: unknown) => {
       setSnackbar({
         open: true,
         severity: 'error',
-        message: '删除失败，请稍后重试',
+        message: getApiErrorMessage(err, '删除失败，请稍后重试'),
+      });
+    },
+  });
+
+  const submitMutation = useMutation({
+    mutationFn: campaignAPI.submitCampaign,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['campaign', id] });
+      setSnackbar({
+        open: true,
+        severity: 'success',
+        message: '已提交审核',
+      });
+    },
+    onError: (err: unknown) => {
+      setSnackbar({
+        open: true,
+        severity: 'error',
+        message: getApiErrorMessage(err, '提交失败，请稍后重试'),
       });
     },
   });
@@ -232,25 +279,29 @@ export const CampaignDetailPage: React.FC = () => {
 
   // Get status label
   const getStatusLabel = (status: Campaign['status']) => {
-    const labels = {
+    const labels: Record<string, string> = {
       draft: '草稿',
+      pending_review: '待审核',
       active: '进行中',
       paused: '已暂停',
       completed: '已完成',
       cancelled: '已取消',
+      rejected: '已驳回',
     };
     return labels[status] || status;
   };
 
   // Get status color
   const getStatusColor = (status: Campaign['status']) => {
-    const colors = {
+    const colors: Record<string, 'default' | 'success' | 'warning' | 'info' | 'error'> = {
       draft: 'default',
+      pending_review: 'warning',
       active: 'success',
       paused: 'warning',
       completed: 'info',
       cancelled: 'error',
-    } as const;
+      rejected: 'error',
+    };
     return colors[status] || 'default';
   };
 
@@ -274,6 +325,10 @@ export const CampaignDetailPage: React.FC = () => {
       approved: '已批准',
       published: '已发布',
       completed: '已完成',
+      rejected: '已拒绝',
+      cancelled: '已取消',
+      disputed: '纠纷中',
+      revision: '待修改',
     };
     return labels[status] || status;
   };
@@ -288,8 +343,19 @@ export const CampaignDetailPage: React.FC = () => {
       approved: 'success',
       published: 'success',
       completed: 'success',
+      rejected: 'error',
+      cancelled: 'default',
+      disputed: 'warning',
+      revision: 'info',
     };
     return colors[status] || 'default';
+  };
+
+  const handleHubRefresh = () => {
+    void refetch();
+    void refetchStats();
+    void refetchOrders();
+    void balanceQ.refetch();
   };
 
   if (isLoading) {
@@ -306,9 +372,11 @@ export const CampaignDetailPage: React.FC = () => {
     return (
       <Box sx={{ p: 4 }}>
         <Alert severity="error" sx={{ mb: 2 }}>
-          加载活动详情失败，请稍后重试
+          {error
+            ? getApiErrorMessage(error, '加载活动详情失败，请稍后重试')
+            : '未找到该活动或无权查看'}
         </Alert>
-        <Button variant="contained" onClick={() => navigate('/advertiser/campaigns')}>
+        <Button variant="contained" onClick={() => navigate(pathAdvertiser(ADVERTISER_ROUTE_SEG.campaigns))}>
           返回列表
         </Button>
       </Box>
@@ -327,7 +395,7 @@ export const CampaignDetailPage: React.FC = () => {
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <IconButton onClick={() => navigate('/advertiser/campaigns')}>
+          <IconButton onClick={() => navigate(pathAdvertiser(ADVERTISER_ROUTE_SEG.campaigns))}>
             <ArrowBackIcon />
           </IconButton>
           <Box>
@@ -343,32 +411,82 @@ export const CampaignDetailPage: React.FC = () => {
             </Typography>
           </Box>
         </Box>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <IconButton onClick={() => refetch()} color="primary">
-            <RefreshIcon />
-          </IconButton>
-          <Button
-            variant="outlined"
-            startIcon={<EditIcon />}
-            onClick={() => navigate(`/advertiser/campaigns/edit/${campaign.id}`)}
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {campaign.status === 'draft' && (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<ScheduleIcon />}
+              onClick={() => submitMutation.mutate(campaign.id)}
+              disabled={submitMutation.isPending}
+            >
+              {submitMutation.isPending ? '提交中…' : '提交审核'}
+            </Button>
+          )}
+          <Tooltip
+            title={
+              canEditCampaignByStatus(campaign.status)
+                ? '编辑活动'
+                : '已完成或已取消的活动不可编辑'
+            }
           >
-            编辑
-          </Button>
-          <Button
-            variant="outlined"
-            color="error"
-            startIcon={<DeleteIcon />}
-            onClick={() => {
-              if (window.confirm('确定要删除这个活动吗？')) {
-                deleteMutation.mutate(campaign.id);
-              }
-            }}
-            disabled={deleteMutation.isPending}
+            <span>
+              <Button
+                variant="outlined"
+                startIcon={<EditIcon />}
+                onClick={() =>
+                  navigate(pathAdvertiserCampaignEdit(campaign.id))
+                }
+                disabled={!canEditCampaignByStatus(campaign.status)}
+              >
+                编辑
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip
+            title={
+              canDeleteCampaignByStatus(campaign.status)
+                ? '删除活动'
+                : '仅草稿或已取消的活动可删除'
+            }
           >
-            删除
-          </Button>
+            <span>
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<DeleteIcon />}
+                onClick={() => {
+                  if (window.confirm('确定要删除这个活动吗？')) {
+                    deleteMutation.mutate(campaign.id);
+                  }
+                }}
+                disabled={
+                  deleteMutation.isPending ||
+                  !canDeleteCampaignByStatus(campaign.status)
+                }
+              >
+                删除
+              </Button>
+            </span>
+          </Tooltip>
         </Box>
       </Box>
+
+      <AdvertiserHubNav preset="campaign-detail" onRefresh={handleHubRefresh} />
+      <AdvertiserLowBalanceAlert
+        balance={balanceQ.data ?? null}
+        publicUi={publicUi}
+        context="campaign-detail"
+        sx={{ mb: 3 }}
+      />
+      <Alert severity="info" sx={{ mb: 3 }}>
+        本页合作订单与 CPM 展示口径与订单中心一致；预算消耗与冻结以账户流水及订单状态为准。刷新将同步活动主数据、统计卡片与本页订单列表。
+      </Alert>
+      {campaignBudgetAtRisk ? (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          当前活动已消耗 ≥{Math.round(budgetRiskTh * 100)}% 预算（与平台预算风险预警阈值一致），请关注投放节奏或调整预算。
+        </Alert>
+      ) : null}
 
       {/* Stats Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -388,6 +506,14 @@ export const CampaignDetailPage: React.FC = () => {
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     总预算：{formatCurrency(campaign.budget)}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    color={(campaign.ordersFrozenTotal ?? 0) > 0 ? 'primary.main' : 'text.secondary'}
+                    display="block"
+                    sx={{ mt: 0.5 }}
+                  >
+                    订单冻结（本活动）：{formatCurrency(campaign.ordersFrozenTotal ?? 0)}
                   </Typography>
                 </Box>
               </Box>
@@ -480,8 +606,8 @@ export const CampaignDetailPage: React.FC = () => {
             aria-label="campaign tabs"
           >
             <Tab label="活动详情" {...a11yProps(0)} />
-            <Tab label={`订单列表 (${mockOrders.length})`} {...a11yProps(1)} />
-            <Tab label={`KOL 列表 (${mockKols.length})`} {...a11yProps(2)} />
+            <Tab label={`订单列表 (${orders.length})`} {...a11yProps(1)} />
+            <Tab label={`合作 KOL (${uniqueKolsFromOrders.length})`} {...a11yProps(2)} />
             <Tab label="数据分析" {...a11yProps(3)} />
           </Tabs>
         </Box>
@@ -509,7 +635,7 @@ export const CampaignDetailPage: React.FC = () => {
                         预算类型
                       </Typography>
                       <Typography variant="body2">
-                        {campaign.budgetType === 'fixed' ? '固定预算' : '动态预算'}
+                        {campaign.budgetType === 'fixed' ? '固定预算' : '按视频计费'}
                       </Typography>
                     </Grid>
                     <Grid size={{ xs: 6 }}>
@@ -622,120 +748,205 @@ export const CampaignDetailPage: React.FC = () => {
 
           {/* Tab Panel 1: Orders */}
           <TabPanel value={tabValue} index={1}>
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>KOL</TableCell>
-                    <TableCell>平台</TableCell>
-                    <TableCell>状态</TableCell>
-                    <TableCell align="right">金额</TableCell>
-                    <TableCell>交付内容</TableCell>
-                    <TableCell>创建日期</TableCell>
-                    <TableCell align="right">操作</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {mockOrders.map((order) => (
-                    <TableRow key={order.id}>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Avatar src={order.kolAvatar} sx={{ width: 32, height: 32 }}>
-                            {order.kolName[0]}
-                          </Avatar>
-                          <Typography variant="body2">{order.kolName}</Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Chip label={order.platform} size="small" variant="outlined" />
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={getOrderStatusLabel(order.status)}
-                          size="small"
-                          sx={{
-                            bgcolor: order.status === 'in_progress' ? 'primary.light' : undefined,
-                            color: order.status === 'in_progress' ? 'primary.main' : undefined,
-                          }}
-                        />
-                      </TableCell>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              曝光、互动等指标通常每约 2 小时从平台同步一次；结算窗口与最终金额以平台规则与订单状态为准。CPM
+              订单展示当前口径下的预估/累计应付（gross_spend）。
+            </Alert>
+            {ordersLoading ? (
+              <Skeleton variant="rectangular" height={220} />
+            ) : orders.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                暂无订单，请在 KOL 发现页发起合作并下单。
+              </Typography>
+            ) : (
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>KOL</TableCell>
+                      <TableCell>平台</TableCell>
+                      <TableCell>计价</TableCell>
+                      <TableCell align="right">曝光</TableCell>
+                      <TableCell align="right">应付/预估</TableCell>
                       <TableCell align="right">
-                        <Typography variant="body2" fontWeight="bold">
-                          {formatCurrency(order.amount)}
-                        </Typography>
+                        <Tooltip title="为该订单从账户预留的冻结金额；无冻结时显示 —。">
+                          <span style={{ cursor: 'help' }}>冻结</span>
+                        </Tooltip>
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">{order.deliverables}</Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {new Date(order.createdAt).toLocaleDateString('zh-CN')}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right">
-                        <Button size="small" onClick={() => {}}>
-                          查看
-                        </Button>
-                      </TableCell>
+                      <TableCell>状态</TableCell>
+                      <TableCell>交付</TableCell>
+                      <TableCell>创建日期</TableCell>
+                      <TableCell align="right">操作</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableHead>
+                  <TableBody>
+                    {orders.map((order) => {
+                      const kolLabel =
+                        order.kol?.platform_display_name ||
+                        order.kol?.platform_username ||
+                        order.id.slice(0, 8);
+                      const kolInitial = (kolLabel || '?').charAt(0);
+                      const spend = advertiserOrderGrossSpendCny(order as unknown as Record<string, unknown>);
+                      const frozen = advertiserOrderFrozenCny(order as unknown as Record<string, unknown>);
+                      return (
+                        <TableRow key={order.id}>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Avatar src={order.kol?.platform_avatar_url || undefined} sx={{ width: 32, height: 32 }}>
+                                {kolInitial}
+                              </Avatar>
+                              <Typography variant="body2">{kolLabel}</Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={order.kol?.platform || '—'}
+                              size="small"
+                              variant="outlined"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={order.pricing_model === 'cpm' ? 'CPM' : '固定价'}
+                              size="small"
+                              color={order.pricing_model === 'cpm' ? 'secondary' : 'default'}
+                              variant="outlined"
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            {order.pricing_model === 'cpm' && order.cpm_breakdown ? (
+                              <Tooltip
+                                title={
+                                  <span>
+                                    原始曝光（平台同步）：{' '}
+                                    {formatNumber(order.cpm_breakdown.raw_views ?? order.views ?? 0)}
+                                    <br />
+                                    计费曝光（CPM 结算口径）：{' '}
+                                    {formatNumber(order.cpm_breakdown.billable_impressions ?? 0)}
+                                  </span>
+                                }
+                                enterTouchDelay={0}
+                              >
+                                <Typography variant="body2" component="span" sx={{ cursor: 'help' }}>
+                                  {formatNumber(order.views ?? 0)}
+                                </Typography>
+                              </Tooltip>
+                            ) : (
+                              <Typography variant="body2">{formatNumber(order.views ?? 0)}</Typography>
+                            )}
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="body2" fontWeight="bold">
+                              {formatCurrency(spend)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography
+                              variant="body2"
+                              color={frozen > 0 ? 'text.primary' : 'text.secondary'}
+                            >
+                              {frozen > 0 ? formatCurrency(frozen) : '—'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={getOrderStatusLabel(order.status || '')}
+                              size="small"
+                              color={getOrderStatusColor(order.status || '')}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {order.content_count ?? 0} · {order.content_type ?? '—'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {order.created_at
+                                ? new Date(order.created_at).toLocaleDateString('zh-CN')
+                                : '—'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Link component={RouterLink} to={pathAdvertiserOrder(order.id)} underline="hover">
+                              详情
+                            </Link>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
           </TabPanel>
 
-          {/* Tab Panel 2: KOLs */}
+          {/* Tab Panel 2: KOLs（来自本活动订单，去重） */}
           <TabPanel value={tabValue} index={2}>
-            <Grid container spacing={2}>
-              {mockKols.map((kol) => (
-                <Grid size={{ xs: 12, sm: 6, md: 4 }} key={kol.id}>
-                  <Card variant="outlined">
-                    <CardContent>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Avatar
-                          src={kol.platformAvatarUrl}
-                          sx={{ width: 56, height: 56 }}
-                        >
-                          {kol.platformUsername?.[1]}
-                        </Avatar>
-                        <Box sx={{ flex: 1 }}>
-                          <Typography variant="subtitle2">
-                            {kol.platformDisplayName || kol.platformUsername}
-                          </Typography>
+            {uniqueKolsFromOrders.length === 0 ? (
+              <Box>
+                <Typography variant="body2" color="text.secondary" paragraph>
+                  暂无合作 KOL。请在 KOL 发现页选择达人并创建订单后，将显示在此处。
+                </Typography>
+                <Button
+                  variant="contained"
+                  onClick={() => navigate(pathAdvertiser(ADVERTISER_ROUTE_SEG.kols))}
+                >
+                  前往 KOL 发现
+                </Button>
+              </Box>
+            ) : (
+              <Grid container spacing={2}>
+                {uniqueKolsFromOrders.map((order) => {
+                  const kol = order.kol;
+                  const name =
+                    kol?.platform_display_name ||
+                    kol?.platform_username ||
+                    'KOL';
+                  const initial = name.charAt(0);
+                  return (
+                    <Grid size={{ xs: 12, sm: 6, md: 4 }} key={`${order.id}-${name}`}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <Avatar
+                              src={kol?.platform_avatar_url || undefined}
+                              sx={{ width: 56, height: 56 }}
+                            >
+                              {initial}
+                            </Avatar>
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                              <Typography variant="subtitle2" noWrap>
+                                {name}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" noWrap>
+                                {kol?.platform_username || '—'}
+                              </Typography>
+                            </Box>
+                            <Chip
+                              label={kol?.platform || '—'}
+                              size="small"
+                              variant="outlined"
+                            />
+                          </Box>
+                          <Divider sx={{ my: 2 }} />
                           <Typography variant="caption" color="text.secondary">
-                            {kol.followers?.toLocaleString()} 粉丝
+                            关联订单状态
                           </Typography>
-                        </Box>
-                        <Chip
-                          label={`${(kol.engagementRate! * 100).toFixed(1)}%`}
-                          size="small"
-                          color="success"
-                        />
-                      </Box>
-                      <Divider sx={{ my: 2 }} />
-                      <Grid container spacing={1}>
-                        <Grid size={{ xs: 6 }}>
-                          <Typography variant="caption" color="text.secondary">
-                            互动率
-                          </Typography>
-                          <Typography variant="body2" fontWeight="bold">
-                            {(kol.engagementRate! * 100).toFixed(2)}%
-                          </Typography>
-                        </Grid>
-                        <Grid size={{ xs: 6 }}>
-                          <Typography variant="caption" color="text.secondary">
-                            基础价格
-                          </Typography>
-                          <Typography variant="body2" fontWeight="bold" color="primary">
-                            {formatCurrency(kol.basePrice || 0)}
-                          </Typography>
-                        </Grid>
-                      </Grid>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
+                          <Box sx={{ mt: 0.5 }}>
+                            <Chip
+                              label={getOrderStatusLabel(order.status || '')}
+                              size="small"
+                              color={getOrderStatusColor(order.status || '')}
+                            />
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  );
+                })}
+              </Grid>
+            )}
           </TabPanel>
 
           {/* Tab Panel 3: Analytics */}

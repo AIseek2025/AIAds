@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -8,11 +8,9 @@ import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import CardActions from '@mui/material/CardActions';
 import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
 import LinearProgress from '@mui/material/LinearProgress';
 import Alert from '@mui/material/Alert';
 import Chip from '@mui/material/Chip';
-import Stack from '@mui/material/Stack';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import TextField from '@mui/material/TextField';
@@ -27,7 +25,6 @@ import { styled } from '@mui/material/styles';
 import TikTokIcon from '@mui/icons-material/VideoLibrary';
 import YouTubeIcon from '@mui/icons-material/YouTube';
 import InstagramIcon from '@mui/icons-material/PhotoCamera';
-import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
@@ -36,13 +33,15 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import EditIcon from '@mui/icons-material/Edit';
 import UploadIcon from '@mui/icons-material/Upload';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import DeleteIcon from '@mui/icons-material/Delete';
-
 // Types
 import type { KolTask } from '../../stores/kolStore';
+import { KolHubNav } from '../../components/kol/KolHubNav';
+import { KolFrequencyAlerts } from '../../components/kol/KolFrequencyAlerts';
+import { KOL_ROUTE_SEG, pathKol, pathKolMyTask } from '../../constants/appPaths';
 
 // Services
-import { myTasksAPI } from '../../services/kolApi';
+import { kolAcceptFrequencyQueryKey, kolProfileAPI, myTasksAPI } from '../../services/kolApi';
+import { getApiErrorMessage } from '../../utils/apiError';
 
 // Styled Components
 const TaskCard = styled(Card)(({ theme }) => ({
@@ -88,31 +87,8 @@ const statusConfig: Record<KolTask['status'], { label: string; color: 'default' 
   rejected: { label: '已拒绝', color: 'error', icon: CancelIcon },
 };
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-const TabPanel: React.FC<TabPanelProps> = (props) => {
-  const { children, value, index, ...other } = props;
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`tasks-tabpanel-${index}`}
-      aria-labelledby={`tasks-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
-    </div>
-  );
-};
-
 export const MyTasksPage: React.FC = () => {
   const navigate = useNavigate();
-  const params = useParams();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
@@ -151,11 +127,21 @@ export const MyTasksPage: React.FC = () => {
     retry: 1,
   });
 
+  const freqQ = useQuery({
+    queryKey: [...kolAcceptFrequencyQueryKey],
+    queryFn: kolProfileAPI.getAcceptFrequency,
+    retry: 0,
+  });
+
+  const freq = freqQ.data;
+  const freqBlocksAccept = Boolean(freq?.enabled && freq.remaining <= 0);
+
   // Accept task mutation
   const acceptMutation = useMutation({
     mutationFn: myTasksAPI.acceptTask,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [queryKeys.tasks] });
+      queryClient.invalidateQueries({ queryKey: [...kolAcceptFrequencyQueryKey] });
     },
   });
 
@@ -277,7 +263,6 @@ export const MyTasksPage: React.FC = () => {
   const canAccept = (task: KolTask) => task.status === 'pending';
   const canSubmit = (task: KolTask) => task.status === 'in_progress';
   const canEdit = (task: KolTask) => task.status === 'pending_review';
-  const canReject = (task: KolTask) => task.status === 'pending';
 
   if (isLoading) {
     return <LinearProgress />;
@@ -286,7 +271,7 @@ export const MyTasksPage: React.FC = () => {
   if (error) {
     return (
       <Alert severity="error" sx={{ mt: 2 }}>
-        加载任务列表失败，请稍后重试
+        {getApiErrorMessage(error, '加载任务列表失败，请稍后重试')}
       </Alert>
     );
   }
@@ -294,14 +279,42 @@ export const MyTasksPage: React.FC = () => {
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          我的任务
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          管理您的任务，查看进度和提交作品
-        </Typography>
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 2,
+          mb: 2,
+        }}
+      >
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="h4" gutterBottom>
+            我的任务
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            管理接单、交付与审核；详情页可查看订单号、CPM 拆分与交付链接。
+          </Typography>
+        </Box>
+        <KolHubNav
+          preset="my-tasks-page"
+          onRefresh={() => {
+            void refetch();
+            void freqQ.refetch();
+          }}
+        />
       </Box>
+      <Alert severity="info" sx={{ mb: 3 }}>
+        列表与「任务广场」报名结果同步；完成后结算与待结算金额见收益管理、汇总见经营分析。
+      </Alert>
+      <KolFrequencyAlerts
+        freqQ={freqQ}
+        tone="my-tasks"
+        onRetry={() => void freqQ.refetch()}
+        onGoTaskMarket={() => navigate(pathKol(KOL_ROUTE_SEG.taskMarket))}
+        alertSx={{ mb: 2 }}
+      />
 
       {/* Tabs */}
       <Card sx={{ mb: 4 }}>
@@ -371,6 +384,18 @@ export const MyTasksPage: React.FC = () => {
                           </Grid>
                           <Grid size={{ xs: 6, sm: 3 }}>
                             <Typography variant="caption" color="text.secondary">
+                              订单冻结
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              fontWeight="bold"
+                              color={(task.frozenAmount ?? 0) > 0 ? 'warning.main' : 'text.secondary'}
+                            >
+                              {(task.frozenAmount ?? 0) > 0 ? formatCurrency(task.frozenAmount!) : '—'}
+                            </Typography>
+                          </Grid>
+                          <Grid size={{ xs: 6, sm: 3 }}>
+                            <Typography variant="caption" color="text.secondary">
                               截止日期
                             </Typography>
                             <Typography variant="body2" fontWeight="bold">
@@ -422,7 +447,7 @@ export const MyTasksPage: React.FC = () => {
                           size="small"
                           variant="contained"
                           onClick={() => handleAcceptTask(task.id)}
-                          disabled={acceptMutation.isPending}
+                          disabled={acceptMutation.isPending || freqBlocksAccept}
                         >
                           {acceptMutation.isPending ? '接受中...' : '接受任务'}
                         </Button>
@@ -452,7 +477,7 @@ export const MyTasksPage: React.FC = () => {
                       size="small"
                       variant="outlined"
                       startIcon={<VisibilityIcon />}
-                      onClick={() => navigate(`/kol/my-tasks/${task.id}`)}
+                      onClick={() => navigate(pathKolMyTask(task.id))}
                     >
                       详情
                     </Button>
@@ -496,7 +521,7 @@ export const MyTasksPage: React.FC = () => {
                 <Button
                   variant="contained"
                   sx={{ mt: 2 }}
-                  onClick={() => navigate('/kol/task-market')}
+                  onClick={() => navigate(pathKol(KOL_ROUTE_SEG.taskMarket))}
                 >
                   浏览任务广场
                 </Button>

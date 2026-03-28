@@ -10,22 +10,24 @@
  * @returns Masked phone number
  */
 export function maskPhone(phone: string): string {
-  if (!phone) return phone;
-  
+  if (!phone) {
+    return phone;
+  }
+
   // Remove any non-digit characters
   const digits = phone.replace(/\D/g, '');
-  
+
   // Only mask if phone has at least 11 digits (Chinese phone format)
   if (digits.length >= 11) {
     return digits.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
   }
-  
+
   // For shorter numbers, mask middle portion
   if (digits.length > 4) {
     const visible = Math.floor(digits.length / 2);
     return digits.slice(0, visible) + '****' + digits.slice(-visible);
   }
-  
+
   return '****';
 }
 
@@ -36,19 +38,21 @@ export function maskPhone(phone: string): string {
  * @returns Masked email address
  */
 export function maskEmail(email: string): string {
-  if (!email) return email;
-  
+  if (!email) {
+    return email;
+  }
+
   const parts = email.split('@');
   if (parts.length !== 2) {
     return '****';
   }
-  
+
   const [username, domain] = parts;
-  
+
   if (username.length <= 3) {
     return `****@${domain}`;
   }
-  
+
   // Show first 3 characters, mask the rest
   const masked = username.slice(0, 3) + '****';
   return `${masked}@${domain}`;
@@ -61,20 +65,22 @@ export function maskEmail(email: string): string {
  * @returns Masked ID number
  */
 export function maskIdNumber(idNumber: string): string {
-  if (!idNumber) return idNumber;
-  
+  if (!idNumber) {
+    return idNumber;
+  }
+
   const digits = idNumber.replace(/\D/g, '');
-  
+
   // Chinese ID is 18 digits
   if (digits.length === 18) {
     return digits.replace(/(\d{6})\d{8}(\d{4})/, '$1********$2');
   }
-  
+
   // For other lengths, mask middle portion
   if (digits.length > 8) {
     return digits.slice(0, 6) + '********' + digits.slice(-4);
   }
-  
+
   return '****';
 }
 
@@ -85,10 +91,12 @@ export function maskIdNumber(idNumber: string): string {
  * @returns Masked card number
  */
 export function maskCardNumber(cardNumber: string): string {
-  if (!cardNumber) return cardNumber;
-  
+  if (!cardNumber) {
+    return cardNumber;
+  }
+
   const digits = cardNumber.replace(/\D/g, '');
-  
+
   if (digits.length >= 16) {
     // Group by 4 and mask middle groups
     const groups = digits.match(/.{1,4}/g);
@@ -98,12 +106,12 @@ export function maskCardNumber(cardNumber: string): string {
       return `${firstGroup} **** **** ${lastGroup}`;
     }
   }
-  
+
   // For shorter numbers, mask middle
   if (digits.length > 8) {
     return digits.slice(0, 4) + ' **** **** ' + digits.slice(-4);
   }
-  
+
   return '****';
 }
 
@@ -114,13 +122,15 @@ export function maskCardNumber(cardNumber: string): string {
  * @returns Masked name
  */
 export function maskRealName(name: string): string {
-  if (!name) return name;
-  
+  if (!name) {
+    return name;
+  }
+
   const trimmed = name.trim();
   if (trimmed.length <= 1) {
     return '*';
   }
-  
+
   return trimmed.charAt(0) + '*'.repeat(trimmed.length - 1);
 }
 
@@ -138,7 +148,7 @@ export function maskVerificationCode(): string {
  * @param user - User object with sensitive fields
  * @returns User object with masked sensitive fields
  */
-export function maskUserData(user: {
+type MaskUserSensitiveFields = {
   phone?: string | null;
   email?: string | null;
   realName?: string | null;
@@ -146,37 +156,46 @@ export function maskUserData(user: {
   bankAccount?: string | null;
   alipayAccount?: string | null;
   wechatPayAccount?: string | null;
-  [key: string]: any;
-}): Record<string, any> {
-  const masked: Record<string, any> = { ...user };
+};
 
-  if (user.phone) {
-    masked.phone = maskPhone(user.phone);
+export function maskUserData(user: object): Record<string, unknown> {
+  const u = user as MaskUserSensitiveFields;
+  const raw = user as Record<string, unknown>;
+  const masked: Record<string, unknown> = { ...raw };
+
+  if (u.phone) {
+    masked.phone = maskPhone(u.phone);
   }
 
-  if (user.email) {
-    masked.email = maskEmail(user.email);
+  if (u.email) {
+    masked.email = maskEmail(u.email);
   }
 
-  if (user.realName) {
-    masked.realName = maskRealName(user.realName);
+  if (u.realName) {
+    masked.realName = maskRealName(u.realName);
   }
 
-  if (user.idNumber) {
-    masked.idNumber = maskIdNumber(user.idNumber);
+  // UserResponse（公开 API）使用 snake_case 的 real_name
+  const realNameSnake = raw['real_name'];
+  if (typeof realNameSnake === 'string' && realNameSnake.length > 0) {
+    masked['real_name'] = maskRealName(realNameSnake);
+  }
+
+  if (u.idNumber) {
+    masked.idNumber = maskIdNumber(u.idNumber);
   }
 
   // P2 Fix: Mask additional sensitive fields
-  if (user.bankAccount) {
-    masked.bankAccount = maskCardNumber(user.bankAccount);
+  if (u.bankAccount) {
+    masked.bankAccount = maskCardNumber(u.bankAccount);
   }
 
-  if (user.alipayAccount) {
-    masked.alipayAccount = maskPhone(user.alipayAccount);
+  if (u.alipayAccount) {
+    masked.alipayAccount = maskPhone(u.alipayAccount);
   }
 
-  if (user.wechatPayAccount) {
-    masked.wechatPayAccount = maskPhone(user.wechatPayAccount);
+  if (u.wechatPayAccount) {
+    masked.wechatPayAccount = maskPhone(u.wechatPayAccount);
   }
 
   return masked;
@@ -186,35 +205,37 @@ export function maskUserData(user: {
  * Apply masking to advertiser object for safe API response
  * P2 Fix: Added advertiser-specific field masking
  */
-export function maskAdvertiserData(advertiser: {
+type MaskAdvertiserSensitiveFields = {
   phone?: string | null;
   email?: string | null;
   companyName?: string | null;
   taxId?: string | null;
   bankAccount?: string | null;
-  [key: string]: any;
-}): Record<string, any> {
-  const masked: Record<string, any> = { ...advertiser };
+};
 
-  if (advertiser.phone) {
-    masked.phone = maskPhone(advertiser.phone);
+export function maskAdvertiserData(advertiser: object): Record<string, unknown> {
+  const a = advertiser as MaskAdvertiserSensitiveFields;
+  const masked: Record<string, unknown> = { ...(advertiser as Record<string, unknown>) };
+
+  if (a.phone) {
+    masked.phone = maskPhone(a.phone);
   }
 
-  if (advertiser.email) {
-    masked.email = maskEmail(advertiser.email);
+  if (a.email) {
+    masked.email = maskEmail(a.email);
   }
 
-  if (advertiser.companyName) {
+  if (a.companyName) {
     // Mask partial company name for privacy
-    masked.companyName = maskCompanyName(advertiser.companyName);
+    masked.companyName = maskCompanyName(a.companyName);
   }
 
-  if (advertiser.taxId) {
-    masked.taxId = maskTaxId(advertiser.taxId);
+  if (a.taxId) {
+    masked.taxId = maskTaxId(a.taxId);
   }
 
-  if (advertiser.bankAccount) {
-    masked.bankAccount = maskCardNumber(advertiser.bankAccount);
+  if (a.bankAccount) {
+    masked.bankAccount = maskCardNumber(a.bankAccount);
   }
 
   return masked;
@@ -225,7 +246,9 @@ export function maskAdvertiserData(advertiser: {
  * Example: ABC Technology Ltd -> A** Technology Ltd
  */
 export function maskCompanyName(name: string): string {
-  if (!name) return name;
+  if (!name) {
+    return name;
+  }
   const trimmed = name.trim();
   if (trimmed.length <= 1) {
     return '*';
@@ -238,7 +261,9 @@ export function maskCompanyName(name: string): string {
  * Example: 91310101MA1234567X -> 913101**********567X
  */
 export function maskTaxId(taxId: string): string {
-  if (!taxId) return taxId;
+  if (!taxId) {
+    return taxId;
+  }
   const trimmed = taxId.trim();
   if (trimmed.length >= 18) {
     return trimmed.slice(0, 6) + '**********' + trimmed.slice(-4);

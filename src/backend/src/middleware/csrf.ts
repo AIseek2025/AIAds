@@ -19,8 +19,12 @@ const csrfProtection = csrf({
  * CSRF error handler middleware
  * Handles CSRF token validation errors
  */
-export function csrfErrorHandler(err: any, req: Request, res: Response, next: NextFunction): void {
-  if (err.code === 'EBADCSRFTOKEN') {
+function isBadCsrfToken(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && (err as { code: string }).code === 'EBADCSRFTOKEN';
+}
+
+export function csrfErrorHandler(err: unknown, req: Request, res: Response, next: NextFunction): void {
+  if (isBadCsrfToken(err)) {
     logger.warn('CSRF token validation failed', {
       path: req.path,
       method: req.method,
@@ -45,8 +49,8 @@ export function csrfErrorHandler(err: any, req: Request, res: Response, next: Ne
  * Returns a new CSRF token for the current session
  */
 export function getCsrfToken(req: Request, res: Response): void {
-  const token = (req as any).csrfToken();
-  
+  const token = req.csrfToken();
+
   res.json({
     success: true,
     data: {

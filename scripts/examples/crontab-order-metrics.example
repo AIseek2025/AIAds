@@ -1,0 +1,8 @@
+# 订单指标批量回填 — crontab 示例（GStack：可审计、非零退出告警）
+# 复制到 `crontab -e` 前请替换路径、环境文件与执行用户。
+#
+# 方式 A：bash + 临时 JSON（需 DATABASE_URL + AIADS_ADMIN_TOKEN + AIADS_ADMIN_API）
+# 0 */2 * * * . /path/to/aiads/.env.prod && cd /path/to/aiads && ./scripts/run-order-metrics-batch-from-db.sh --limit 100 >> /var/log/aiads-order-metrics.log 2>&1
+#
+# 方式 B：Node 一键（无中间文件，仓库根）
+# 0 */2 * * * . /path/to/aiads/.env.prod && cd /path/to/aiads && npm run metrics:batch-sync -- --limit 100 >> /var/log/aiads-order-metrics.log 2>&1

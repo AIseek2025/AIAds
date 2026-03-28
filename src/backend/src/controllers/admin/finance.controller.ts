@@ -1,9 +1,23 @@
 import { Request, Response } from 'express';
 import { adminFinanceService } from '../../services/admin/finance.service';
 import { asyncHandler } from '../../middleware/errorHandler';
-import { validateBody } from '../../middleware/validation';
+import { requireAdmin } from '../../middleware/adminAuth';
+import { parseBodyOrRespond, parseQueryOrRespond } from '../../middleware/validation';
 import { ApiResponse } from '../../types';
 import { z } from 'zod';
+
+function limitFromQuery(q: Request['query']): number {
+  const raw = q.page_size ?? q.limit;
+  if (raw === undefined || raw === '') {
+    return 20;
+  }
+  const s = Array.isArray(raw) ? raw[0] : raw;
+  const n = parseInt(String(s), 10);
+  if (!Number.isFinite(n) || n < 1) {
+    return 20;
+  }
+  return Math.min(n, 100);
+}
 
 // Validation schemas
 const approveWithdrawalSchema = z.object({
@@ -16,10 +30,10 @@ const rejectWithdrawalSchema = z.object({
   note: z.string().optional(),
 });
 
-const exportFinanceSchema = z.object({
+const exportFinanceQuerySchema = z.object({
   type: z.enum(['transactions', 'withdrawals', 'deposits', 'all']),
-  startDate: z.string(),
-  endDate: z.string(),
+  startDate: z.string().min(1),
+  endDate: z.string().min(1),
   format: z.enum(['csv', 'xlsx', 'pdf']).optional(),
 });
 
@@ -30,7 +44,7 @@ export class AdminFinanceController {
    */
   getFinanceOverview = asyncHandler(async (req: Request, res: Response) => {
     const { period = 'month' } = req.query;
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminFinanceService.getFinanceOverview(period as string, adminId);
 
@@ -49,7 +63,6 @@ export class AdminFinanceController {
   getDeposits = asyncHandler(async (req: Request, res: Response) => {
     const {
       page,
-      limit,
       status,
       payment_method,
       user_id,
@@ -63,7 +76,7 @@ export class AdminFinanceController {
 
     const filters = {
       page: page ? parseInt(page as string, 10) : 1,
-      limit: limit ? parseInt(limit as string, 10) : 20,
+      limit: limitFromQuery(req.query),
       status: status as string,
       paymentMethod: payment_method as string,
       userId: user_id as string,
@@ -75,7 +88,7 @@ export class AdminFinanceController {
       order: (order as 'asc' | 'desc') || 'desc',
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminFinanceService.getDeposits(filters, adminId);
 
     const response: ApiResponse<typeof result> = {
@@ -91,23 +104,12 @@ export class AdminFinanceController {
    * Get withdrawal records
    */
   getWithdrawals = asyncHandler(async (req: Request, res: Response) => {
-    const {
-      page,
-      limit,
-      status,
-      payment_method,
-      kol_id,
-      min_amount,
-      max_amount,
-      created_after,
-      created_before,
-      sort,
-      order,
-    } = req.query;
+    const { page, status, payment_method, kol_id, min_amount, max_amount, created_after, created_before, sort, order } =
+      req.query;
 
     const filters = {
       page: page ? parseInt(page as string, 10) : 1,
-      limit: limit ? parseInt(limit as string, 10) : 20,
+      limit: limitFromQuery(req.query),
       status: status as string,
       paymentMethod: payment_method as string,
       kolId: kol_id as string,
@@ -119,7 +121,7 @@ export class AdminFinanceController {
       order: (order as 'asc' | 'desc') || 'desc',
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminFinanceService.getWithdrawals(filters, adminId);
 
     const response: ApiResponse<typeof result> = {
@@ -135,16 +137,16 @@ export class AdminFinanceController {
    * Get pending withdrawals
    */
   getPendingWithdrawals = asyncHandler(async (req: Request, res: Response) => {
-    const { page, limit, min_amount, max_amount } = req.query;
+    const { page, min_amount, max_amount } = req.query;
 
     const filters = {
       page: page ? parseInt(page as string, 10) : 1,
-      limit: limit ? parseInt(limit as string, 10) : 20,
+      limit: limitFromQuery(req.query),
       minAmount: min_amount ? parseFloat(min_amount as string) : undefined,
       maxAmount: max_amount ? parseFloat(max_amount as string) : undefined,
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminFinanceService.getPendingWithdrawals(filters, adminId);
 
     const response: ApiResponse<typeof result> = {
@@ -161,7 +163,7 @@ export class AdminFinanceController {
    */
   getWithdrawalById = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminFinanceService.getWithdrawalById(id.toString(), adminId);
 
@@ -185,11 +187,12 @@ export class AdminFinanceController {
       mfaCode: z.string().length(6).optional(),
     });
 
-    validateBody(verifySchema)(req, res, () => {});
+    if (!parseBodyOrRespond(verifySchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminFinanceService.verifyWithdrawal(
       id.toString(),
@@ -214,11 +217,12 @@ export class AdminFinanceController {
    * Approve withdrawal
    */
   approveWithdrawal = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(approveWithdrawalSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(approveWithdrawalSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminFinanceService.approveWithdrawal(id.toString(), req.body, adminId, adminEmail);
 
@@ -236,11 +240,12 @@ export class AdminFinanceController {
    * Reject withdrawal
    */
   rejectWithdrawal = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(rejectWithdrawalSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(rejectWithdrawalSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminFinanceService.rejectWithdrawal(id.toString(), req.body, adminId, adminEmail);
 
@@ -260,7 +265,6 @@ export class AdminFinanceController {
   getTransactionList = asyncHandler(async (req: Request, res: Response) => {
     const {
       page,
-      limit,
       type,
       status,
       payment_method,
@@ -275,7 +279,7 @@ export class AdminFinanceController {
 
     const filters = {
       page: page ? parseInt(page as string, 10) : 1,
-      limit: limit ? parseInt(limit as string, 10) : 20,
+      limit: limitFromQuery(req.query),
       type: type as string,
       status: status as string,
       paymentMethod: payment_method as string,
@@ -288,7 +292,7 @@ export class AdminFinanceController {
       order: (order as 'asc' | 'desc') || 'desc',
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminFinanceService.getTransactionList(filters, adminId);
 
     const response: ApiResponse<typeof result> = {
@@ -301,27 +305,22 @@ export class AdminFinanceController {
 
   /**
    * GET /api/v1/admin/finance/export
-   * Export finance report
+   * Export finance report（query：type, startDate, endDate, format）
    */
   exportFinance = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(exportFinanceSchema)(req, res, () => {});
+    const parsed = parseQueryOrRespond(exportFinanceQuerySchema, req, res);
+    if (!parsed) {
+      return;
+    }
 
-    const adminId = req.admin?.id!;
-    const result = await adminFinanceService.exportFinance(req.body, adminId);
+    const adminId = requireAdmin(req).id;
+    const result = await adminFinanceService.exportFinance(parsed, adminId);
 
-    // Set download headers
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="finance_report_${req.body.type}_${req.body.startDate}_${req.body.endDate}.csv"`
-    );
+    const filename = `${result.filenameBase}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-    const response: ApiResponse<string> = {
-      success: true,
-      data: result.csvData,
-    };
-
-    res.status(200).send(response.data);
+    res.status(200).send(result.csvData);
   });
 
   /**
@@ -334,10 +333,11 @@ export class AdminFinanceController {
       note: z.string().optional(),
     });
 
-    validateBody(confirmSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(confirmSchema, req, res)) {
+      return;
+    }
 
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminFinanceService.confirmRecharge(
       req.body.transactionId,
@@ -368,10 +368,11 @@ export class AdminFinanceController {
       note: z.string().optional(),
     });
 
-    validateBody(adjustSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(adjustSchema, req, res)) {
+      return;
+    }
 
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminFinanceService.adjustBalance(
       req.body.userId,

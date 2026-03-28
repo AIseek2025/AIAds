@@ -1,3 +1,5 @@
+import { Prisma, UserRole, UserStatus } from '@prisma/client';
+import type { PaginationResponse } from '../../types';
 import prisma from '../../config/database';
 import { logger } from '../../utils/logger';
 import { ApiError } from '../../middleware/errorHandler';
@@ -82,11 +84,64 @@ export interface UserResponse {
   } | null;
 }
 
+/** 合并用户 metadata（Json），避免 `as any` */
+function mergeUserMetadata(existing: Prisma.JsonValue, patch: Record<string, unknown>): Prisma.InputJsonValue {
+  const base =
+    existing !== null && typeof existing === 'object' && !Array.isArray(existing)
+      ? { ...(existing as Record<string, unknown>) }
+      : {};
+  return { ...base, ...patch } as Prisma.InputJsonValue;
+}
+
+/** 与列表/详情查询 include 兼容的格式化入参（嵌套字段可多可少） */
+type UserForFormat = {
+  id: string;
+  email: string;
+  phone: string | null;
+  nickname: string | null;
+  avatarUrl: string | null;
+  realName: string | null;
+  role: UserRole;
+  status: UserStatus;
+  emailVerified: boolean;
+  phoneVerified: boolean;
+  lastLoginAt: Date | null;
+  lastLoginIp: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  advertiser: {
+    id: string;
+    companyName: string;
+    walletBalance: Prisma.Decimal;
+    totalSpent: Prisma.Decimal;
+  } | null;
+  kol: {
+    id: string;
+    platform: string;
+    platformUsername: string;
+    followers: number;
+    status: string;
+  } | null;
+};
+
+/** 用户详情页「活动/审计」列表单行（针对该用户的 resource 审计） */
+export type UserActivityLogItem = {
+  id: string;
+  adminEmail: string;
+  adminName: string;
+  action: string;
+  requestMethod: string;
+  requestPath: string;
+  ipAddress: string | null;
+  status: string;
+  createdAt: Date;
+};
+
 export class AdminUsersService {
   /**
    * Get user list with pagination and filters
    */
-  async getUserList(filters: UserListFilters, adminId: string) {
+  async getUserList(filters: UserListFilters, adminId: string): Promise<PaginationResponse<UserResponse>> {
     const {
       page = 1,
       limit = 20,
@@ -104,14 +159,14 @@ export class AdminUsersService {
     const take = limit;
 
     // Build where clause
-    const where: any = {};
+    const where: Prisma.UserWhereInput = {};
 
     if (role) {
-      where.role = role;
+      where.role = role as UserRole;
     }
 
     if (status) {
-      where.status = status;
+      where.status = status as UserStatus;
     }
 
     if (keyword) {
@@ -128,13 +183,14 @@ export class AdminUsersService {
     }
 
     if (createdAfter || createdBefore) {
-      where.createdAt = {};
+      const createdAt: Prisma.DateTimeFilter = {};
       if (createdAfter) {
-        where.createdAt.gte = new Date(createdAfter);
+        createdAt.gte = new Date(createdAfter);
       }
       if (createdBefore) {
-        where.createdAt.lte = new Date(createdBefore);
+        createdAt.lte = new Date(createdBefore);
       }
+      where.createdAt = createdAt;
     }
 
     // Get total count
@@ -145,7 +201,7 @@ export class AdminUsersService {
       where,
       skip,
       take,
-      orderBy: { [sort]: order },
+      orderBy: { [sort]: order } as Prisma.UserOrderByWithRelationInput,
       include: {
         advertiser: {
           select: {
@@ -242,7 +298,12 @@ export class AdminUsersService {
   /**
    * Update user
    */
-  async updateUser(userId: string, data: UpdateUserRequest, adminId: string, adminEmail: string) {
+  async updateUser(
+    userId: string,
+    data: UpdateUserRequest,
+    adminId: string,
+    adminEmail: string
+  ): Promise<{ id: string; email: string; updatedAt: Date }> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
@@ -291,7 +352,7 @@ export class AdminUsersService {
     note?: string,
     adminId?: string,
     adminEmail?: string
-  ) {
+  ): Promise<{ id: string; status: string; updatedAt: Date }> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
@@ -304,14 +365,13 @@ export class AdminUsersService {
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
-        status: status as any,
-        metadata: {
-          ...(user.metadata as any) || {},
+        status: status as UserStatus,
+        metadata: mergeUserMetadata(user.metadata, {
           statusUpdatedAt: new Date().toISOString(),
           statusChangedBy: adminId,
           statusReason: reason,
           statusNote: note,
-        },
+        }),
       },
     });
 
@@ -341,7 +401,7 @@ export class AdminUsersService {
   /**
    * Delete user (soft delete)
    */
-  async deleteUser(userId: string, adminId: string, adminEmail: string) {
+  async deleteUser(userId: string, adminId: string, adminEmail: string): Promise<{ id: string; deletedAt: Date }> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
@@ -382,21 +442,18 @@ export class AdminUsersService {
   /**
    * Get user activity log
    */
-  async getUserActivity(userId: string, filters: UserActivityFilters, adminId: string) {
-    const {
-      page = 1,
-      limit = 20,
-      action,
-      createdAfter,
-      createdBefore,
-    } = filters;
+  async getUserActivity(
+    userId: string,
+    filters: UserActivityFilters,
+    _adminId: string
+  ): Promise<PaginationResponse<UserActivityLogItem>> {
+    const { page = 1, limit = 20, action, createdAfter, createdBefore } = filters;
 
     const skip = (page - 1) * limit;
     const take = limit;
 
-    // Build where clause
-    const where: any = {
-      adminId,
+    // 与该用户相关的审计记录（任意管理员对该 user 资源的操作），不按「当前查看者」过滤
+    const where: Prisma.AdminAuditLogWhereInput = {
       resourceType: 'user',
       resourceId: userId,
     };
@@ -406,13 +463,14 @@ export class AdminUsersService {
     }
 
     if (createdAfter || createdBefore) {
-      where.createdAt = {};
+      const createdAt: Prisma.DateTimeFilter = {};
       if (createdAfter) {
-        where.createdAt.gte = new Date(createdAfter);
+        createdAt.gte = new Date(createdAfter);
       }
       if (createdBefore) {
-        where.createdAt.lte = new Date(createdBefore);
+        createdAt.lte = new Date(createdBefore);
       }
+      where.createdAt = createdAt;
     }
 
     // Get total count
@@ -453,7 +511,18 @@ export class AdminUsersService {
   /**
    * Ban user
    */
-  async banUser(userId: string, data: BanUserRequest, adminId: string, adminEmail: string) {
+  async banUser(
+    userId: string,
+    data: BanUserRequest,
+    adminId: string,
+    adminEmail: string
+  ): Promise<{
+    id: string;
+    status: string;
+    bannedAt: Date;
+    bannedUntil: Date | null;
+    banReason: string;
+  }> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
@@ -467,22 +536,20 @@ export class AdminUsersService {
     }
 
     // Calculate ban until date
-    const bannedUntil = data.duration > 0
-      ? new Date(Date.now() + data.duration * 24 * 60 * 60 * 1000)
-      : null;
+    const bannedUntil = data.duration > 0 ? new Date(Date.now() + data.duration * 24 * 60 * 60 * 1000) : null;
 
     // Update user status
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
         status: 'suspended',
-        metadata: {
+        metadata: mergeUserMetadata(user.metadata, {
           bannedAt: new Date().toISOString(),
           bannedUntil: bannedUntil?.toISOString(),
           banReason: data.reason,
           bannedBy: adminId,
           banNote: data.note,
-        },
+        }),
       },
     });
 
@@ -515,7 +582,12 @@ export class AdminUsersService {
   /**
    * Unban user
    */
-  async unbanUser(userId: string, adminId: string, adminEmail: string, note?: string) {
+  async unbanUser(
+    userId: string,
+    adminId: string,
+    adminEmail: string,
+    note?: string
+  ): Promise<{ id: string; status: string; unbannedAt: Date }> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
@@ -533,12 +605,11 @@ export class AdminUsersService {
       where: { id: userId },
       data: {
         status: 'active',
-        metadata: {
-          ...(user.metadata as any) || {},
+        metadata: mergeUserMetadata(user.metadata, {
           unbannedAt: new Date().toISOString(),
           unbannedBy: adminId,
           unbanNote: note,
-        },
+        }),
       },
     });
 
@@ -568,7 +639,18 @@ export class AdminUsersService {
   /**
    * Suspend user
    */
-  async suspendUser(userId: string, data: SuspendUserRequest, adminId: string, adminEmail: string) {
+  async suspendUser(
+    userId: string,
+    data: SuspendUserRequest,
+    adminId: string,
+    adminEmail: string
+  ): Promise<{
+    id: string;
+    status: string;
+    suspendedAt: Date;
+    suspendedUntil: Date;
+    suspendReason: string;
+  }> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
@@ -585,13 +667,12 @@ export class AdminUsersService {
       where: { id: userId },
       data: {
         status: 'suspended',
-        metadata: {
-          ...(user.metadata as any) || {},
+        metadata: mergeUserMetadata(user.metadata, {
           suspendedAt: new Date().toISOString(),
           suspendedUntil: suspendedUntil.toISOString(),
           suspendReason: data.reason,
           suspendedBy: adminId,
-        },
+        }),
       },
     });
 
@@ -630,7 +711,7 @@ export class AdminUsersService {
     sendEmail: boolean = false,
     adminId: string,
     adminEmail: string
-  ) {
+  ): Promise<{ id: string; passwordReset: boolean; emailSent: boolean }> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
@@ -676,35 +757,39 @@ export class AdminUsersService {
   /**
    * Format user response
    */
-  private formatUserResponse(user: any): UserResponse {
+  private formatUserResponse(user: UserForFormat): UserResponse {
     return {
       id: user.id,
       email: user.email,
-      phone: user.phone,
-      nickname: user.nickname,
-      avatarUrl: user.avatarUrl,
-      realName: user.realName,
+      phone: user.phone ?? undefined,
+      nickname: user.nickname ?? undefined,
+      avatarUrl: user.avatarUrl ?? undefined,
+      realName: user.realName ?? undefined,
       role: user.role,
       status: user.status,
       emailVerified: user.emailVerified,
       phoneVerified: user.phoneVerified,
-      lastLoginAt: user.lastLoginAt,
-      lastLoginIp: user.lastLoginIp,
+      lastLoginAt: user.lastLoginAt ?? undefined,
+      lastLoginIp: user.lastLoginIp ?? undefined,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
-      advertiser: user.advertiser ? {
-        id: user.advertiser.id,
-        companyName: user.advertiser.companyName,
-        walletBalance: Number(user.advertiser.walletBalance),
-        totalSpent: Number(user.advertiser.totalSpent),
-      } : null,
-      kol: user.kol ? {
-        id: user.kol.id,
-        platform: user.kol.platform,
-        platformUsername: user.kol.platformUsername,
-        followers: user.kol.followers,
-        status: user.kol.status,
-      } : null,
+      advertiser: user.advertiser
+        ? {
+            id: user.advertiser.id,
+            companyName: user.advertiser.companyName,
+            walletBalance: Number(user.advertiser.walletBalance),
+            totalSpent: Number(user.advertiser.totalSpent),
+          }
+        : null,
+      kol: user.kol
+        ? {
+            id: user.kol.id,
+            platform: user.kol.platform,
+            platformUsername: user.kol.platformUsername,
+            followers: user.kol.followers,
+            status: user.kol.status,
+          }
+        : null,
     };
   }
 }

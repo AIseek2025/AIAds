@@ -2,11 +2,8 @@
 
 import type {
   AdvertiserListItem,
-  AdvertiserDetail,
   CampaignListItem,
-  CampaignDetail,
   OrderListItem,
-  OrderDetail,
   DashboardStats,
 } from '../types';
 

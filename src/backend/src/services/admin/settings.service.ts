@@ -1,8 +1,10 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../../config/database';
 import { logger } from '../../utils/logger';
 import { ApiError } from '../../middleware/errorHandler';
 import { logAdminAction } from './audit.service';
 import { hashPassword } from '../../utils/crypto';
+import type { PaginationResponse } from '../../types';
 
 // Admin list filters
 export interface AdminListFilters {
@@ -66,9 +68,102 @@ export interface SensitiveWordRequest {
 }
 
 // System config response
-export interface SystemConfig {
-  [key: string]: any;
-}
+export type SystemConfig = Record<string, unknown>;
+
+export type AdminListItem = {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl: string | null;
+  status: string;
+  role: { id: string; name: string };
+  lastLoginAt: Date | null;
+  createdAt: Date;
+};
+
+export type AdminDetailResponse = {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl: string | null;
+  status: string;
+  mfaEnabled: boolean;
+  role: {
+    id: string;
+    name: string;
+    description: string | null;
+    permissions: Prisma.JsonValue;
+  };
+  lastLoginAt: Date | null;
+  lastLoginIp: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type AdminMutationResponse = {
+  id: string;
+  email: string;
+  name: string;
+  role: { id: string; name: string };
+};
+
+export type RoleListItem = {
+  id: string;
+  name: string;
+  description: string | null;
+  permissions: Prisma.JsonValue;
+  isSystem: boolean;
+  createdAt: Date;
+};
+
+export type RoleMutationResponse = {
+  id: string;
+  name: string;
+  description: string | null;
+  permissions: Prisma.JsonValue;
+};
+
+export type AuditLogListItem = {
+  id: string;
+  adminId: string;
+  adminEmail: string | null;
+  adminName: string | null;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  resourceName: string | null;
+  requestMethod: string;
+  requestPath: string;
+  ipAddress: string | null;
+  status: string;
+  createdAt: Date;
+};
+
+export type SystemMonitorResponse = {
+  cpu: { usage: number; cores: number };
+  memory: { used: number; total: number; usage: number };
+  disk: { used: number; total: number; usage: number };
+  database: { connections: number; maxConnections: number; queriesPerSecond: number };
+  cache: { hitRate: number; memoryUsed: number; keys: number };
+  queue: { pending: number; processing: number; failed: number };
+};
+
+export type SensitiveWordListItem = {
+  id: string;
+  word: string;
+  type: string;
+  severity: string;
+  action: string;
+};
+
+export type SensitiveWordCreated = SensitiveWordRequest & { id: string };
+
+export type BackupListItem = {
+  id: string;
+  createdAt: Date;
+  size: number;
+  status: string;
+};
 
 export class AdminSettingsService {
   /**
@@ -110,10 +205,10 @@ export class AdminSettingsService {
    */
   async updateSystemConfig(
     key: string,
-    value: any,
+    value: unknown,
     adminId: string,
     adminEmail: string
-  ): Promise<{ key: string; value: any }> {
+  ): Promise<{ key: string; value: unknown }> {
     // In production, save to database
     logger.info('System config updated', { key, adminId, adminEmail });
 
@@ -136,19 +231,14 @@ export class AdminSettingsService {
   /**
    * Get admin list
    */
-  async getAdminList(filters: AdminListFilters, adminId: string) {
-    const {
-      page = 1,
-      limit = 20,
-      status,
-      role,
-    } = filters;
+  async getAdminList(filters: AdminListFilters, adminId: string): Promise<PaginationResponse<AdminListItem>> {
+    const { page = 1, limit = 20, status, role } = filters;
 
     const skip = (page - 1) * limit;
     const take = limit;
 
     // Build where clause
-    const where: any = {
+    const where: Prisma.AdminWhereInput = {
       deletedAt: null,
     };
 
@@ -217,11 +307,7 @@ export class AdminSettingsService {
   /**
    * Create new admin
    */
-  async createAdmin(
-    data: CreateAdminRequest,
-    adminId: string,
-    adminEmail: string
-  ) {
+  async createAdmin(data: CreateAdminRequest, adminId: string, adminEmail: string): Promise<AdminMutationResponse> {
     // Check if email already exists
     const existingAdmin = await prisma.admin.findUnique({
       where: { email: data.email },
@@ -292,7 +378,7 @@ export class AdminSettingsService {
   /**
    * Get admin by ID
    */
-  async getAdminById(adminId: string, currentAdminId: string) {
+  async getAdminById(adminId: string, currentAdminId: string): Promise<AdminDetailResponse> {
     const admin = await prisma.admin.findUnique({
       where: { id: adminId },
       include: {
@@ -350,7 +436,7 @@ export class AdminSettingsService {
     data: UpdateAdminRequest,
     currentAdminId: string,
     currentAdminEmail: string
-  ) {
+  ): Promise<AdminMutationResponse> {
     const admin = await prisma.admin.findUnique({
       where: { id: adminId },
     });
@@ -425,7 +511,11 @@ export class AdminSettingsService {
   /**
    * Delete admin
    */
-  async deleteAdmin(adminId: string, currentAdminId: string, currentAdminEmail: string) {
+  async deleteAdmin(
+    adminId: string,
+    currentAdminId: string,
+    currentAdminEmail: string
+  ): Promise<{ id: string; deletedAt: Date }> {
     const admin = await prisma.admin.findUnique({
       where: { id: adminId },
     });
@@ -471,7 +561,7 @@ export class AdminSettingsService {
   /**
    * Get role list
    */
-  async getRoleList(adminId: string) {
+  async getRoleList(adminId: string): Promise<RoleListItem[]> {
     const roles = await prisma.adminRole.findMany({
       where: { deletedAt: null },
       orderBy: { createdAt: 'desc' },
@@ -500,11 +590,7 @@ export class AdminSettingsService {
   /**
    * Create role
    */
-  async createRole(
-    data: CreateRoleRequest,
-    adminId: string,
-    adminEmail: string
-  ) {
+  async createRole(data: CreateRoleRequest, adminId: string, adminEmail: string): Promise<RoleMutationResponse> {
     // Check if role name already exists
     const existingRole = await prisma.adminRole.findUnique({
       where: { name: data.name },
@@ -556,7 +642,7 @@ export class AdminSettingsService {
     data: UpdateRoleRequest,
     adminId: string,
     adminEmail: string
-  ) {
+  ): Promise<RoleMutationResponse> {
     const role = await prisma.adminRole.findUnique({
       where: { id: roleId },
     });
@@ -582,10 +668,16 @@ export class AdminSettingsService {
     }
 
     // Update role
-    const updateData: any = {};
-    if (data.name) updateData.name = data.name;
-    if (data.description !== undefined) updateData.description = data.description;
-    if (data.permissions) updateData.permissions = JSON.stringify(data.permissions);
+    const updateData: Prisma.AdminRoleUpdateInput = {};
+    if (data.name) {
+      updateData.name = data.name;
+    }
+    if (data.description !== undefined) {
+      updateData.description = data.description;
+    }
+    if (data.permissions) {
+      updateData.permissions = JSON.stringify(data.permissions) as Prisma.InputJsonValue;
+    }
 
     const updatedRole = await prisma.adminRole.update({
       where: { id: roleId },
@@ -619,7 +711,7 @@ export class AdminSettingsService {
   /**
    * Delete role
    */
-  async deleteRole(roleId: string, adminId: string, adminEmail: string) {
+  async deleteRole(roleId: string, adminId: string, adminEmail: string): Promise<{ id: string; deletedAt: Date }> {
     const role = await prisma.adminRole.findUnique({
       where: { id: roleId },
     });
@@ -674,7 +766,7 @@ export class AdminSettingsService {
   /**
    * Get audit logs
    */
-  async getAuditLogs(filters: AuditLogFilters, _adminId: string) {
+  async getAuditLogs(filters: AuditLogFilters, _adminId: string): Promise<PaginationResponse<AuditLogListItem>> {
     const {
       page = 1,
       limit = 20,
@@ -691,7 +783,7 @@ export class AdminSettingsService {
     const take = limit;
 
     // Build where clause
-    const where: any = {};
+    const where: Prisma.AdminAuditLogWhereInput = {};
 
     if (filterAdminId) {
       where.adminId = filterAdminId;
@@ -714,13 +806,14 @@ export class AdminSettingsService {
     }
 
     if (createdAfter || createdBefore) {
-      where.createdAt = {};
+      const createdAt: Prisma.DateTimeFilter = {};
       if (createdAfter) {
-        where.createdAt.gte = new Date(createdAfter);
+        createdAt.gte = new Date(createdAfter);
       }
       if (createdBefore) {
-        where.createdAt.lte = new Date(createdBefore);
+        createdAt.lte = new Date(createdBefore);
       }
+      where.createdAt = createdAt;
     }
 
     // Get total count
@@ -765,7 +858,7 @@ export class AdminSettingsService {
   /**
    * Export audit logs
    */
-  async exportAuditLogs(filters: AuditLogFilters, adminId: string) {
+  async exportAuditLogs(filters: AuditLogFilters, adminId: string): Promise<{ csvData: string; total: number }> {
     const logs = await this.getAuditLogs(filters, adminId);
 
     // Generate CSV
@@ -784,25 +877,22 @@ export class AdminSettingsService {
       'Created At',
     ];
 
-    const rows = logs.items.map((log: any) => [
+    const rows = logs.items.map((log) => [
       log.id,
       log.adminEmail,
       log.adminName,
       log.action,
       log.resourceType,
-      log.resourceId || '',
-      log.resourceName || '',
+      log.resourceId ?? '',
+      log.resourceName ?? '',
       log.requestMethod,
       log.requestPath,
-      log.ipAddress || '',
+      log.ipAddress ?? '',
       log.status,
       log.createdAt.toISOString(),
     ]);
 
-    const csvData = [
-      headers.join(','),
-      ...rows.map((row) => row.join(',')),
-    ].join('\n');
+    const csvData = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
 
     // Log admin action
     await logAdminAction({
@@ -823,7 +913,7 @@ export class AdminSettingsService {
   /**
    * Get system monitor data
    */
-  async getSystemMonitor(adminId: string) {
+  async getSystemMonitor(adminId: string): Promise<SystemMonitorResponse> {
     // In production, get real metrics from monitoring service
     const monitor = {
       cpu: {
@@ -873,7 +963,10 @@ export class AdminSettingsService {
   /**
    * Get sensitive words
    */
-  async getSensitiveWords(filters: any, _adminId: string) {
+  async getSensitiveWords(
+    filters: { page?: number; limit?: number },
+    _adminId: string
+  ): Promise<PaginationResponse<SensitiveWordListItem>> {
     // In production, load from database
     const { page = 1, limit = 20 } = filters;
 
@@ -902,7 +995,7 @@ export class AdminSettingsService {
     data: SensitiveWordRequest,
     adminId: string,
     adminEmail: string
-  ) {
+  ): Promise<SensitiveWordCreated> {
     // In production, save to database
     const newWord = {
       id: Date.now().toString(),
@@ -931,7 +1024,11 @@ export class AdminSettingsService {
   /**
    * Delete sensitive word
    */
-  async deleteSensitiveWord(wordId: string, adminId: string, adminEmail: string) {
+  async deleteSensitiveWord(
+    wordId: string,
+    adminId: string,
+    adminEmail: string
+  ): Promise<{ id: string; deletedAt: Date }> {
     // In production, delete from database
 
     // Log admin action
@@ -957,7 +1054,10 @@ export class AdminSettingsService {
   /**
    * Create backup
    */
-  async createBackup(adminId: string, adminEmail: string) {
+  async createBackup(
+    adminId: string,
+    adminEmail: string
+  ): Promise<{ id: string; createdAt: Date; size: number; status: string }> {
     // In production, create actual database backup
     const backup = {
       id: Date.now().toString(),
@@ -986,7 +1086,10 @@ export class AdminSettingsService {
   /**
    * Get backup list
    */
-  async getBackupList(filters: any, _adminId: string) {
+  async getBackupList(
+    filters: { page?: number; limit?: number },
+    _adminId: string
+  ): Promise<PaginationResponse<BackupListItem>> {
     const { page = 1, limit = 20 } = filters;
 
     const backups = [
@@ -1014,7 +1117,11 @@ export class AdminSettingsService {
   /**
    * Restore backup
    */
-  async restoreBackup(backupId: string, adminId: string, adminEmail: string) {
+  async restoreBackup(
+    backupId: string,
+    adminId: string,
+    adminEmail: string
+  ): Promise<{ backupId: string; status: string; startedAt: Date }> {
     // In production, restore from actual backup
     // This is a critical operation that should be done carefully
 

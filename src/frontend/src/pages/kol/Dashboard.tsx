@@ -6,9 +6,7 @@ import Typography from '@mui/material/Typography';
 import Grid from '@mui/material/Grid';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
-import CardActions from '@mui/material/CardActions';
 import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
 import LinearProgress from '@mui/material/LinearProgress';
 import Alert from '@mui/material/Alert';
 import Chip from '@mui/material/Chip';
@@ -21,11 +19,11 @@ import TaskIcon from '@mui/icons-material/Task';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import PeopleIcon from '@mui/icons-material/People';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
-
+import PersonIcon from '@mui/icons-material/Person';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 // Types
 import type { KolTask } from '../../stores/kolStore';
 
@@ -34,7 +32,17 @@ import { useAuthStore } from '../../stores/authStore';
 import { useKolStore } from '../../stores/kolStore';
 
 // Services
-import { kolProfileAPI, myTasksAPI } from '../../services/kolApi';
+import {
+  earningsAPI,
+  kolAcceptFrequencyQueryKey,
+  kolBalanceQueryKey,
+  kolProfileAPI,
+  myTasksAPI,
+} from '../../services/kolApi';
+import { getApiErrorMessage } from '../../utils/apiError';
+import { KolHubNav } from '../../components/kol/KolHubNav';
+import { KolFrequencyAlerts } from '../../components/kol/KolFrequencyAlerts';
+import { KOL_ROUTE_SEG, pathKol, pathKolMyTask } from '../../constants/appPaths';
 
 // Styled Components
 const StatCard = styled(Card)(({ theme }) => ({
@@ -122,6 +130,18 @@ export const DashboardPage: React.FC = () => {
     retry: 1,
   });
 
+  const balanceQ = useQuery({
+    queryKey: [...kolBalanceQueryKey],
+    queryFn: earningsAPI.getBalance,
+    retry: 1,
+  });
+
+  const freqQ = useQuery({
+    queryKey: [...kolAcceptFrequencyQueryKey],
+    queryFn: kolProfileAPI.getAcceptFrequency,
+    retry: 0,
+  });
+
   // Update store when data changes
   React.useEffect(() => {
     if (kol) {
@@ -136,6 +156,8 @@ export const DashboardPage: React.FC = () => {
     refetchKol();
     refetchStats();
     refetchTasks();
+    void balanceQ.refetch();
+    void freqQ.refetch();
   };
 
   const formatCurrency = (value: number) => {
@@ -143,16 +165,6 @@ export const DashboardPage: React.FC = () => {
       style: 'currency',
       currency: 'CNY',
     }).format(value);
-  };
-
-  const formatNumber = (value: number) => {
-    if (value >= 1000000) {
-      return `${(value / 1000000).toFixed(1)}M`;
-    }
-    if (value >= 1000) {
-      return `${(value / 1000).toFixed(1)}K`;
-    }
-    return value.toString();
   };
 
   const getStatusLabel = (status: KolTask['status']) => {
@@ -186,7 +198,7 @@ export const DashboardPage: React.FC = () => {
   if (kolError) {
     return (
       <Alert severity="error" sx={{ mt: 2 }}>
-        加载 KOL 信息失败，请稍后重试
+        {getApiErrorMessage(kolError, '加载 KOL 信息失败，请稍后重试')}
       </Alert>
     );
   }
@@ -197,12 +209,14 @@ export const DashboardPage: React.FC = () => {
       <Box
         sx={{
           display: 'flex',
+          flexWrap: 'wrap',
           justifyContent: 'space-between',
-          alignItems: 'center',
-          mb: 4,
+          alignItems: 'flex-start',
+          gap: 2,
+          mb: 2,
         }}
       >
-        <Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="h4" gutterBottom>
             欢迎回来，{user?.nickname || kol?.platformDisplayName || 'KOL'}！
           </Typography>
@@ -210,17 +224,24 @@ export const DashboardPage: React.FC = () => {
             这是您的 KOL 仪表盘，查看您的收益数据和任务情况
           </Typography>
         </Box>
-        <IconButton onClick={handleRefresh} color="primary">
-          <RefreshIcon />
-        </IconButton>
+        <KolHubNav preset="dashboard-page" onRefresh={handleRefresh} />
       </Box>
+      <Alert severity="info" sx={{ mb: 3 }}>
+        本页汇总收益与任务概况；接单、交付与订单状态请在「我的任务」或任务广场详情中操作。
+      </Alert>
+      <KolFrequencyAlerts
+        freqQ={freqQ}
+        tone="dashboard"
+        onRetry={() => void freqQ.refetch()}
+        onGoTaskMarket={() => navigate(pathKol(KOL_ROUTE_SEG.taskMarket))}
+      />
 
       {/* Earnings Stats Cards */}
       <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
         收益统计
       </Typography>
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard>
             <CardContent>
               <StatIconWrapper sx={{ bgcolor: 'primary.light', color: 'primary.main' }}>
@@ -236,7 +257,7 @@ export const DashboardPage: React.FC = () => {
           </StatCard>
         </Grid>
 
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard>
             <CardContent>
               <StatIconWrapper sx={{ bgcolor: 'success.light', color: 'success.main' }}>
@@ -252,7 +273,7 @@ export const DashboardPage: React.FC = () => {
           </StatCard>
         </Grid>
 
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard>
             <CardContent>
               <StatIconWrapper sx={{ bgcolor: 'warning.light', color: 'warning.main' }}>
@@ -263,6 +284,25 @@ export const DashboardPage: React.FC = () => {
               </Typography>
               <Typography variant="h4">
                 {formatCurrency(stats?.pendingEarnings || 0)}
+              </Typography>
+            </CardContent>
+          </StatCard>
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <StatCard>
+            <CardContent>
+              <StatIconWrapper sx={{ bgcolor: 'info.light', color: 'info.main' }}>
+                <LockOutlinedIcon sx={{ fontSize: 32 }} />
+              </StatIconWrapper>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                订单冻结合计
+              </Typography>
+              <Typography variant="h4" color="info.main">
+                {formatCurrency(balanceQ.data?.ordersFrozenTotal ?? 0)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                与「收益管理」页 /kols/balance 同源
               </Typography>
             </CardContent>
           </StatCard>
@@ -329,7 +369,7 @@ export const DashboardPage: React.FC = () => {
       </Typography>
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-          <QuickActionCard onClick={() => navigate('/kol/task-market')}>
+          <QuickActionCard onClick={() => navigate(pathKol(KOL_ROUTE_SEG.myTasks))}>
             <Box
               className="quick-action-icon"
               sx={{
@@ -338,6 +378,34 @@ export const DashboardPage: React.FC = () => {
                 borderRadius: 3,
                 bgcolor: 'primary.light',
                 color: 'primary.main',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                mb: 2,
+                transition: 'transform 0.2s',
+              }}
+            >
+              <TaskIcon sx={{ fontSize: 32 }} />
+            </Box>
+            <Typography variant="subtitle2" align="center">
+              我的任务
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              接单、交付与订单详情
+            </Typography>
+          </QuickActionCard>
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <QuickActionCard onClick={() => navigate(pathKol(KOL_ROUTE_SEG.taskMarket))}>
+            <Box
+              className="quick-action-icon"
+              sx={{
+                width: 64,
+                height: 64,
+                borderRadius: 3,
+                bgcolor: 'secondary.light',
+                color: 'secondary.main',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -357,35 +425,7 @@ export const DashboardPage: React.FC = () => {
         </Grid>
 
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-          <QuickActionCard onClick={() => navigate('/kol/accounts')}>
-            <Box
-              className="quick-action-icon"
-              sx={{
-                width: 64,
-                height: 64,
-                borderRadius: 3,
-                bgcolor: 'secondary.light',
-                color: 'secondary.main',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                mb: 2,
-                transition: 'transform 0.2s',
-              }}
-            >
-              <AccountBalanceIcon sx={{ fontSize: 32 }} />
-            </Box>
-            <Typography variant="subtitle2" align="center">
-              账号绑定
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              管理社交媒体账号
-            </Typography>
-          </QuickActionCard>
-        </Grid>
-
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-          <QuickActionCard onClick={() => navigate('/kol/earnings')}>
+          <QuickActionCard onClick={() => navigate(pathKol(KOL_ROUTE_SEG.earnings))}>
             <Box
               className="quick-action-icon"
               sx={{
@@ -411,6 +451,90 @@ export const DashboardPage: React.FC = () => {
             </Typography>
           </QuickActionCard>
         </Grid>
+
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <QuickActionCard onClick={() => navigate(pathKol(KOL_ROUTE_SEG.analytics))}>
+            <Box
+              className="quick-action-icon"
+              sx={{
+                width: 64,
+                height: 64,
+                borderRadius: 3,
+                bgcolor: 'info.light',
+                color: 'info.main',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                mb: 2,
+                transition: 'transform 0.2s',
+              }}
+            >
+              <TrendingUpIcon sx={{ fontSize: 32 }} />
+            </Box>
+            <Typography variant="subtitle2" align="center">
+              经营分析
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              订单分布、收入与曝光汇总
+            </Typography>
+          </QuickActionCard>
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <QuickActionCard onClick={() => navigate(pathKol(KOL_ROUTE_SEG.profile))}>
+            <Box
+              className="quick-action-icon"
+              sx={{
+                width: 64,
+                height: 64,
+                borderRadius: 3,
+                bgcolor: 'grey.200',
+                color: 'text.primary',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                mb: 2,
+                transition: 'transform 0.2s',
+              }}
+            >
+              <PersonIcon sx={{ fontSize: 32 }} />
+            </Box>
+            <Typography variant="subtitle2" align="center">
+              我的资料
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              编辑展示信息与报价
+            </Typography>
+          </QuickActionCard>
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <QuickActionCard onClick={() => navigate(pathKol(KOL_ROUTE_SEG.accounts))}>
+            <Box
+              className="quick-action-icon"
+              sx={{
+                width: 64,
+                height: 64,
+                borderRadius: 3,
+                bgcolor: 'warning.light',
+                color: 'warning.main',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                mb: 2,
+                transition: 'transform 0.2s',
+              }}
+            >
+              <AccountBalanceIcon sx={{ fontSize: 32 }} />
+            </Box>
+            <Typography variant="subtitle2" align="center">
+              账号绑定
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              管理社交媒体账号
+            </Typography>
+          </QuickActionCard>
+        </Grid>
       </Grid>
 
       {/* Recent Tasks */}
@@ -427,7 +551,7 @@ export const DashboardPage: React.FC = () => {
             <Typography variant="h6">最近任务</Typography>
             <Button
               endIcon={<ArrowForwardIcon />}
-              onClick={() => navigate('/kol/my-tasks')}
+              onClick={() => navigate(pathKol(KOL_ROUTE_SEG.myTasks))}
             >
               查看全部
             </Button>
@@ -449,7 +573,7 @@ export const DashboardPage: React.FC = () => {
                       },
                     }}
                     onClick={() =>
-                      navigate(`/kol/my-tasks/${task.id}`)
+                      navigate(pathKolMyTask(task.id))
                     }
                   >
                     <CardContent>
@@ -480,6 +604,11 @@ export const DashboardPage: React.FC = () => {
                             <Typography variant="body2" color="text.secondary">
                               预算：{formatCurrency(task.budget)}
                             </Typography>
+                            {(task.frozenAmount ?? 0) > 0 ? (
+                              <Typography variant="body2" color="warning.main">
+                                冻结：{formatCurrency(task.frozenAmount!)}
+                              </Typography>
+                            ) : null}
                             <Typography variant="body2" color="text.secondary">
                               平台：{task.platform}
                             </Typography>
@@ -513,7 +642,7 @@ export const DashboardPage: React.FC = () => {
               <Button
                 variant="contained"
                 startIcon={<PeopleIcon />}
-                onClick={() => navigate('/kol/task-market')}
+                onClick={() => navigate(pathKol(KOL_ROUTE_SEG.taskMarket))}
               >
                 浏览任务广场
               </Button>

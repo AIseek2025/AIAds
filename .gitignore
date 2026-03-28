@@ -24,6 +24,9 @@ Thumbs.db
 # 测试
 coverage/
 .test-results/
+tests/playwright-report/
+tests/test-results/
+*.tsbuildinfo
 
 # IDE
 .idea/

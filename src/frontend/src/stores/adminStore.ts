@@ -34,7 +34,8 @@ export const useAdminAuthStore = create<AdminAuthState>()(
       accessToken: null,
       refreshToken: null,
       isAuthenticated: false,
-      isLoading: true,
+      // 客户端路由需在首帧即可判断是否跳转；持久化恢复后由 checkAuth 同步（见 persist.onRehydrateStorage）
+      isLoading: false,
 
       login: (admin, accessToken, refreshToken, role, permissions) => {
         localStorage.setItem('adminAccessToken', accessToken);
@@ -87,6 +88,22 @@ export const useAdminAuthStore = create<AdminAuthState>()(
           return true;
         }
 
+        // 无 token：清掉 persist 中可能残留的 admin 会话，避免未登录仍被视为已登录
+        if (!accessToken) {
+          localStorage.removeItem('adminRefreshToken');
+          set({
+            admin: null,
+            role: null,
+            permissions: [],
+            accessToken: null,
+            refreshToken: null,
+            isAuthenticated: false,
+            isLoading: false,
+          });
+          return false;
+        }
+
+        // 有 token 但 admin 尚未恢复（persist 未完成首帧）：不清理 token，仅暂不标为已登录
         set({ isAuthenticated: false, isLoading: false });
         return false;
       },
@@ -124,6 +141,22 @@ export const useAdminAuthStore = create<AdminAuthState>()(
         permissions: state.permissions,
         isAuthenticated: state.isAuthenticated,
       }),
+      merge: (persistedState, currentState) => {
+        const p =
+          persistedState && typeof persistedState === 'object'
+            ? (persistedState as Partial<AdminAuthState>)
+            : {};
+        return {
+          ...currentState,
+          ...p,
+          // 不参与持久化；旧存储若含 true 会导致 ProtectedAdminRoute 永久 Loading
+          isLoading: false,
+        };
+      },
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) return;
+        useAdminAuthStore.getState().checkAuth();
+      },
     }
   )
 );

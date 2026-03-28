@@ -1,6 +1,6 @@
 /**
  * TikTok Integration Types
- * 
+ *
  * Type definitions for TikTok API integration
  */
 

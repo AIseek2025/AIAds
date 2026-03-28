@@ -4,7 +4,6 @@ import TextField from '@mui/material/TextField';
 import InputAdornment from '@mui/material/InputAdornment';
 import IconButton from '@mui/material/IconButton';
 import Button from '@mui/material/Button';
-import Stack from '@mui/material/Stack';
 
 // Icons
 import SearchIcon from '@mui/icons-material/Search';

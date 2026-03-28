@@ -27,6 +27,7 @@ export interface KolTask {
   campaignTitle: string;
   campaignDescription?: string;
   platform: string;
+  /** 列表与详情均可能展示为「预估/结算报酬」，与订单 kol_earning 对齐 */
   budget: number;
   status: 'pending' | 'accepted' | 'in_progress' | 'pending_review' | 'completed' | 'rejected';
   deadline?: string;
@@ -37,13 +38,55 @@ export interface KolTask {
   contentDescription?: string;
   createdAt: string;
   updatedAt: string;
+  /** 以下为订单接口扩展字段（详情页优先展示） */
+  orderNo?: string;
+  pricingModel?: 'fixed' | 'cpm';
+  orderPrice?: number;
+  platformFee?: number;
+  kolEarning?: number;
+  frozenAmount?: number;
+  views?: number;
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  revisionCount?: number;
+  draftUrls?: string[];
+  publishedUrls?: string[];
+  cpmBreakdown?: {
+    billable_impressions: number;
+    raw_views: number;
+    cpm_rate: number | null;
+    gross_spend: number;
+    kol_earning: number;
+  };
+  /** 任务广场活动（Campaign / TaskResponse）扩展 */
+  campaignStatusRaw?: string;
+  objective?: string;
+  contentType?: string;
+  contentCount?: number;
+  minFollowers?: number;
+  maxFollowers?: number;
+  minEngagementRate?: number;
+  requiredCategories?: string[];
+  targetCountries?: string[];
+  contentRequirements?: string;
+  contentGuidelines?: string;
+  requiredHashtags?: string[];
+  requiredMentions?: string[];
+  startDate?: string;
+  endDate?: string;
+  totalKols?: number;
+  appliedKols?: number;
+  selectedKols?: number;
+  publishedVideos?: number;
 }
 
 export interface KolEarnings {
   id: string;
+  /** 关联订单 ID（来自流水 order_id） */
   taskId: string;
   amount: number;
-  type: 'task_reward' | 'bonus' | 'refund';
+  type: 'task_reward' | 'bonus' | 'refund' | 'withdrawal';
   status: 'pending' | 'settled' | 'withdrawn';
   settledAt?: string;
   createdAt: string;
@@ -100,7 +143,7 @@ interface KolState {
   updateTask: (taskId: string, data: Partial<KolTask>) => void;
 }
 
-export const useKolStore = create<KolState>((set, get) => ({
+export const useKolStore = create<KolState>((set) => ({
   // Initial state
   kol: null,
   stats: null,

@@ -7,10 +7,15 @@
 ```
 tests/
 ├── e2e/                    # E2E 测试文件
-│   ├── advertiser-auth.spec.ts    # 广告主认证流程测试
-│   ├── kol-auth.spec.ts           # KOL 认证流程测试
-│   └── forgot-password.spec.ts    # 忘记密码流程测试
-└── playwright.config.ts    # Playwright 配置文件
+│   ├── admin-smoke.spec.ts
+│   ├── admin-api-*.spec.ts       # 管理端 API 回归（可选集成环境）
+│   ├── integration-order-lifecycle-api.spec.ts  # 广告主建单→完成→流水（强依赖集成数据）
+│   ├── advertiser-auth.spec.ts
+│   ├── kol-auth.spec.ts
+│   ├── forgot-password.spec.ts
+│   └── public-routes.spec.ts
+├── global-setup.ts         # 加载 .env、可选换 token / 自动选订单 ID
+└── playwright.config.ts
 ```
 
 ## 测试类型
@@ -18,6 +23,8 @@ tests/
 ### 1. E2E 测试 (Playwright)
 
 E2E 测试用于验证完整的用户流程，运行在真实的浏览器环境中。
+
+Playwright 默认在 **4173** 端口启动 Vite（避免与本机已占用 **3000** 的其他服务冲突），`baseURL` 与之对齐。
 
 **运行命令**:
 
@@ -40,6 +47,23 @@ npm run test:e2e:ui
 # 查看测试报告
 npm run test:e2e:report
 ```
+
+### 管理端 API 回归（`test:e2e:api`）
+
+聚合「健康检查 + 批量指标 + 登录 + 订单/看板/财务/KOL 等只读 API」，用于**可选集成环境**回归（与 `ADMIN_API_SPEC.md` §9.5 一致）。
+
+```bash
+# 仅跑 API 相关 spec（仓库根也可：npm run test:e2e:api）
+npm run test:e2e:api
+
+# 仅 Chromium（避免未安装 firefox/webkit 时失败；根目录：npm run test:e2e:api:chromium）
+npm run test:e2e:api:chromium
+
+# 不启动 Vite（仅 HTTP 用例）
+E2E_SKIP_WEBSERVER=true npm run test:e2e:api
+```
+
+环境变量：`AIADS_E2E_API_BASE` 必填（集成用例）；`AIADS_E2E_ADMIN_TOKEN` 与「`AIADS_E2E_ADMIN_EMAIL` + `AIADS_E2E_ADMIN_PASSWORD`」二选一即可——未设 Token 时 **`global-setup.ts`** 会用邮箱密码调用登录接口并注入 Token；未设 `AIADS_E2E_ORDER_ID` 且列表有订单时会自动取首条。可将 `tests/.env.example` 复制为仓库根 `.env` 或 `tests/.env`。演练前可执行 `bash scripts/check-e2e-api-env.sh`（不打印 Token 明文）。
 
 ## 后端测试
 

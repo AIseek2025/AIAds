@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { mockOrders } from '../../data/mockData';
-import type { OrderListItem } from '../../types';
 
 // MUI Components
 import Box from '@mui/material/Box';

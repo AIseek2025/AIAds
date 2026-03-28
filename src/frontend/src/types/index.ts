@@ -27,6 +27,8 @@ export interface RegisterData {
   password: string;
   phone?: string;
   role: 'advertiser' | 'kol';
+  /** 可选；与后端 REQUIRE_INVITE_CODE_FOR_REGISTRATION 联用 */
+  inviteCode?: string;
   verificationCode: string;
   agreeTerms: boolean;
 }
@@ -89,6 +91,21 @@ export interface PaginationResponse {
   has_prev: boolean;
 }
 
+/** 管理端邀请码列表（与后端 snake_case 一致） */
+export interface InviteCodeRow {
+  id: string;
+  code: string;
+  role_target: 'advertiser' | 'kol';
+  max_uses: number;
+  used_count: number;
+  expires_at: string | null;
+  active: boolean;
+  note: string | null;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ListResponse<T> {
   items: T[];
   pagination: PaginationResponse;
@@ -119,6 +136,8 @@ export interface Advertiser {
   totalCampaigns: number;
   activeCampaigns: number;
   totalOrders: number;
+  /** 全活动订单冻结合计（GET /advertisers/me 与详情同源） */
+  ordersFrozenTotal?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -188,7 +207,14 @@ export interface Campaign {
   startDate: string;
   endDate: string;
   deadline?: string;
-  status: 'draft' | 'active' | 'paused' | 'completed' | 'cancelled';
+  status:
+    | 'draft'
+    | 'pending_review'
+    | 'active'
+    | 'paused'
+    | 'completed'
+    | 'cancelled'
+    | 'rejected';
   totalKols: number;
   appliedKols: number;
   selectedKols: number;
@@ -196,6 +222,8 @@ export interface Campaign {
   totalViews: number;
   totalLikes: number;
   totalComments: number;
+  /** 本活动订单冻结金额合计（与详情/管理端同源） */
+  ordersFrozenTotal?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -347,6 +375,8 @@ export interface AdminUser {
   phone?: string;
   nickname: string;
   avatarUrl?: string;
+  /** 界面语言偏好（可选，部分接口可能返回） */
+  language?: string;
   role: 'advertiser' | 'kol';
   status: 'active' | 'suspended' | 'banned';
   emailVerified: boolean;
@@ -422,6 +452,10 @@ export interface KolApplication {
   verified?: boolean;
   avgViews?: number;
   totalOrders?: number;
+  /** 管理端 GET /admin/kols* 与 KOL 端 /kols/balance 同源聚合 */
+  totalEarnings?: number;
+  availableBalance?: number;
+  ordersFrozenTotal?: number;
   submittedAt: string;
   createdAt: string;
 }
@@ -502,12 +536,12 @@ export interface Transaction {
   currency: string;
   paymentMethod: string;
   paymentRef?: string;
-  status: 'pending' | 'completed' | 'failed' | 'cancelled';
-  user: {
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  user?: {
     id: string;
     email: string;
     companyName?: string;
-  };
+  } | null;
   balanceBefore?: number;
   balanceAfter?: number;
   description?: string;
@@ -532,7 +566,9 @@ export interface Withdrawal {
   };
   amount: number;
   currency: string;
-  paymentMethod: 'paypal' | 'bank_transfer' | 'alipay' | 'wechat';
+  paymentMethod: string;
+  accountName?: string;
+  accountNumber?: string;
   paymentAccount: string;
   paymentAccountName?: string;
   bankInfo?: {
@@ -570,6 +606,16 @@ export interface TransactionListParams extends PaginationParams {
   created_before?: string;
 }
 
+/** GET /finance/overview — 管理端财务概览（camelCase，由 adminApi 映射） */
+export interface FinanceOverview {
+  period: string;
+  totalCompletedVolume: number;
+  pendingWithdrawals: number;
+  monthlyRevenue: number;
+  pendingRecharges: number;
+  pendingInvoices: number;
+}
+
 // Dashboard types
 export interface DashboardStats {
   period: {
@@ -589,19 +635,32 @@ export interface DashboardStats {
     completedToday: number;
     totalBudget: number;
     spentAmount: number;
+    /** 待审核活动（pending_review） */
+    pendingReview?: number;
+    /** 预算占用 ≥ budgetRiskThreshold 的活动数 */
+    budgetRiskCount?: number;
+    /** 与 budget-risks / Cron 一致的判定阈值 */
+    budgetRiskThreshold?: number;
   };
   orders: {
     total: number;
     pending: number;
     inProgress: number;
     completedToday: number;
+    /** 纠纷中订单数 */
+    disputed?: number;
+    /** 未结案纠纷工单数 */
+    pendingDisputes?: number;
   };
   finance: {
     totalRevenue: number;
     todayRevenue: number;
     totalPayout: number;
     todayPayout: number;
+    /** 待处理提现金额合计 */
     pendingWithdrawals: number;
+    /** 待处理提现笔数 */
+    pendingWithdrawalCount?: number;
   };
   content: {
     pendingReview: number;
@@ -609,7 +668,7 @@ export interface DashboardStats {
     rejectedToday: number;
   };
   kol?: {
-    pendingVerification: number;
+    pendingVerification?: number;
   };
   totalUsers?: number;
   totalAdvertisers?: number;
@@ -640,6 +699,16 @@ export interface AnalyticsData {
   };
   platformDistribution?: Record<string, number>;
   categoryDistribution?: Record<string, number>;
+  /** 与 categoryDistribution 二选一：部分接口曾用该字段名 */
+  kolCategoryDistribution?: Record<string, number>;
+  campaignPerformance?: {
+    labels: string[];
+    series: {
+      impressions: number[];
+      clicks: number[];
+      conversions: number[];
+    };
+  };
 }
 
 export interface KolRanking {
@@ -758,6 +827,8 @@ export interface AdvertiserListItem {
   walletBalance?: number;
   balance?: number;
   frozenBalance?: number;
+  /** 列表行：全活动订单冻结 */
+  ordersFrozenTotal?: number;
   activeCampaigns?: number;
   status?: 'active' | 'disabled' | 'suspended';
   createdAt?: string;
@@ -778,6 +849,8 @@ export interface AdvertiserDetail extends AdvertiserListItem {
   rejectionReason?: string;
   totalRecharged: number;
   totalSpent: number;
+  /** 全活动订单冻结合计（与账户冻结不同） */
+  ordersFrozenTotal?: number;
   statistics: {
     totalCampaigns: number;
     activeCampaigns: number;
@@ -860,6 +933,8 @@ export interface CampaignListItem {
   industry?: string;
   budget: number;
   spentAmount?: number;
+  /** 活动下订单冻结金额合计（管理端详情等） */
+  ordersFrozenTotal?: number;
   status: 'draft' | 'pending_review' | 'pending' | 'approved' | 'rejected' | 'active' | 'paused' | 'completed' | 'cancelled';
   objective?: 'awareness' | 'engagement' | 'traffic' | 'conversion' | 'sales';
   startDate?: string;
@@ -955,6 +1030,22 @@ export interface CampaignStats {
   }>;
 }
 
+/** GET /admin/campaigns/budget-risks 响应（前端统一 camelCase） */
+export interface CampaignBudgetRiskItem {
+  id: string;
+  title: string;
+  budget: number;
+  spentAmount: number;
+  /** spent / budget */
+  utilization: number;
+  status: string;
+}
+
+export interface CampaignBudgetRisksResponse {
+  threshold: number;
+  items: CampaignBudgetRiskItem[];
+}
+
 export interface CampaignAnomaly {
   id: string;
   campaignId: string;
@@ -987,6 +1078,13 @@ export interface OrderListItem {
   kolPlatform?: string;
   platform?: string;
   amount: number;
+  /** fixed | cpm */
+  pricingModel?: string;
+  pricing_model?: string;
+  cpmRate?: number | null;
+  cpm_rate?: number | null;
+  frozenAmount?: number;
+  frozen_amount?: number;
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'disputed';
   createdAt: string;
   updatedAt?: string;

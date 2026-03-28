@@ -54,11 +54,15 @@ export class YouTubeSyncService {
    */
   private scheduleActiveKolsSync(): void {
     // Run every hour at minute 0
-    this.activeKolsJob = cron.schedule('0 * * * *', async () => {
-      await this.syncActiveKols();
-    }, {
-      timezone: 'Asia/Shanghai',
-    });
+    this.activeKolsJob = cron.schedule(
+      '0 * * * *',
+      async () => {
+        await this.syncActiveKols();
+      },
+      {
+        timezone: 'Asia/Shanghai',
+      }
+    );
 
     logger.info('Active KOLs sync job scheduled', { cron: '0 * * * *' });
   }
@@ -68,11 +72,15 @@ export class YouTubeSyncService {
    */
   private scheduleAllKolsSync(): void {
     // Run daily at 3:00 AM
-    this.allKolsJob = cron.schedule('0 3 * * *', async () => {
-      await this.syncAllKols();
-    }, {
-      timezone: 'Asia/Shanghai',
-    });
+    this.allKolsJob = cron.schedule(
+      '0 3 * * *',
+      async () => {
+        await this.syncAllKols();
+      },
+      {
+        timezone: 'Asia/Shanghai',
+      }
+    );
 
     logger.info('All KOLs sync job scheduled', { cron: '0 3 * * *' });
   }
@@ -82,11 +90,15 @@ export class YouTubeSyncService {
    */
   private scheduleTokenRefresh(): void {
     // Run every 30 minutes
-    this.tokenRefreshJob = cron.schedule('*/30 * * * *', async () => {
-      await this.checkAndRefreshTokens();
-    }, {
-      timezone: 'Asia/Shanghai',
-    });
+    this.tokenRefreshJob = cron.schedule(
+      '*/30 * * * *',
+      async () => {
+        await this.checkAndRefreshTokens();
+      },
+      {
+        timezone: 'Asia/Shanghai',
+      }
+    );
 
     logger.info('Token refresh job scheduled', { cron: '*/30 * * * *' });
   }
@@ -144,9 +156,7 @@ export class YouTubeSyncService {
       const batchSize = 5;
       for (let i = 0; i < kolAccounts.length; i += batchSize) {
         const batch = kolAccounts.slice(i, i + batchSize);
-        const promises = batch.map((account) =>
-          this.syncWithRetry(account.kolId, account.id)
-        );
+        const promises = batch.map((account) => this.syncWithRetry(account.kolId, account.id));
 
         const results = await Promise.all(promises);
 
@@ -231,9 +241,7 @@ export class YouTubeSyncService {
       const batchSize = 3;
       for (let i = 0; i < kolAccounts.length; i += batchSize) {
         const batch = kolAccounts.slice(i, i + batchSize);
-        const promises = batch.map((account) =>
-          this.syncWithRetry(account.kolId, account.id, { syncVideos: true })
-        );
+        const promises = batch.map((account) => this.syncWithRetry(account.kolId, account.id, { syncVideos: true }));
 
         const results = await Promise.all(promises);
 
@@ -306,7 +314,7 @@ export class YouTubeSyncService {
         } catch (error) {
           logger.error('Failed to refresh token', {
             accountId: account.id,
-            error
+            error,
           });
         }
       }
@@ -433,9 +441,7 @@ export class YouTubeSyncService {
     });
 
     const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const recentSyncedCount = recentSyncs.filter(
-      (a) => a.lastSyncedAt && a.lastSyncedAt >= last24Hours
-    ).length;
+    const recentSyncedCount = recentSyncs.filter((a) => a.lastSyncedAt && a.lastSyncedAt >= last24Hours).length;
 
     return {
       activeKols: {

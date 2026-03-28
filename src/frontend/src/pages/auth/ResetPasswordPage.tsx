@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
@@ -10,6 +10,10 @@ import Alert from '@mui/material/Alert';
 import { styled } from '@mui/material/styles';
 import { Button, Input, Loading, SnackbarComponent } from '../../components/common';
 import { authAPI } from '../../services/api';
+import {
+  loginPathAfterPasswordRecovery,
+  pathForgotPasswordPreservingRecoveryContext,
+} from '../../constants/appPaths';
 
 const AuthContainer = styled(Box)(({ theme }) => ({
   minHeight: '100vh',
@@ -57,6 +61,7 @@ const DescriptionText = styled(Typography)(({ theme }) => ({
 export const ResetPasswordPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const loginPath = useMemo(() => loginPathAfterPasswordRecovery(searchParams), [searchParams]);
   const token = searchParams.get('token');
   const email = searchParams.get('email');
 
@@ -132,7 +137,7 @@ export const ResetPasswordPage: React.FC = () => {
         severity: 'success',
       });
       setTimeout(() => {
-        window.location.href = '/login';
+        navigate(loginPath, { replace: true });
       }, 2000);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : '密码重置失败';
@@ -174,7 +179,7 @@ export const ResetPasswordPage: React.FC = () => {
               color="primary"
               size="large"
               fullWidth
-              onClick={() => navigate('/forgot-password')}
+              onClick={() => navigate(pathForgotPasswordPreservingRecoveryContext(searchParams))}
             >
               重新设置密码
             </Button>
@@ -248,7 +253,7 @@ export const ResetPasswordPage: React.FC = () => {
           <Box sx={{ mt: 3, textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary">
               记得密码了？{' '}
-              <Link to="/login" style={{ textDecoration: 'none' }}>
+              <Link to={loginPath} style={{ textDecoration: 'none' }}>
                 <Typography component="span" color="primary" fontWeight="600">
                   返回登录
                 </Typography>

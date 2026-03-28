@@ -32,30 +32,23 @@ export function validateJwtSecret(secret: string | undefined, name: string): voi
   if (!secret) {
     throw new Error(`${name} is required`);
   }
-  
+
   // JWT secret should be at least 32 characters (256 bits when hex-encoded)
   if (secret.length < 32) {
-    throw new Error(`${name} must be at least 32 characters. Current length: ${secret.length}. Consider using generateSecureSecret() to create a strong secret.`);
+    throw new Error(
+      `${name} must be at least 32 characters. Current length: ${secret.length}. Consider using generateSecureSecret() to create a strong secret.`
+    );
   }
-  
+
   // Check for common weak patterns
-  const weakPatterns = [
-    /^secret/i,
-    /^password/i,
-    /^123456/,
-    /^qwerty/i,
-    /^admin/i,
-    /^test/i,
-    /^dev-/,
-    /^change-me/i,
-  ];
-  
+  const weakPatterns = [/^secret/i, /^password/i, /^123456/, /^qwerty/i, /^admin/i, /^test/i, /^dev-/, /^change-me/i];
+
   for (const pattern of weakPatterns) {
     if (pattern.test(secret)) {
       throw new Error(`${name} contains weak patterns. Please use a randomly generated secret.`);
     }
   }
-  
+
   logger.info(`${name} validation passed`, { length: secret.length });
 }
 

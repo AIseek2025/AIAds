@@ -1,7 +1,39 @@
+import { KolPlatform, KolStatus, Prisma } from '@prisma/client';
 import prisma from '../../config/database';
 import { logger } from '../../utils/logger';
+import { decimalToNumber } from '../../utils/decimal';
 import { cacheService } from '../../config/redis';
 import { logAdminAction } from './audit.service';
+import { kolFrequencyService } from '../kol-frequency.service';
+import { getBudgetRiskThreshold } from '../../utils/budgetRiskThreshold';
+
+/** KOL 排行指标字段（与 getKolRankings 的 metric 分支一致） */
+type KolRankingMetricField = 'totalEarnings' | 'totalOrders' | 'followers' | 'engagementRate';
+
+function kolRankingMetricValue(
+  kol: {
+    totalEarnings: Prisma.Decimal;
+    totalOrders: number;
+    followers: number;
+    engagementRate: Prisma.Decimal;
+  },
+  field: KolRankingMetricField
+): number {
+  switch (field) {
+    case 'totalEarnings':
+      return decimalToNumber(kol.totalEarnings);
+    case 'totalOrders':
+      return kol.totalOrders;
+    case 'followers':
+      return kol.followers;
+    case 'engagementRate':
+      return decimalToNumber(kol.engagementRate);
+    default: {
+      const _exhaustive: never = field;
+      return _exhaustive;
+    }
+  }
+}
 
 // Dashboard stats response
 export interface DashboardStatsResponse {
@@ -22,19 +54,36 @@ export interface DashboardStatsResponse {
     completedToday: number;
     totalBudget: number;
     spentAmount: number;
+    /** 待平台审核的活动（pending_review） */
+    pendingReview: number;
+    /** 预算占用率 ≥ budgetRiskThreshold 的活动数（与 GET /campaigns/budget-risks 一致） */
+    budgetRiskCount: number;
+    /** 预算风险判定阈值（与 AIADS_BUDGET_RISK_THRESHOLD / budget-risks 默认一致） */
+    budgetRiskThreshold: number;
+  };
+  kol: {
+    /** 待入驻/资质审核的 KOL（status=pending） */
+    pendingVerification: number;
   };
   orders: {
     total: number;
     pending: number;
     inProgress: number;
     completedToday: number;
+    /** 当前 orders.status = disputed */
+    disputed: number;
+    /** 未结案纠纷工单（order_disputes.status ≠ resolved） */
+    pendingDisputes: number;
   };
   finance: {
     totalRevenue: number;
     todayRevenue: number;
     totalPayout: number;
     todayPayout: number;
+    /** 待处理提现金额合计 */
     pendingWithdrawals: number;
+    /** 待处理提现笔数 */
+    pendingWithdrawalCount: number;
   };
   content: {
     pendingReview: number;
@@ -88,12 +137,12 @@ export class AdminDashboardService {
    */
   async getStats(period: string = 'today', adminId: string): Promise<DashboardStatsResponse> {
     // Try to get from cache first
-    const cacheKey = `dashboard:stats:${period}`;
+    const cacheKey = `dashboard:stats:v4:${period}`;
     const cached = await cacheService.get<DashboardStatsResponse>(cacheKey);
-    
+
     if (cached) {
       logger.debug('Dashboard stats from cache', { period });
-      
+
       // Log admin action
       await logAdminAction({
         adminId,
@@ -103,7 +152,7 @@ export class AdminDashboardService {
         requestPath: '/api/v1/admin/dashboard/stats',
         status: 'success',
       });
-      
+
       return cached;
     }
 
@@ -114,7 +163,7 @@ export class AdminDashboardService {
     endOfDay.setDate(endOfDay.getDate() + 1);
 
     let startDate = startOfDay;
-    let endDate = endOfDay;
+    const endDate = endOfDay;
 
     if (period === 'week') {
       startDate = new Date(startOfDay);
@@ -154,6 +203,12 @@ export class AdminDashboardService {
       pendingContentReview,
       approvedContentToday,
       rejectedContentToday,
+      pendingCampaignReview,
+      pendingKolVerification,
+      pendingWithdrawalCount,
+      disputedOrdersCount,
+      pendingDisputeTickets,
+      campaignRowsForBudgetRisk,
     ] = await Promise.all([
       // Users
       prisma.user.count(),
@@ -175,7 +230,7 @@ export class AdminDashboardService {
       }),
       prisma.user.count({ where: { role: 'advertiser' } }),
       prisma.kol.count(),
-      
+
       // Campaigns
       prisma.campaign.count(),
       prisma.campaign.count({ where: { status: 'active' } }),
@@ -194,7 +249,7 @@ export class AdminDashboardService {
       prisma.campaign.aggregate({
         _sum: { spentAmount: true },
       }),
-      
+
       // Orders
       prisma.order.count(),
       prisma.order.count({ where: { status: 'pending' } }),
@@ -208,7 +263,7 @@ export class AdminDashboardService {
           },
         },
       }),
-      
+
       // Finance
       prisma.transaction.aggregate({
         _sum: { amount: true },
@@ -243,7 +298,7 @@ export class AdminDashboardService {
         _sum: { amount: true },
         where: { status: 'pending' },
       }),
-      
+
       // Content
       prisma.contentModeration.count({ where: { status: 'pending' } }),
       prisma.contentModeration.count({
@@ -264,7 +319,25 @@ export class AdminDashboardService {
           },
         },
       }),
+      prisma.campaign.count({ where: { status: 'pending_review' } }),
+      prisma.kol.count({ where: { status: 'pending' } }),
+      prisma.withdrawal.count({ where: { status: 'pending' } }),
+      prisma.order.count({ where: { status: 'disputed' } }),
+      prisma.orderDispute.count({
+        where: { NOT: { status: 'resolved' } },
+      }),
+      prisma.campaign.findMany({
+        where: { status: { in: ['active', 'paused'] }, budget: { gt: 0 } },
+        select: { budget: true, spentAmount: true },
+      }),
     ]);
+
+    const budgetRiskThreshold = getBudgetRiskThreshold();
+    const budgetRiskCount = campaignRowsForBudgetRisk.filter((c) => {
+      const budget = decimalToNumber(c.budget);
+      const spent = decimalToNumber(c.spentAmount);
+      return budget > 0 && spent / budget >= budgetRiskThreshold;
+    }).length;
 
     const stats: DashboardStatsResponse = {
       period: {
@@ -284,12 +357,20 @@ export class AdminDashboardService {
         completedToday: completedCampaignsToday,
         totalBudget: Number(campaignBudget._sum.budget) || 0,
         spentAmount: Number(campaignSpent._sum.spentAmount) || 0,
+        pendingReview: pendingCampaignReview,
+        budgetRiskCount,
+        budgetRiskThreshold,
+      },
+      kol: {
+        pendingVerification: pendingKolVerification,
       },
       orders: {
         total: totalOrders,
         pending: pendingOrders,
         inProgress: inProgressOrders,
         completedToday: completedOrdersToday,
+        disputed: disputedOrdersCount,
+        pendingDisputes: pendingDisputeTickets,
       },
       finance: {
         totalRevenue: Number(totalRevenue._sum.amount) || 0,
@@ -297,6 +378,7 @@ export class AdminDashboardService {
         totalPayout: Number(totalPayout._sum.amount) || 0,
         todayPayout: Number(todayPayout._sum.amount) || 0,
         pendingWithdrawals: Number(pendingWithdrawalsAmount._sum.amount) || 0,
+        pendingWithdrawalCount,
       },
       content: {
         pendingReview: pendingContentReview,
@@ -306,7 +388,7 @@ export class AdminDashboardService {
     };
 
     // Cache for 5 minutes
-    await cacheService.set(cacheKey, JSON.stringify(stats), 300);
+    await cacheService.set(cacheKey, stats, 300);
 
     // Log admin action
     await logAdminAction({
@@ -327,7 +409,7 @@ export class AdminDashboardService {
   async getAnalytics(metric: string, period: string = 'month', adminId: string): Promise<AnalyticsResponse> {
     const cacheKey = `dashboard:analytics:${metric}:${period}`;
     const cached = await cacheService.get<AnalyticsResponse>(cacheKey);
-    
+
     if (cached) {
       return cached;
     }
@@ -363,7 +445,7 @@ export class AdminDashboardService {
     }
 
     // Cache for 10 minutes
-    await cacheService.set(cacheKey, JSON.stringify(analytics), 600);
+    await cacheService.set(cacheKey, analytics, 600);
 
     // Log admin action
     await logAdminAction({
@@ -381,10 +463,15 @@ export class AdminDashboardService {
   /**
    * Get KOL rankings
    */
-  async getKolRankings(metric: string = 'earnings', limit: number = 10, platform?: string, adminId?: string): Promise<KolRankingResponse> {
+  async getKolRankings(
+    metric: string = 'earnings',
+    limit: number = 10,
+    platform?: string,
+    adminId?: string
+  ): Promise<KolRankingResponse> {
     // Build order by clause based on metric
-    let orderBy: any = {};
-    let selectField: string = '';
+    let orderBy: Prisma.KolOrderByWithRelationInput;
+    let selectField: KolRankingMetricField;
 
     switch (metric) {
       case 'earnings':
@@ -408,12 +495,12 @@ export class AdminDashboardService {
         selectField = 'totalEarnings';
     }
 
-    const where: any = {
-      status: 'active',
+    const where: Prisma.KolWhereInput = {
+      status: KolStatus.active,
     };
 
     if (platform) {
-      where.platform = platform;
+      where.platform = platform as KolPlatform;
     }
 
     const kols = await prisma.kol.findMany({
@@ -437,7 +524,7 @@ export class AdminDashboardService {
         platform: kol.platform,
         avatarUrl: kol.platformAvatarUrl ?? undefined,
       },
-      value: Number((kol as any)[selectField]) || 0,
+      value: kolRankingMetricValue(kol, selectField),
       change: '+0%', // Would need historical data to calculate
     }));
 
@@ -463,7 +550,18 @@ export class AdminDashboardService {
   /**
    * Get user growth data
    */
-  private async getUserGrowthData(startDate: Date, endDate: Date) {
+  private async getUserGrowthData(
+    startDate: Date,
+    endDate: Date
+  ): Promise<{
+    labels: string[];
+    series: {
+      newUsers: number[];
+      activeUsers: number[];
+      advertisers: number[];
+      kols: number[];
+    };
+  }> {
     // This is a simplified implementation
     // In production, you would use a more efficient query with date grouping
     const labels: string[] = [];
@@ -473,7 +571,7 @@ export class AdminDashboardService {
     const kols: number[] = [];
 
     const days = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     for (let i = 0; i < days; i++) {
       const date = new Date(startDate);
       date.setDate(date.getDate() + i);
@@ -538,13 +636,22 @@ export class AdminDashboardService {
   /**
    * Get revenue trend data
    */
-  private async getRevenueTrendData(startDate: Date, endDate: Date) {
+  private async getRevenueTrendData(
+    startDate: Date,
+    endDate: Date
+  ): Promise<{
+    labels: string[];
+    series: {
+      revenue: number[];
+      payout: number[];
+    };
+  }> {
     const labels: string[] = [];
     const revenue: number[] = [];
     const payout: number[] = [];
 
     const days = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     for (let i = 0; i < days; i++) {
       const date = new Date(startDate);
       date.setDate(date.getDate() + i);
@@ -629,6 +736,24 @@ export class AdminDashboardService {
     });
 
     return distribution;
+  }
+
+  /**
+   * 运维只读：KOL 接单滚动窗口策略（环境变量，与接单 API 一致）
+   */
+  getKolFrequencyPolicy(): {
+    enabled: boolean;
+    rolling_days: number;
+    max_accepts: number;
+    env_keys: string[];
+  } {
+    const c = kolFrequencyService.getKolAcceptFrequencyConfig();
+    return {
+      enabled: c.enabled,
+      rolling_days: c.rollingDays,
+      max_accepts: c.maxAccepts,
+      env_keys: ['KOL_ACCEPT_FREQ_ENABLED', 'KOL_ACCEPT_ROLLING_DAYS', 'KOL_MAX_ACCEPTS_ROLLING_WINDOW'],
+    };
   }
 }
 

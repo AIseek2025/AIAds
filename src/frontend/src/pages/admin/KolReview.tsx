@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminKolAPI } from '../../services/adminApi';
-import type { KolApplication, KolDetail } from '../../types';
+import { getApiErrorMessage } from '../../utils/apiError';
+import type { KolApplication } from '../../types';
 
 // MUI Components
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
-import CardHeader from '@mui/material/CardHeader';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
@@ -35,15 +35,51 @@ import Tab from '@mui/material/Tab';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
 import IconButton from '@mui/material/IconButton';
+import { AdminHubNav } from '../../components/admin/AdminHubNav';
 
 // Icons
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+
+const KolPlatformBadge = ({ platform }: { platform: string }) => {
+  const platformConfig: Record<string, { color: 'error' | 'primary' | 'secondary' | 'success'; label: string }> = {
+    tiktok: { color: 'error', label: 'TikTok' },
+    youtube: { color: 'primary', label: 'YouTube' },
+    instagram: { color: 'secondary', label: 'Instagram' },
+    xiaohongshu: { color: 'success', label: '小红书' },
+    weibo: { color: 'primary', label: '微博' },
+  };
+
+  const config = platformConfig[platform] || { color: 'primary' as const, label: platform };
+
+  return (
+    <Chip
+      label={config.label}
+      color={config.color}
+      size="small"
+      variant="outlined"
+    />
+  );
+};
+
+const KolReviewStatusBadge = ({ status }: { status: string }) => {
+  const statusConfig: Record<string, { color: 'warning' | 'success' | 'error' | 'default'; label: string }> = {
+    pending: { color: 'warning', label: '待审核' },
+    active: { color: 'success', label: '已通过' },
+    verified: { color: 'success', label: '已认证' },
+    rejected: { color: 'error', label: '已拒绝' },
+    suspended: { color: 'error', label: '已暂停' },
+    banned: { color: 'error', label: '已封禁' },
+  };
+
+  const config = statusConfig[status] || { color: 'default' as const, label: status };
+
+  return <Chip label={config.label} color={config.color} size="small" />;
+};
 
 const KolReviewPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -66,7 +102,7 @@ const KolReviewPage: React.FC = () => {
   });
 
   // Fetch pending KOLs
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch: refetchPending } = useQuery({
     queryKey: ['adminPendingKols', page, pageSize],
     queryFn: () => adminKolAPI.getPendingKols({ page: page + 1, page_size: pageSize }),
   });
@@ -82,8 +118,12 @@ const KolReviewPage: React.FC = () => {
       setApproveNote('');
       setSelectedKol(null);
     },
-    onError: (err: any) => {
-      setSnackbar({ open: true, message: err.response?.data?.error?.message || '操作失败', severity: 'error' });
+    onError: (err: unknown) => {
+      setSnackbar({
+        open: true,
+        message: getApiErrorMessage(err, '操作失败'),
+        severity: 'error',
+      });
     },
   });
 
@@ -99,17 +139,26 @@ const KolReviewPage: React.FC = () => {
       setRejectNote('');
       setSelectedKol(null);
     },
-    onError: (err: any) => {
-      setSnackbar({ open: true, message: err.response?.data?.error?.message || '操作失败', severity: 'error' });
+    onError: (err: unknown) => {
+      setSnackbar({
+        open: true,
+        message: getApiErrorMessage(err, '操作失败'),
+        severity: 'error',
+      });
     },
   });
 
   // Fetch KOL detail when dialog opens
-  const { data: kolDetail } = useQuery({
+  const { data: kolDetail, refetch: refetchKolDetail } = useQuery({
     queryKey: ['adminKolDetail', selectedKol?.id],
     queryFn: () => adminKolAPI.getKol(selectedKol!.id),
     enabled: detailOpen && !!selectedKol?.id,
   });
+
+  const handleHubRefresh = () => {
+    void refetchPending();
+    void refetchKolDetail();
+  };
 
   // Handlers
   const handlePageChange = (event: unknown, newPage: number) => {
@@ -181,48 +230,10 @@ const KolReviewPage: React.FC = () => {
     setDetailTab(newValue);
   };
 
-  // Platform badge
-  const PlatformBadge = ({ platform }: { platform: string }) => {
-    const platformConfig: Record<string, { color: 'error' | 'primary' | 'secondary' | 'success'; label: string }> = {
-      tiktok: { color: 'error', label: 'TikTok' },
-      youtube: { color: 'primary', label: 'YouTube' },
-      instagram: { color: 'secondary', label: 'Instagram' },
-      xiaohongshu: { color: 'success', label: '小红书' },
-      weibo: { color: 'primary', label: '微博' },
-    };
-
-    const config = platformConfig[platform] || { color: 'primary', label: platform };
-
-    return (
-      <Chip
-        label={config.label}
-        color={config.color}
-        size="small"
-        variant="outlined"
-      />
-    );
-  };
-
-  // Status badge
-  const StatusBadge = ({ status }: { status: string }) => {
-    const statusConfig: Record<string, { color: 'warning' | 'success' | 'error' | 'default'; label: string }> = {
-      pending: { color: 'warning', label: '待审核' },
-      active: { color: 'success', label: '已通过' },
-      verified: { color: 'success', label: '已认证' },
-      rejected: { color: 'error', label: '已拒绝' },
-      suspended: { color: 'error', label: '已暂停' },
-      banned: { color: 'error', label: '已封禁' },
-    };
-
-    const config = statusConfig[status] || { color: 'default', label: status };
-
-    return <Chip label={config.label} color={config.color} size="small" />;
-  };
-
   return (
     <Box>
       {/* Page Header */}
-      <Box sx={{ mb: 4 }}>
+      <Box sx={{ mb: 2 }}>
         <Typography variant="h4" fontWeight="bold" gutterBottom>
           KOL 审核
         </Typography>
@@ -230,6 +241,10 @@ const KolReviewPage: React.FC = () => {
           审核 KOL 认证申请，确保平台 KOL 质量
         </Typography>
       </Box>
+      <AdminHubNav onRefresh={handleHubRefresh} />
+      <Alert severity="info" sx={{ mb: 3, mt: 2 }}>
+        与「KOL 库」列表互为补充；通过/拒绝后待审列表会失效刷新，也可手动刷新待审队列与已打开的详情。
+      </Alert>
 
       {/* Stats Cards */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -308,7 +323,9 @@ const KolReviewPage: React.FC = () => {
               ) : error ? (
                 <TableRow>
                   <TableCell colSpan={8} align="center">
-                    <Alert severity="error">加载失败：{(error as Error).message}</Alert>
+                    <Alert severity="error">
+                    加载失败：{getApiErrorMessage(error, '请稍后重试')}
+                  </Alert>
                   </TableCell>
                 </TableRow>
               ) : data?.items.length === 0 ? (
@@ -336,7 +353,7 @@ const KolReviewPage: React.FC = () => {
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <PlatformBadge platform={kol.platform} />
+                      <KolPlatformBadge platform={kol.platform} />
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">{kol.followers.toLocaleString()}</Typography>
@@ -350,7 +367,7 @@ const KolReviewPage: React.FC = () => {
                       <Typography variant="body2">{kol.category}</Typography>
                     </TableCell>
                     <TableCell>
-                      <StatusBadge status={kol.status} />
+                      <KolReviewStatusBadge status={kol.status} />
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
@@ -420,7 +437,7 @@ const KolReviewPage: React.FC = () => {
                     <Typography variant="body2" color="text.secondary">{kolDetail.platformUsername}</Typography>
                   </Box>
                 </Box>
-                <PlatformBadge platform={kolDetail.platform} />
+                <KolPlatformBadge platform={kolDetail.platform} />
               </Box>
             </DialogTitle>
 

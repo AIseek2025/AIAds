@@ -3,6 +3,7 @@ import { verifyToken, extractTokenFromHeader } from '../utils/crypto';
 import { logger } from '../utils/logger';
 import prisma from '../config/database';
 import { cacheService } from '../config/redis';
+import { ApiError } from './errorHandler';
 
 // Extend Express Request type for admin authentication
 declare global {
@@ -22,13 +23,13 @@ declare global {
 
 // Admin JWT Token payload
 interface AdminJwtPayload {
-  sub: string;          // Admin ID
+  sub: string; // Admin ID
   email: string;
   role: string;
   permissions: string[];
   iat?: number;
   exp?: number;
-  jti: string;          // Unique token ID
+  jti: string; // Unique token ID
 }
 
 // Admin Auth middleware options
@@ -41,11 +42,7 @@ interface AdminJwtPayload {
  * Admin authentication middleware
  * Verifies admin JWT token and attaches admin info to request
  */
-export async function adminAuth(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> {
+export async function adminAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     // Extract token from Authorization header
     const authHeader = req.headers.authorization;
@@ -65,7 +62,7 @@ export async function adminAuth(
     // Check if token is blacklisted (logout)
     const decoded = verifyToken(token, 'admin_access') as AdminJwtPayload;
     const isBlacklisted = await cacheService.get(`admin_blacklist:${decoded.jti}`);
-    
+
     if (isBlacklisted) {
       res.status(401).json({
         success: false,
@@ -158,9 +155,7 @@ export async function adminAuth(
  * Require specific permissions middleware
  * Must be used after adminAuth middleware
  */
-export function requirePermission(
-  ...permissions: string[]
-): (req: Request, res: Response, next: NextFunction) => void {
+export function requirePermission(...permissions: string[]): (req: Request, res: Response, next: NextFunction) => void {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.admin) {
       res.status(401).json({
@@ -235,13 +230,20 @@ export function requireAnyPermission(
 }
 
 /**
+ * 在已通过 `adminAuth` 的路由处理器中取当前管理员（无则抛错，避免 `req.admin?.id!` 反模式）
+ */
+export function requireAdmin(req: Request): NonNullable<Express.Request['admin']> {
+  const admin = req.admin;
+  if (!admin) {
+    throw new ApiError('需要管理员认证', 401, 'AUTH_REQUIRED');
+  }
+  return admin;
+}
+
+/**
  * Super admin only middleware
  */
-export function superAdminOnly(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void {
+export function superAdminOnly(req: Request, res: Response, next: NextFunction): void {
   if (!req.admin) {
     res.status(401).json({
       success: false,

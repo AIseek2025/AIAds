@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { campaignService } from '../services/campaigns.service';
 import { asyncHandler, errors } from '../middleware/errorHandler';
-import { validateBody } from '../middleware/validation';
+import { parseBodyOrRespond } from '../middleware/validation';
 import { createCampaignSchema, updateCampaignSchema } from '../utils/validator';
 import { ApiResponse } from '../types';
 
@@ -11,7 +11,9 @@ export class CampaignController {
    * Create campaign
    */
   createCampaign = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(createCampaignSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(createCampaignSchema, req, res)) {
+      return;
+    }
 
     const userId = req.user?.id;
     if (!userId) {
@@ -46,17 +48,18 @@ export class CampaignController {
 
     const { page = 1, page_size = 20, status, keyword, objective } = req.query;
 
-    const filters: any = {};
-    if (status) filters.status = status as string;
-    if (keyword) filters.keyword = keyword as string;
-    if (objective) filters.objective = objective as string;
+    const filters: { status?: string; keyword?: string; objective?: string } = {};
+    if (status) {
+      filters.status = status as string;
+    }
+    if (keyword) {
+      filters.keyword = keyword as string;
+    }
+    if (objective) {
+      filters.objective = objective as string;
+    }
 
-    const result = await campaignService.getCampaigns(
-      advertiser,
-      Number(page),
-      Number(page_size),
-      filters
-    );
+    const result = await campaignService.getCampaigns(advertiser, Number(page), Number(page_size), filters);
 
     const totalPages = Math.ceil(result.total / Number(page_size));
 
@@ -105,7 +108,9 @@ export class CampaignController {
    * Update campaign
    */
   updateCampaign = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(updateCampaignSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(updateCampaignSchema, req, res)) {
+      return;
+    }
 
     const userId = req.user?.id;
     if (!userId) {

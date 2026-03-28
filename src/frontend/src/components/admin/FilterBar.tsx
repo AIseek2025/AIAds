@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import MenuItem from '@mui/material/MenuItem';
@@ -11,8 +11,6 @@ import Tooltip from '@mui/material/Tooltip';
 // Icons
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ClearAllIcon from '@mui/icons-material/ClearAll';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-
 interface FilterOption {
   value: string;
   label: string;
@@ -29,10 +27,10 @@ interface FilterConfig {
 
 interface FilterBarProps {
   filters: FilterConfig[];
-  values: Record<string, any>;
-  onChange: (key: string, value: any) => void;
+  values: Record<string, unknown>;
+  onChange: (key: string, value: unknown) => void;
   onReset?: () => void;
-  onApply?: (values: Record<string, any>) => void;
+  onApply?: (values: Record<string, unknown>) => void;
   showReset?: boolean;
   showApply?: boolean;
   compact?: boolean;
@@ -48,9 +46,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
   showApply = false,
   compact = false,
 }) => {
-  const [expandedFilters, setExpandedFilters] = useState<Set<string>>(new Set());
-
-  const handleFilterChange = (key: string, value: any) => {
+  const handleFilterChange = (key: string, value: unknown) => {
     onChange(key, value);
   };
 
@@ -60,16 +56,6 @@ const FilterBar: React.FC<FilterBarProps> = ({
 
   const handleApply = () => {
     onApply?.(values);
-  };
-
-  const toggleExpanded = (key: string) => {
-    const newExpanded = new Set(expandedFilters);
-    if (newExpanded.has(key)) {
-      newExpanded.delete(key);
-    } else {
-      newExpanded.add(key);
-    }
-    setExpandedFilters(newExpanded);
   };
 
   const hasActiveFilters = Object.values(values).some((v) => {
@@ -92,7 +78,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
             size={compact ? 'small' : 'medium'}
             sx={{ minWidth: compact ? 140 : 180 }}
             SelectProps={{
-              IconComponent: expandedFilters.has(filter.key) ? ExpandMoreIcon : FilterListIcon,
+              IconComponent: FilterListIcon,
             }}
           >
             <MenuItem value="">全部</MenuItem>
@@ -148,14 +134,18 @@ const FilterBar: React.FC<FilterBarProps> = ({
           />
         );
 
-      case 'dateRange':
+      case 'dateRange': {
+        const rangeValue =
+          value && typeof value === 'object' && !Array.isArray(value)
+            ? (value as { start?: string; end?: string })
+            : {};
         return (
           <Stack key={filter.key} direction="row" spacing={1} alignItems="center">
             <TextField
               label={`${filter.label} - 开始`}
               type="date"
-              value={value?.start || ''}
-              onChange={(e) => handleFilterChange(filter.key, { ...value, start: e.target.value })}
+              value={rangeValue.start || ''}
+              onChange={(e) => handleFilterChange(filter.key, { ...rangeValue, start: e.target.value })}
               size={compact ? 'small' : 'medium'}
               sx={{ minWidth: compact ? 130 : 160 }}
               InputLabelProps={{ shrink: true }}
@@ -163,14 +153,15 @@ const FilterBar: React.FC<FilterBarProps> = ({
             <TextField
               label={`${filter.label} - 结束`}
               type="date"
-              value={value?.end || ''}
-              onChange={(e) => handleFilterChange(filter.key, { ...value, end: e.target.value })}
+              value={rangeValue.end || ''}
+              onChange={(e) => handleFilterChange(filter.key, { ...rangeValue, end: e.target.value })}
               size={compact ? 'small' : 'medium'}
               sx={{ minWidth: compact ? 130 : 160 }}
               InputLabelProps={{ shrink: true }}
             />
           </Stack>
         );
+      }
 
       default:
         return null;

@@ -4,7 +4,8 @@ import type { Advertiser } from '../types';
 interface AdvertiserStats {
   totalCampaigns: number;
   activeCampaigns: number;
-  completedCampaigns: number;
+  /** 合作订单总数（与广告主资料 total_orders 一致） */
+  totalOrders: number;
   totalSpent: number;
   totalViews: number;
   totalClicks: number;
@@ -27,7 +28,7 @@ interface AdvertiserState {
   refreshAdvertiser: () => void;
 }
 
-export const useAdvertiserStore = create<AdvertiserState>((set, get) => ({
+export const useAdvertiserStore = create<AdvertiserState>((set) => ({
   // Initial state
   advertiser: null,
   stats: null,

@@ -1,0 +1,23 @@
+-- AIAds 频次治理 — 草案占位（Wave C / backlog §五、§九）
+-- 未执行迁移；正式表结构需与《深度拆解》第五章及平台差异对齐后再定稿。
+--
+-- 【2026-03 运行时实现】MVP 使用现有 `orders` 表：按 `kol_id` + `accepted_at` 滚动窗口计数，
+-- 接单前在 `orders.service#acceptOrder` 中校验；策略见环境变量 `KOL_ACCEPT_*`（`.env.example`）。
+-- 【2026-03-28 前端】KOL 工作台与任务广场列表展示剩余接单额度（报名不限；接单仍走 assertCanAcceptOrder）。
+--
+-- 设计方向（供后续迭代）：
+-- 1) 按 kol_id + platform + 窗口（如滑动 7 日）聚合接单/曝光次数；
+-- 2) 接单前校验：当前计数 + 本次请求 ≤ 策略上限；
+-- 3) 与邀请/反作弊（第六章）独立表，避免单表过载。
+--
+-- 示例（非最终）：
+-- CREATE TABLE kol_frequency_window (
+--   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+--   kol_id UUID NOT NULL REFERENCES kol(id),
+--   platform VARCHAR(32) NOT NULL,
+--   window_start TIMESTAMPTZ NOT NULL,
+--   window_end TIMESTAMPTZ NOT NULL,
+--   order_count INT NOT NULL DEFAULT 0,
+--   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- );
+-- CREATE INDEX idx_kol_frequency_window_lookup ON kol_frequency_window (kol_id, platform, window_end);

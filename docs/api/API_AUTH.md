@@ -1,7 +1,7 @@
 # AIAds 认证 API
 
-**版本**: 1.0.0
-**最后更新**: 2026 年 3 月 24 日
+**版本**: 1.0.1
+**最后更新**: 2026 年 3 月 27 日
 
 ---
 
@@ -9,14 +9,15 @@
 
 1. [用户注册](#1-用户注册)
 2. [用户登录](#2-用户登录)
-3. [刷新 Token](#3-刷新-token)
-4. [用户登出](#4-用户登出)
-5. [发送验证码](#5-发送验证码)
-6. [验证验证码](#6-验证验证码)
-7. [重置密码](#7-重置密码)
-8. [获取用户信息](#8-获取用户信息)
-9. [更新用户信息](#9-更新用户信息)
-10. [修改密码](#10-修改密码)
+3. [邮箱验证码登录](#3-邮箱验证码登录)
+4. [刷新 Token](#4-刷新-token)
+5. [用户登出](#5-用户登出)
+6. [发送验证码](#6-发送验证码)
+7. [验证验证码](#7-验证验证码)
+8. [重置密码](#8-重置密码)
+9. [获取用户信息](#9-获取用户信息)
+10. [更新用户信息](#10-更新用户信息)
+11. [修改密码](#11-修改密码)
 
 ---
 
@@ -206,7 +207,40 @@ Content-Type: application/json
 
 ---
 
-## 3. 刷新 Token
+## 3. 邮箱验证码登录
+
+使用邮箱收到的 6 位验证码登录（需先调用 [发送验证码](#6-发送验证码)，`purpose` 为 `login`）。
+
+### 请求
+
+```http
+POST /v1/auth/login-email-code
+Content-Type: application/json
+```
+
+### 请求参数
+
+| 字段 | 类型 | 必填 | 说明 | 示例 |
+|------|------|------|------|------|
+| `email` | string | ✅ | 已注册邮箱 | `user@example.com` |
+| `code` | string | ✅ | 6 位数字验证码 | `123456` |
+
+### 请求示例
+
+```json
+{
+  "email": "user@example.com",
+  "code": "123456"
+}
+```
+
+### 响应
+
+与 [用户登录](#2-用户登录) 成功响应一致（`user` + `tokens`）。
+
+---
+
+## 4. 刷新 Token
 
 使用 Refresh Token 获取新的 Access Token。
 
@@ -272,7 +306,7 @@ Content-Type: application/json
 
 ---
 
-## 4. 用户登出
+## 5. 用户登出
 
 用户登出，使 Token 失效。
 
@@ -300,7 +334,7 @@ Authorization: Bearer <access_token>
 
 ---
 
-## 5. 发送验证码
+## 6. 发送验证码
 
 发送邮箱或手机验证码。
 
@@ -317,8 +351,7 @@ Content-Type: application/json
 |------|------|------|------|------|
 | `type` | string | ✅ | 验证类型：`email`/`phone` | `email` |
 | `target` | string | ✅ | 邮箱或手机号 | `user@example.com` |
-| `purpose` | string | ✅ | 用途：`register`/`login`/`reset_password`/`bind` | `register` |
-| `language` | string | ❌ | 验证码语言：`zh-CN`/`en-US` | `zh-CN` |
+| `purpose` | string | ❌ | 用途，默认 `register`：`register` / `login` / `reset_password` | `register` |
 
 ### 请求示例
 
@@ -358,7 +391,7 @@ Content-Type: application/json
 
 ---
 
-## 6. 验证验证码
+## 7. 验证验证码
 
 验证邮箱或手机验证码。
 
@@ -376,6 +409,7 @@ Content-Type: application/json
 | `type` | string | ✅ | 验证类型：`email`/`phone` | `email` |
 | `target` | string | ✅ | 邮箱或手机号 | `user@example.com` |
 | `code` | string | ✅ | 6 位验证码 | `123456` |
+| `purpose` | string | ❌ | 与发码场景一致，默认 `register`：`register` / `reset_password` / `verify` / `login` | `register` |
 
 ### 请求示例
 
@@ -383,7 +417,8 @@ Content-Type: application/json
 {
   "type": "email",
   "target": "user@example.com",
-  "code": "123456"
+  "code": "123456",
+  "purpose": "register"
 }
 ```
 
@@ -395,6 +430,8 @@ Content-Type: application/json
   "message": "验证成功"
 }
 ```
+
+> 说明：部分流程（如「忘记密码」）可在客户端校验验证码格式后，直接调用 [重置密码](#8-重置密码) 完成设密，无需先调用本接口，以免验证码被消费两次。
 
 ### 错误响应
 
@@ -424,7 +461,7 @@ Content-Type: application/json
 
 ---
 
-## 7. 重置密码
+## 8. 重置密码
 
 通过验证码重置密码。
 
@@ -439,16 +476,18 @@ Content-Type: application/json
 
 | 字段 | 类型 | 必填 | 说明 | 示例 |
 |------|------|------|------|------|
-| `email` | string | ✅ | 邮箱地址 | `user@example.com` |
-| `verification_code` | string | ✅ | 验证码 | `123456` |
-| `new_password` | string | ✅ | 新密码 | `NewSecurePass123!` |
+| `type` | string | ✅ | 验证类型：`email`/`phone` | `email` |
+| `target` | string | ✅ | 邮箱或手机号 | `user@example.com` |
+| `code` | string | ✅ | 6 位验证码 | `123456` |
+| `new_password` | string | ✅ | 新密码（符合平台密码规则） | `NewSecurePass123!` |
 
 ### 请求示例
 
 ```json
 {
-  "email": "user@example.com",
-  "verification_code": "123456",
+  "type": "email",
+  "target": "user@example.com",
+  "code": "123456",
   "new_password": "NewSecurePass123!"
 }
 ```
@@ -464,7 +503,7 @@ Content-Type: application/json
 
 ---
 
-## 8. 获取用户信息
+## 9. 获取用户信息
 
 获取当前登录用户的详细信息。
 
@@ -501,7 +540,7 @@ Authorization: Bearer <access_token>
 
 ---
 
-## 9. 更新用户信息
+## 10. 更新用户信息
 
 更新当前用户的信息。
 
@@ -548,7 +587,7 @@ Content-Type: application/json
 
 ---
 
-## 10. 修改密码
+## 11. 修改密码
 
 修改当前用户的密码。
 

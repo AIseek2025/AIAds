@@ -2,7 +2,6 @@ import request from 'supertest';
 import app from '../src/app';
 import prisma from '../src/config/database';
 
-
 describe('KOL Module API Tests', () => {
   let kolAccessToken: string;
   let kolUserId: string;
@@ -11,14 +10,16 @@ describe('KOL Module API Tests', () => {
   // Helper function to create a test KOL user
   async function createTestKolUser() {
     const email = `kol_${Date.now()}@example.com`;
-    
+
     // Register user as KOL
-    const registerRes = await request(app).post('/api/v1/auth/register').send({
-      email,
-      password: 'SecurePass123!',
-      role: 'kol' as const,
-      nickname: '测试 KOL',
-    });
+    const registerRes = await request(app)
+      .post('/api/v1/auth/register')
+      .send({
+        email,
+        password: 'SecurePass123!',
+        role: 'kol' as const,
+        nickname: '测试 KOL',
+      });
 
     kolUserId = registerRes.body.data.user.id;
     kolAccessToken = registerRes.body.data.tokens.access_token;
@@ -111,11 +112,13 @@ describe('KOL Module API Tests', () => {
     it('应该拒绝非 KOL 角色创建', async () => {
       // Create advertiser user
       const advertiserEmail = `advertiser_${Date.now()}@example.com`;
-      const advertiserRes = await request(app).post('/api/v1/auth/register').send({
-        email: advertiserEmail,
-        password: 'SecurePass123!',
-        role: 'advertiser' as const,
-      });
+      const advertiserRes = await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email: advertiserEmail,
+          password: 'SecurePass123!',
+          role: 'advertiser' as const,
+        });
 
       const advertiserToken = advertiserRes.body.data.tokens.access_token;
 
@@ -181,20 +184,20 @@ describe('KOL Module API Tests', () => {
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .get('/api/v1/kols/me')
-        .expect(401);
+      const response = await request(app).get('/api/v1/kols/me').expect(401);
 
       expect(response.body.success).toBe(false);
     });
 
     it('应该返回资料不存在错误', async () => {
       // Create new user without profile
-      const newUserRes = await request(app).post('/api/v1/auth/register').send({
-        email: `newkol_${Date.now()}@example.com`,
-        password: 'SecurePass123!',
-        role: 'kol' as const,
-      });
+      const newUserRes = await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email: `newkol_${Date.now()}@example.com`,
+          password: 'SecurePass123!',
+          role: 'kol' as const,
+        });
 
       const response = await request(app)
         .get('/api/v1/kols/me')
@@ -333,13 +336,10 @@ describe('KOL Module API Tests', () => {
     describe('GET /api/v1/kols/accounts', () => {
       it('应该获取已绑定账号列表', async () => {
         // Bind an account first
-        await request(app)
-          .post('/api/v1/kols/connect/tiktok')
-          .set('Authorization', `Bearer ${kolAccessToken}`)
-          .send({
-            platform_username: 'tiktok_user',
-            platform_id: 'tiktok_789',
-          });
+        await request(app).post('/api/v1/kols/connect/tiktok').set('Authorization', `Bearer ${kolAccessToken}`).send({
+          platform_username: 'tiktok_user',
+          platform_id: 'tiktok_789',
+        });
 
         const response = await request(app)
           .get('/api/v1/kols/accounts')
@@ -446,6 +446,8 @@ describe('KOL Module API Tests', () => {
 
         expect(response.body.success).toBe(true);
         expect(response.body.data.available_balance).toBeDefined();
+        expect(response.body.data.orders_frozen_total).toBeDefined();
+        expect(typeof response.body.data.orders_frozen_total).toBe('number');
         expect(response.body.data.currency).toBe('USD');
       });
     });
@@ -512,6 +514,37 @@ describe('KOL Module API Tests', () => {
         expect(response.body.data.items).toBeDefined();
         expect(response.body.data.pagination).toBeDefined();
       });
+    });
+  });
+
+  describe('GET /api/v1/kols 发现', () => {
+    beforeEach(async () => {
+      await createKolProfile();
+    });
+
+    it('列表应返回分页结构', async () => {
+      const res = await request(app)
+        .get('/api/v1/kols?page=1&page_size=5')
+        .set('Authorization', `Bearer ${kolAccessToken}`)
+        .expect(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.pagination.total_pages).toBeDefined();
+    });
+
+    it('关键词搜索应成功', async () => {
+      const res = await request(app)
+        .get('/api/v1/kols?keyword=test')
+        .set('Authorization', `Bearer ${kolAccessToken}`)
+        .expect(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it('详情应返回公开摘要', async () => {
+      const res = await request(app)
+        .get(`/api/v1/kols/${kolId}`)
+        .set('Authorization', `Bearer ${kolAccessToken}`)
+        .expect(200);
+      expect(res.body.data.id).toBe(kolId);
     });
   });
 });

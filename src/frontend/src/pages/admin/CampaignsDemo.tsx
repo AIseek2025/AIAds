@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { mockCampaigns } from '../../data/mockData';
-import type { CampaignListItem } from '../../types';
 
 // MUI Components
 import Box from '@mui/material/Box';

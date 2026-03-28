@@ -1,14 +1,15 @@
 import { Request, Response } from 'express';
 import { adminSettingsService } from '../../services/admin/settings.service';
 import { asyncHandler } from '../../middleware/errorHandler';
-import { validateBody } from '../../middleware/validation';
+import { requireAdmin } from '../../middleware/adminAuth';
+import { parseBodyOrRespond } from '../../middleware/validation';
 import { ApiResponse } from '../../types';
 import { z } from 'zod';
 
 // Validation schemas
 const updateSystemConfigSchema = z.object({
   key: z.string().min(1),
-  value: z.any(),
+  value: z.unknown(),
 });
 
 const createAdminSchema = z.object({
@@ -51,7 +52,7 @@ export class AdminSettingsController {
    * Get system configuration
    */
   getSystemConfig = asyncHandler(async (req: Request, res: Response) => {
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminSettingsService.getSystemConfig(adminId);
 
@@ -68,17 +69,13 @@ export class AdminSettingsController {
    * Update system configuration
    */
   updateSystemConfig = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(updateSystemConfigSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(updateSystemConfigSchema, req, res)) {
+      return;
+    }
 
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
-    const result = await adminSettingsService.updateSystemConfig(
-      req.body.key,
-      req.body.value,
-      adminId,
-      adminEmail
-    );
+    const result = await adminSettingsService.updateSystemConfig(req.body.key, req.body.value, adminId, adminEmail);
 
     const response: ApiResponse<typeof result> = {
       success: true,
@@ -103,7 +100,7 @@ export class AdminSettingsController {
       role: role as string,
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminSettingsService.getAdminList(filters, adminId);
 
     const response: ApiResponse<typeof result> = {
@@ -119,10 +116,11 @@ export class AdminSettingsController {
    * Create new admin
    */
   createAdmin = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(createAdminSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(createAdminSchema, req, res)) {
+      return;
+    }
 
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminSettingsService.createAdmin(req.body, adminId, adminEmail);
 
@@ -141,7 +139,7 @@ export class AdminSettingsController {
    */
   getAdminById = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminSettingsService.getAdminById(id.toString(), adminId);
 
@@ -158,18 +156,14 @@ export class AdminSettingsController {
    * Update admin
    */
   updateAdmin = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(updateAdminSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(updateAdminSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
-    const result = await adminSettingsService.updateAdmin(
-      id.toString(),
-      req.body,
-      adminId,
-      adminEmail
-    );
+    const result = await adminSettingsService.updateAdmin(id.toString(), req.body, adminId, adminEmail);
 
     const response: ApiResponse<typeof result> = {
       success: true,
@@ -186,8 +180,7 @@ export class AdminSettingsController {
    */
   deleteAdmin = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminSettingsService.deleteAdmin(id.toString(), adminId, adminEmail);
 
@@ -205,7 +198,7 @@ export class AdminSettingsController {
    * Get role list
    */
   getRoleList = asyncHandler(async (req: Request, res: Response) => {
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminSettingsService.getRoleList(adminId);
 
@@ -222,10 +215,11 @@ export class AdminSettingsController {
    * Create new role
    */
   createRole = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(createRoleSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(createRoleSchema, req, res)) {
+      return;
+    }
 
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminSettingsService.createRole(req.body, adminId, adminEmail);
 
@@ -243,18 +237,14 @@ export class AdminSettingsController {
    * Update role
    */
   updateRole = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(updateRoleSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(updateRoleSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
-    const result = await adminSettingsService.updateRole(
-      id.toString(),
-      req.body,
-      adminId,
-      adminEmail
-    );
+    const result = await adminSettingsService.updateRole(id.toString(), req.body, adminId, adminEmail);
 
     const response: ApiResponse<typeof result> = {
       success: true,
@@ -271,8 +261,7 @@ export class AdminSettingsController {
    */
   deleteRole = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminSettingsService.deleteRole(id.toString(), adminId, adminEmail);
 
@@ -290,17 +279,8 @@ export class AdminSettingsController {
    * Get audit logs
    */
   getAuditLogs = asyncHandler(async (req: Request, res: Response) => {
-    const {
-      page,
-      limit,
-      admin_id,
-      action,
-      resource_type,
-      status,
-      created_after,
-      created_before,
-      ip_address,
-    } = req.query;
+    const { page, limit, admin_id, action, resource_type, status, created_after, created_before, ip_address } =
+      req.query;
 
     const filters = {
       page: page ? parseInt(page as string, 10) : 1,
@@ -314,7 +294,7 @@ export class AdminSettingsController {
       ipAddress: ip_address as string,
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminSettingsService.getAuditLogs(filters, adminId);
 
     const response: ApiResponse<typeof result> = {
@@ -330,15 +310,7 @@ export class AdminSettingsController {
    * Export audit logs
    */
   exportAuditLogs = asyncHandler(async (req: Request, res: Response) => {
-    const {
-      admin_id,
-      action,
-      resource_type,
-      status,
-      created_after,
-      created_before,
-      format = 'csv',
-    } = req.query;
+    const { admin_id, action, resource_type, status, created_after, created_before, format = 'csv' } = req.query;
 
     const filters = {
       adminId: admin_id as string,
@@ -350,7 +322,7 @@ export class AdminSettingsController {
       format: format as string,
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminSettingsService.exportAuditLogs(filters, adminId);
 
     // Set download headers
@@ -373,7 +345,7 @@ export class AdminSettingsController {
    * Get system monitoring data
    */
   getSystemMonitor = asyncHandler(async (req: Request, res: Response) => {
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminSettingsService.getSystemMonitor(adminId);
 
@@ -399,7 +371,7 @@ export class AdminSettingsController {
       severity: severity as string,
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminSettingsService.getSensitiveWords(filters, adminId);
 
     const response: ApiResponse<typeof result> = {
@@ -415,10 +387,11 @@ export class AdminSettingsController {
    * Add sensitive word
    */
   addSensitiveWord = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(updateSensitiveWordSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(updateSensitiveWordSchema, req, res)) {
+      return;
+    }
 
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminSettingsService.addSensitiveWord(req.body, adminId, adminEmail);
 
@@ -437,8 +410,7 @@ export class AdminSettingsController {
    */
   deleteSensitiveWord = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminSettingsService.deleteSensitiveWord(id.toString(), adminId, adminEmail);
 
@@ -456,8 +428,7 @@ export class AdminSettingsController {
    * Create system backup
    */
   createBackup = asyncHandler(async (req: Request, res: Response) => {
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminSettingsService.createBackup(adminId, adminEmail);
 
@@ -482,7 +453,7 @@ export class AdminSettingsController {
       limit: limit ? parseInt(limit as string, 10) : 20,
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminSettingsService.getBackupList(filters, adminId);
 
     const response: ApiResponse<typeof result> = {
@@ -500,19 +471,16 @@ export class AdminSettingsController {
   restoreBackup = asyncHandler(async (req: Request, res: Response) => {
     const backupSchema = z.object({
       backupId: z.string().uuid(),
-      confirm: z.boolean().refine(val => val === true, '必须确认恢复操作'),
+      confirm: z.boolean().refine((val) => val === true, '必须确认恢复操作'),
     });
 
-    validateBody(backupSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(backupSchema, req, res)) {
+      return;
+    }
 
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
-    const result = await adminSettingsService.restoreBackup(
-      req.body.backupId,
-      adminId,
-      adminEmail
-    );
+    const result = await adminSettingsService.restoreBackup(req.body.backupId, adminId, adminEmail);
 
     const response: ApiResponse<typeof result> = {
       success: true,

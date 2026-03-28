@@ -1,7 +1,27 @@
+import { KolPlatform, KolStatus, Prisma } from '@prisma/client';
 import prisma from '../../config/database';
+import { sumFrozenAmountForKol, sumFrozenAmountForKols } from '../order-frozen.util';
 import { logger } from '../../utils/logger';
 import { ApiError } from '../../middleware/errorHandler';
 import { logAdminAction } from './audit.service';
+import type { PaginationResponse } from '../../types';
+
+function mergeKolMetadata(
+  current: Prisma.JsonValue,
+  patch: Record<string, Prisma.InputJsonValue>
+): Prisma.InputJsonValue {
+  const base =
+    current && typeof current === 'object' && !Array.isArray(current)
+      ? { ...(current as Record<string, Prisma.InputJsonValue>) }
+      : {};
+  return { ...base, ...patch };
+}
+
+type KolWithUser = Prisma.KolGetPayload<{
+  include: {
+    user: { select: { email: true; nickname: true } };
+  };
+}>;
 
 // KOL list filters
 export interface KolListFilters {
@@ -57,6 +77,8 @@ export interface KolResponse {
   currency: string;
   totalEarnings: number;
   availableBalance: number;
+  /** 该 KOL 全部合作订单 frozen_amount 合计（与 KOL 端 /kols/balance 的 orders_frozen_total 同源） */
+  ordersFrozenTotal: number;
   totalOrders: number;
   completedOrders: number;
   tags: string[];
@@ -73,26 +95,85 @@ export interface KolResponse {
   }>;
 }
 
+export type ApproveKolResult = {
+  id: string;
+  status: string;
+  verified: boolean;
+  verifiedAt: Date | null;
+  verifiedBy: string;
+};
+
+export type RejectKolResult = {
+  id: string;
+  status: string;
+  rejectedAt: Date;
+  rejectedBy: string;
+  rejectionReason: string;
+};
+
+export type RateKolResult = {
+  id: string;
+  rating: string;
+  ratedAt: Date;
+  ratedBy: string;
+};
+
+export type BlacklistKolResult = {
+  id: string;
+  status: string;
+  blacklistedAt: Date;
+  blacklistedBy: string;
+  blacklistReason: string;
+};
+
+export type RemoveFromBlacklistResult = {
+  id: string;
+  status: string;
+  removedFromBlacklistAt: Date;
+  removedBy: string;
+};
+
+export type SuspendKolResult = {
+  id: string;
+  status: string;
+  suspendedAt: Date;
+  suspendedBy: string;
+  suspensionReason: string;
+  suspendedUntil: Date | null;
+};
+
+export type UnsuspendKolResult = {
+  id: string;
+  status: string;
+  unsuspendedAt: Date;
+  unsuspendedBy: string;
+};
+
+export type SyncKolDataResult = {
+  id: string;
+  syncedAt: Date;
+  syncedBy: string;
+};
+
 export class AdminKolsService {
   /**
    * Get pending KOLs for review
    */
-  async getPendingKols(filters: { page?: number; limit?: number; platform?: string }, adminId: string) {
-    const {
-      page = 1,
-      limit = 20,
-      platform,
-    } = filters;
+  async getPendingKols(
+    filters: { page?: number; limit?: number; platform?: string },
+    adminId: string
+  ): Promise<PaginationResponse<KolResponse>> {
+    const { page = 1, limit = 20, platform } = filters;
 
     const skip = (page - 1) * limit;
     const take = limit;
 
-    const where: any = {
-      status: 'pending',
+    const where: Prisma.KolWhereInput = {
+      status: KolStatus.pending,
     };
 
     if (platform) {
-      where.platform = platform;
+      where.platform = platform as KolPlatform;
     }
 
     const [total, kols] = await Promise.all([
@@ -113,6 +194,8 @@ export class AdminKolsService {
       }),
     ]);
 
+    const frozenByKol = await sumFrozenAmountForKols(kols.map((k) => k.id));
+
     // Log admin action
     await logAdminAction({
       adminId,
@@ -124,7 +207,7 @@ export class AdminKolsService {
     });
 
     return {
-      items: kols.map((kol) => this.formatKolResponse(kol)),
+      items: kols.map((kol) => this.formatKolResponse(kol, frozenByKol.get(kol.id) ?? 0)),
       pagination: {
         page,
         page_size: limit,
@@ -139,7 +222,7 @@ export class AdminKolsService {
   /**
    * Get KOL list with filters
    */
-  async getKolList(filters: KolListFilters, _adminId: string) {
+  async getKolList(filters: KolListFilters, _adminId: string): Promise<PaginationResponse<KolResponse>> {
     const {
       page = 1,
       limit = 20,
@@ -156,26 +239,29 @@ export class AdminKolsService {
     const skip = (page - 1) * limit;
     const take = limit;
 
-    const where: any = {};
+    const where: Prisma.KolWhereInput = {};
 
     if (status) {
-      where.status = status;
+      where.status = status as KolStatus;
     }
 
     if (platform) {
-      where.platform = platform;
+      where.platform = platform as KolPlatform;
     }
 
     if (category) {
       where.category = category;
     }
 
-    if (minFollowers !== undefined) {
-      where.followers = { gte: minFollowers };
-    }
-
-    if (maxFollowers !== undefined) {
-      where.followers = { ...where.followers, lte: maxFollowers };
+    if (minFollowers !== undefined || maxFollowers !== undefined) {
+      const followers: Prisma.IntFilter = {};
+      if (minFollowers !== undefined) {
+        followers.gte = minFollowers;
+      }
+      if (maxFollowers !== undefined) {
+        followers.lte = maxFollowers;
+      }
+      where.followers = followers;
     }
 
     if (verified !== undefined) {
@@ -200,8 +286,10 @@ export class AdminKolsService {
       }),
     ]);
 
+    const frozenByKol = await sumFrozenAmountForKols(kols.map((k) => k.id));
+
     return {
-      items: kols.map((kol) => this.formatKolResponse(kol)),
+      items: kols.map((kol) => this.formatKolResponse(kol, frozenByKol.get(kol.id) ?? 0)),
       pagination: {
         page,
         page_size: limit,
@@ -217,21 +305,24 @@ export class AdminKolsService {
    * Get KOL by ID
    */
   async getKolById(kolId: string, adminId: string): Promise<KolResponse> {
-    const kol = await prisma.kol.findUnique({
-      where: { id: kolId },
-      include: {
-        user: {
-          select: {
-            email: true,
-            nickname: true,
+    const [kol, ordersFrozenTotal] = await Promise.all([
+      prisma.kol.findUnique({
+        where: { id: kolId },
+        include: {
+          user: {
+            select: {
+              email: true,
+              nickname: true,
+            },
+          },
+          statsHistory: {
+            orderBy: { snapshotDate: 'desc' },
+            take: 10,
           },
         },
-        statsHistory: {
-          orderBy: { snapshotDate: 'desc' },
-          take: 10,
-        },
-      },
-    });
+      }),
+      sumFrozenAmountForKol(kolId),
+    ]);
 
     if (!kol) {
       throw new ApiError('KOL 不存在', 404, 'KOL_NOT_FOUND');
@@ -250,8 +341,8 @@ export class AdminKolsService {
     });
 
     return {
-      ...this.formatKolResponse(kol),
-      statsHistory: kol.statsHistory.map((s: any) => ({
+      ...this.formatKolResponse(kol, ordersFrozenTotal),
+      statsHistory: kol.statsHistory.map((s) => ({
         date: s.snapshotDate,
         followers: s.followers,
         engagementRate: s.engagementRate ? Number(s.engagementRate) : 0,
@@ -262,7 +353,12 @@ export class AdminKolsService {
   /**
    * Approve KOL
    */
-  async approveKol(kolId: string, data: ApproveKolRequest, adminId: string, adminEmail: string) {
+  async approveKol(
+    kolId: string,
+    data: ApproveKolRequest,
+    adminId: string,
+    adminEmail: string
+  ): Promise<ApproveKolResult> {
     const kol = await prisma.kol.findUnique({
       where: { id: kolId },
     });
@@ -315,7 +411,12 @@ export class AdminKolsService {
   /**
    * Reject KOL
    */
-  async rejectKol(kolId: string, data: RejectKolRequest, adminId: string, adminEmail: string) {
+  async rejectKol(
+    kolId: string,
+    data: RejectKolRequest,
+    adminId: string,
+    adminEmail: string
+  ): Promise<RejectKolResult> {
     const kol = await prisma.kol.findUnique({
       where: { id: kolId },
     });
@@ -333,13 +434,12 @@ export class AdminKolsService {
       where: { id: kolId },
       data: {
         status: 'rejected',
-        metadata: {
-          ...(kol.metadata as any) || {},
+        metadata: mergeKolMetadata(kol.metadata, {
           rejectedAt: new Date().toISOString(),
           rejectedBy: adminId,
           rejectionReason: data.reason,
-          rejectionNote: data.note,
-        },
+          rejectionNote: data.note ?? '',
+        }),
       },
     });
 
@@ -372,19 +472,19 @@ export class AdminKolsService {
   /**
    * Format KOL response
    */
-  private formatKolResponse(kol: any): KolResponse {
+  private formatKolResponse(kol: KolWithUser, ordersFrozenTotal = 0): KolResponse {
     return {
       id: kol.id,
       userId: kol.userId,
       platform: kol.platform,
       platformId: kol.platformId,
       platformUsername: kol.platformUsername,
-      platformDisplayName: kol.platformDisplayName,
-      platformAvatarUrl: kol.platformAvatarUrl,
-      bio: kol.bio,
-      category: kol.category,
-      subcategory: kol.subcategory,
-      country: kol.country,
+      platformDisplayName: kol.platformDisplayName ?? undefined,
+      platformAvatarUrl: kol.platformAvatarUrl ?? undefined,
+      bio: kol.bio ?? undefined,
+      category: kol.category ?? undefined,
+      subcategory: kol.subcategory ?? undefined,
+      country: kol.country ?? undefined,
       followers: kol.followers,
       following: kol.following,
       totalVideos: kol.totalVideos,
@@ -394,19 +494,22 @@ export class AdminKolsService {
       engagementRate: Number(kol.engagementRate),
       status: kol.status,
       verified: kol.verified,
-      verifiedAt: kol.verifiedAt,
-      verifiedBy: kol.verifiedBy,
+      verifiedAt: kol.verifiedAt ?? undefined,
+      verifiedBy: kol.verifiedBy ?? undefined,
       basePrice: kol.basePrice ? Number(kol.basePrice) : undefined,
       currency: kol.currency,
       totalEarnings: Number(kol.totalEarnings),
       availableBalance: Number(kol.availableBalance),
+      ordersFrozenTotal,
       totalOrders: kol.totalOrders,
       completedOrders: kol.completedOrders,
       tags: kol.tags,
-      user: kol.user ? {
-        email: kol.user.email,
-        nickname: kol.user.nickname,
-      } : undefined,
+      user: kol.user
+        ? {
+            email: kol.user.email,
+            nickname: kol.user.nickname ?? undefined,
+          }
+        : undefined,
       createdAt: kol.createdAt,
       updatedAt: kol.updatedAt,
     };
@@ -415,14 +518,24 @@ export class AdminKolsService {
   /**
    * Verify KOL (alias for approve)
    */
-  async verifyKol(kolId: string, data: ApproveKolRequest, adminId: string, adminEmail: string) {
+  async verifyKol(
+    kolId: string,
+    data: ApproveKolRequest,
+    adminId: string,
+    adminEmail: string
+  ): Promise<ApproveKolResult> {
     return this.approveKol(kolId, data, adminId, adminEmail);
   }
 
   /**
    * Rate KOL
    */
-  async rateKol(kolId: string, data: { rating: string; note?: string }, adminId: string, adminEmail: string) {
+  async rateKol(
+    kolId: string,
+    data: { rating: string; note?: string },
+    adminId: string,
+    adminEmail: string
+  ): Promise<RateKolResult> {
     const kol = await prisma.kol.findUnique({
       where: { id: kolId },
     });
@@ -434,13 +547,12 @@ export class AdminKolsService {
     const updatedKol = await prisma.kol.update({
       where: { id: kolId },
       data: {
-        metadata: {
-          ...(kol.metadata as any) || {},
+        metadata: mergeKolMetadata(kol.metadata, {
           rating: data.rating,
           ratingUpdatedAt: new Date().toISOString(),
           ratedBy: adminId,
-          ratingNote: data.note,
-        },
+          ratingNote: data.note ?? '',
+        }),
       },
     });
 
@@ -471,7 +583,12 @@ export class AdminKolsService {
   /**
    * Blacklist KOL
    */
-  async blacklistKol(kolId: string, data: { reason: string; note?: string }, adminId: string, adminEmail: string) {
+  async blacklistKol(
+    kolId: string,
+    data: { reason: string; note?: string },
+    adminId: string,
+    adminEmail: string
+  ): Promise<BlacklistKolResult> {
     const kol = await prisma.kol.findUnique({
       where: { id: kolId },
     });
@@ -484,13 +601,12 @@ export class AdminKolsService {
       where: { id: kolId },
       data: {
         status: 'banned',
-        metadata: {
-          ...(kol.metadata as any) || {},
+        metadata: mergeKolMetadata(kol.metadata, {
           blacklistedAt: new Date().toISOString(),
           blacklistedBy: adminId,
           blacklistReason: data.reason,
-          blacklistNote: data.note,
-        },
+          blacklistNote: data.note ?? '',
+        }),
       },
     });
 
@@ -522,7 +638,7 @@ export class AdminKolsService {
   /**
    * Remove KOL from blacklist
    */
-  async removeFromBlacklist(kolId: string, adminId: string, adminEmail: string) {
+  async removeFromBlacklist(kolId: string, adminId: string, adminEmail: string): Promise<RemoveFromBlacklistResult> {
     const kol = await prisma.kol.findUnique({
       where: { id: kolId },
     });
@@ -539,11 +655,10 @@ export class AdminKolsService {
       where: { id: kolId },
       data: {
         status: 'active',
-        metadata: {
-          ...(kol.metadata as any) || {},
+        metadata: mergeKolMetadata(kol.metadata, {
           removedFromBlacklistAt: new Date().toISOString(),
           removedBy: adminId,
-        },
+        }),
       },
     });
 
@@ -573,7 +688,12 @@ export class AdminKolsService {
   /**
    * Suspend KOL
    */
-  async suspendKol(kolId: string, data: { reason: string; duration_days?: number }, adminId: string, adminEmail: string) {
+  async suspendKol(
+    kolId: string,
+    data: { reason: string; duration_days?: number },
+    adminId: string,
+    adminEmail: string
+  ): Promise<SuspendKolResult> {
     const kol = await prisma.kol.findUnique({
       where: { id: kolId },
     });
@@ -588,13 +708,12 @@ export class AdminKolsService {
       where: { id: kolId },
       data: {
         status: 'suspended',
-        metadata: {
-          ...(kol.metadata as any) || {},
+        metadata: mergeKolMetadata(kol.metadata, {
           suspendedAt: new Date().toISOString(),
           suspendedBy: adminId,
           suspensionReason: data.reason,
-          suspendedUntil: suspendedUntil?.toISOString(),
-        },
+          suspendedUntil: suspendedUntil?.toISOString() ?? '',
+        }),
       },
     });
 
@@ -627,7 +746,7 @@ export class AdminKolsService {
   /**
    * Unsuspend KOL
    */
-  async unsuspendKol(kolId: string, adminId: string, adminEmail: string) {
+  async unsuspendKol(kolId: string, adminId: string, adminEmail: string): Promise<UnsuspendKolResult> {
     const kol = await prisma.kol.findUnique({
       where: { id: kolId },
     });
@@ -644,11 +763,10 @@ export class AdminKolsService {
       where: { id: kolId },
       data: {
         status: 'active',
-        metadata: {
-          ...(kol.metadata as any) || {},
+        metadata: mergeKolMetadata(kol.metadata, {
           unsuspendedAt: new Date().toISOString(),
           unsuspendedBy: adminId,
-        },
+        }),
       },
     });
 
@@ -678,7 +796,7 @@ export class AdminKolsService {
   /**
    * Sync KOL data
    */
-  async syncKolData(kolId: string, adminId: string) {
+  async syncKolData(kolId: string, adminId: string): Promise<SyncKolDataResult> {
     const kol = await prisma.kol.findUnique({
       where: { id: kolId },
     });
@@ -691,11 +809,10 @@ export class AdminKolsService {
     const updatedKol = await prisma.kol.update({
       where: { id: kolId },
       data: {
-        metadata: {
-          ...(kol.metadata as any) || {},
+        metadata: mergeKolMetadata(kol.metadata, {
           lastSyncedAt: new Date().toISOString(),
           syncedBy: adminId,
-        },
+        }),
       },
     });
 

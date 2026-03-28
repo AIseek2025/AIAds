@@ -44,7 +44,7 @@ export class PerformanceMonitor {
   constructor(slowRequestThreshold: number = 1000, maxDurations: number = 1000) {
     this.slowRequestThreshold = slowRequestThreshold;
     this.maxDurations = maxDurations;
-    
+
     this.metrics = {
       requestCount: 0,
       errorCount: 0,
@@ -63,15 +63,15 @@ export class PerformanceMonitor {
     const start = Date.now();
     const method = req.method;
     const path = this.normalizePath(req.path);
-    const requestId = req.headers['x-request-id'] as string || 'unknown';
+    const requestId = (req.headers['x-request-id'] as string) || 'unknown';
 
     // Track response finish
     res.on('finish', () => {
       const duration = Date.now() - start;
       const statusCode = res.statusCode;
-      
+
       this.recordRequest(method, path, duration, statusCode);
-      
+
       // Log slow requests
       if (duration > this.slowRequestThreshold) {
         logger.warn('Slow request detected', {
@@ -92,15 +92,10 @@ export class PerformanceMonitor {
   /**
    * Record request metrics
    */
-  private recordRequest(
-    method: string,
-    path: string,
-    duration: number,
-    statusCode: number
-  ): void {
+  private recordRequest(method: string, path: string, duration: number, statusCode: number): void {
     this.metrics.requestCount++;
     this.metrics.totalDuration += duration;
-    
+
     // Track durations for percentile calculation
     this.metrics.durations.push(duration);
     if (this.metrics.durations.length > this.maxDurations) {
@@ -127,7 +122,7 @@ export class PerformanceMonitor {
         minDuration: Infinity,
       };
     }
-    
+
     const methodStats = this.metrics.methodStats[method];
     methodStats.count++;
     methodStats.totalDuration += duration;
@@ -147,13 +142,13 @@ export class PerformanceMonitor {
         p99: 0,
       };
     }
-    
+
     const pathStats = this.metrics.pathStats[path];
     pathStats.count++;
     pathStats.totalDuration += duration;
     pathStats.avgDuration = pathStats.totalDuration / pathStats.count;
     pathStats.maxDuration = Math.max(pathStats.maxDuration, duration);
-    
+
     // Recalculate percentiles
     this.recalculatePercentiles();
   }
@@ -162,12 +157,14 @@ export class PerformanceMonitor {
    * Recalculate percentile metrics
    */
   private recalculatePercentiles(): void {
-    if (this.metrics.durations.length === 0) return;
+    if (this.metrics.durations.length === 0) {
+      return;
+    }
 
     const sorted = [...this.metrics.durations].sort((a, b) => a - b);
 
     // Update all path stats with current percentiles
-    Object.values(this.metrics.pathStats).forEach(stats => {
+    Object.values(this.metrics.pathStats).forEach((stats) => {
       stats.p50 = this.getPercentile(sorted, 50);
       stats.p95 = this.getPercentile(sorted, 95);
       stats.p99 = this.getPercentile(sorted, 99);
@@ -202,23 +199,18 @@ export class PerformanceMonitor {
     overallP95: number;
     overallP99: number;
   } {
-    const avgDuration = this.metrics.requestCount > 0
-      ? this.metrics.totalDuration / this.metrics.requestCount
-      : 0;
-    
-    const slowRequestRate = this.metrics.requestCount > 0
-      ? (this.metrics.slowRequestCount / this.metrics.requestCount) * 100
-      : 0;
-    
-    const errorRate = this.metrics.requestCount > 0
-      ? (this.metrics.errorCount / this.metrics.requestCount) * 100
-      : 0;
+    const avgDuration = this.metrics.requestCount > 0 ? this.metrics.totalDuration / this.metrics.requestCount : 0;
+
+    const slowRequestRate =
+      this.metrics.requestCount > 0 ? (this.metrics.slowRequestCount / this.metrics.requestCount) * 100 : 0;
+
+    const errorRate = this.metrics.requestCount > 0 ? (this.metrics.errorCount / this.metrics.requestCount) * 100 : 0;
 
     const overallP95 = this.getPercentile(
       [...this.metrics.durations].sort((a, b) => a - b),
       95
     );
-    
+
     const overallP99 = this.getPercentile(
       [...this.metrics.durations].sort((a, b) => a - b),
       99
@@ -300,7 +292,7 @@ export const performanceMonitor = new PerformanceMonitor(
 /**
  * Performance monitoring middleware factory
  */
-export function performanceMiddleware() {
+export function performanceMiddleware(): (req: Request, res: Response, next: NextFunction) => void {
   return performanceMonitor.middleware;
 }
 
@@ -320,14 +312,9 @@ export class DatabasePerformanceMonitor {
   /**
    * Record query execution
    */
-  recordQuery(
-    model: string,
-    action: string,
-    duration: number,
-    success: boolean = true
-  ): void {
+  recordQuery(model: string, action: string, duration: number, success: boolean = true): void {
     const key = `${model}:${action}`;
-    
+
     if (!this.queryStats.has(key)) {
       this.queryStats.set(key, {
         count: 0,
@@ -398,7 +385,7 @@ export class DatabasePerformanceMonitor {
     slowRate: number;
   }> {
     return this.getQueryStats()
-      .filter(stats => stats.avgDuration > this.slowQueryThreshold)
+      .filter((stats) => stats.avgDuration > this.slowQueryThreshold)
       .sort((a, b) => b.avgDuration - a.avgDuration);
   }
 
@@ -417,27 +404,36 @@ export const dbPerformanceMonitor = new DatabasePerformanceMonitor(
   parseInt(process.env.SLOW_QUERY_THRESHOLD_MS || '100', 10)
 );
 
+/** Minimal shape used by Prisma `$use` — only `model` / `action` are read here */
+type PrismaUseMiddlewareParams = {
+  model?: string;
+  action: string;
+};
+
 /**
  * Prisma middleware for query performance monitoring
  */
-export function prismaPerformanceMiddleware() {
-  return async (params: any, next: any) => {
+export function prismaPerformanceMiddleware(): (
+  params: PrismaUseMiddlewareParams,
+  next: (params: PrismaUseMiddlewareParams) => Promise<unknown>
+) => Promise<unknown> {
+  return async (params, next) => {
     const before = Date.now();
-    
+
     try {
       const result = await next(params);
       const after = Date.now();
       const duration = after - before;
-      
-      dbPerformanceMonitor.recordQuery(params.model, params.action, duration, true);
-      
+
+      dbPerformanceMonitor.recordQuery(params.model ?? 'unknown', params.action, duration, true);
+
       return result;
     } catch (error) {
       const after = Date.now();
       const duration = after - before;
-      
-      dbPerformanceMonitor.recordQuery(params.model, params.action, duration, false);
-      
+
+      dbPerformanceMonitor.recordQuery(params.model ?? 'unknown', params.action, duration, false);
+
       throw error;
     }
   };

@@ -9,6 +9,51 @@ const router = Router();
 router.use(auth());
 
 /**
+ * KOL 订单子路径必须注册在 /:id 之前，否则 "kols" 会被当成任务 UUID
+ */
+/**
+ * @route   GET /api/v1/tasks/kols/orders
+ * @desc    Get KOL orders list
+ * @access  Private (kol)
+ */
+router.get('/kols/orders', tasksController.getOrders);
+
+/**
+ * @route   GET /api/v1/tasks/kols/orders/:id
+ * @desc    Get order details
+ * @access  Private (kol)
+ */
+router.get('/kols/orders/:id', tasksController.getOrder);
+
+/**
+ * @route   PUT /api/v1/tasks/kols/orders/:id/accept
+ * @desc    Accept order
+ * @access  Private (kol)
+ */
+router.put('/kols/orders/:id/accept', strictRateLimiter, tasksController.acceptOrder);
+
+/**
+ * @route   PUT /api/v1/tasks/kols/orders/:id/reject
+ * @desc    Reject order
+ * @access  Private (kol)
+ */
+router.put('/kols/orders/:id/reject', strictRateLimiter, tasksController.rejectOrder);
+
+/**
+ * @route   PUT /api/v1/tasks/kols/orders/:id/submit
+ * @desc    Submit order work
+ * @access  Private (kol)
+ */
+router.put('/kols/orders/:id/submit', strictRateLimiter, tasksController.submitOrder);
+
+/**
+ * @route   PUT /api/v1/tasks/kols/orders/:id/revise
+ * @desc    Revise order work
+ * @access  Private (kol)
+ */
+router.put('/kols/orders/:id/revise', strictRateLimiter, tasksController.reviseOrder);
+
+/**
  * @route   GET /api/v1/tasks
  * @desc    Get available tasks list for KOL
  * @access  Private (kol)
@@ -28,47 +73,5 @@ router.get('/:id', tasksController.getTask);
  * @access  Private (kol)
  */
 router.post('/:id/apply', moderateRateLimiter, tasksController.applyForTask);
-
-/**
- * @route   GET /api/v1/kols/orders
- * @desc    Get KOL orders list
- * @access  Private (kol)
- */
-router.get('/kols/orders', tasksController.getOrders);
-
-/**
- * @route   GET /api/v1/kols/orders/:id
- * @desc    Get order details
- * @access  Private (kol)
- */
-router.get('/kols/orders/:id', tasksController.getOrder);
-
-/**
- * @route   PUT /api/v1/kols/orders/:id/accept
- * @desc    Accept order
- * @access  Private (kol)
- */
-router.put('/kols/orders/:id/accept', strictRateLimiter, tasksController.acceptOrder);
-
-/**
- * @route   PUT /api/v1/kols/orders/:id/reject
- * @desc    Reject order
- * @access  Private (kol)
- */
-router.put('/kols/orders/:id/reject', strictRateLimiter, tasksController.rejectOrder);
-
-/**
- * @route   PUT /api/v1/kols/orders/:id/submit
- * @desc    Submit order work
- * @access  Private (kol)
- */
-router.put('/kols/orders/:id/submit', strictRateLimiter, tasksController.submitOrder);
-
-/**
- * @route   PUT /api/v1/kols/orders/:id/revise
- * @desc    Revise order work
- * @access  Private (kol)
- */
-router.put('/kols/orders/:id/revise', strictRateLimiter, tasksController.reviseOrder);
 
 export default router;

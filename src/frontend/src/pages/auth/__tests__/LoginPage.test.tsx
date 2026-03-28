@@ -1,8 +1,9 @@
-/// <reference types="vitest" />
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { LoginPage } from '../LoginPage';
+import { APP_PATHS } from '../../../constants/appPaths';
 import { authAPI } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
 
@@ -37,8 +38,8 @@ describe('LoginPage', () => {
     renderWithRouter(<LoginPage />);
     
     expect(screen.getByLabelText(/邮箱/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/密码/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /登录/i })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/请输入密码/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^登录$/ })).toBeInTheDocument();
     expect(screen.getByText(/记住我/i)).toBeInTheDocument();
     expect(screen.getByText(/忘记密码/i)).toBeInTheDocument();
   });
@@ -46,7 +47,7 @@ describe('LoginPage', () => {
   it('应该显示表单验证错误', async () => {
     renderWithRouter(<LoginPage />);
     
-    const submitButton = screen.getByRole('button', { name: /登录/i });
+    const submitButton = screen.getByRole('button', { name: /^登录$/ });
     fireEvent.click(submitButton);
     
     expect(await screen.findByText(/请输入邮箱地址/i)).toBeInTheDocument();
@@ -59,7 +60,7 @@ describe('LoginPage', () => {
     const emailInput = screen.getByLabelText(/邮箱/i);
     fireEvent.change(emailInput, { target: { value: 'invalid-email' } });
     
-    const submitButton = screen.getByRole('button', { name: /登录/i });
+    const submitButton = screen.getByRole('button', { name: /^登录$/ });
     fireEvent.click(submitButton);
     
     expect(await screen.findByText(/邮箱格式不正确/i)).toBeInTheDocument();
@@ -71,11 +72,11 @@ describe('LoginPage', () => {
     fireEvent.change(screen.getByLabelText(/邮箱/i), {
       target: { value: 'test@example.com' },
     });
-    fireEvent.change(screen.getByLabelText(/密码/i), {
+    fireEvent.change(screen.getByPlaceholderText(/请输入密码/), {
       target: { value: '123' },
     });
     
-    const submitButton = screen.getByRole('button', { name: /登录/i });
+    const submitButton = screen.getByRole('button', { name: /^登录$/ });
     fireEvent.click(submitButton);
     
     expect(await screen.findByText(/密码至少 8 位/i)).toBeInTheDocument();
@@ -94,11 +95,11 @@ describe('LoginPage', () => {
     fireEvent.change(screen.getByLabelText(/邮箱/i), {
       target: { value: 'test@example.com' },
     });
-    fireEvent.change(screen.getByLabelText(/密码/i), {
+    fireEvent.change(screen.getByPlaceholderText(/请输入密码/), {
       target: { value: 'SecurePass123!' },
     });
     
-    const submitButton = screen.getByRole('button', { name: /登录/i });
+    const submitButton = screen.getByRole('button', { name: /^登录$/ });
     fireEvent.click(submitButton);
     
     await waitFor(() => {
@@ -128,11 +129,11 @@ describe('LoginPage', () => {
     fireEvent.change(screen.getByLabelText(/邮箱/i), {
       target: { value: 'test@example.com' },
     });
-    fireEvent.change(screen.getByLabelText(/密码/i), {
+    fireEvent.change(screen.getByPlaceholderText(/请输入密码/), {
       target: { value: 'wrongpassword' },
     });
     
-    const submitButton = screen.getByRole('button', { name: /登录/i });
+    const submitButton = screen.getByRole('button', { name: /^登录$/ });
     fireEvent.click(submitButton);
     
     expect(await screen.findByText(/邮箱或密码错误/i)).toBeInTheDocument();
@@ -151,10 +152,10 @@ describe('LoginPage', () => {
   it('应该显示/隐藏密码', () => {
     renderWithRouter(<LoginPage />);
     
-    const passwordInput = screen.getByLabelText(/密码/i);
+    const passwordInput = screen.getByPlaceholderText(/请输入密码/);
     expect(passwordInput).toHaveAttribute('type', 'password');
     
-    const visibilityButton = screen.getByRole('button');
+    const visibilityButton = screen.getByRole('button', { name: /显示密码/i });
     fireEvent.click(visibilityButton);
     
     expect(passwordInput).toHaveAttribute('type', 'text');
@@ -162,23 +163,27 @@ describe('LoginPage', () => {
 
   it('应该跳转到注册页面', () => {
     renderWithRouter(<LoginPage />);
-    
-    const registerLink = screen.getByText(/立即注册/i);
-    expect(registerLink).toHaveAttribute('href', '/register');
+
+    expect(screen.getByRole('link', { name: /立即注册/i })).toHaveAttribute(
+      'href',
+      APP_PATHS.register
+    );
   });
 
   it('应该跳转到忘记密码页面', () => {
     renderWithRouter(<LoginPage />);
-    
-    const forgotLink = screen.getByText(/忘记密码/i);
-    expect(forgotLink).toHaveAttribute('href', '/forgot-password');
+
+    expect(screen.getByRole('link', { name: /忘记密码/i })).toHaveAttribute(
+      'href',
+      APP_PATHS.forgotPassword
+    );
   });
 
   it('应该清除错误当用户开始输入', async () => {
     renderWithRouter(<LoginPage />);
     
     const emailInput = screen.getByLabelText(/邮箱/i);
-    const submitButton = screen.getByRole('button', { name: /登录/i });
+    const submitButton = screen.getByRole('button', { name: /^登录$/ });
     
     // Trigger validation error
     fireEvent.click(submitButton);
@@ -200,11 +205,11 @@ describe('LoginPage', () => {
     fireEvent.change(screen.getByLabelText(/邮箱/i), {
       target: { value: 'test@example.com' },
     });
-    fireEvent.change(screen.getByLabelText(/密码/i), {
+    fireEvent.change(screen.getByPlaceholderText(/请输入密码/), {
       target: { value: 'SecurePass123!' },
     });
     
-    const submitButton = screen.getByRole('button', { name: /登录/i });
+    const submitButton = screen.getByRole('button', { name: /^登录$/ });
     fireEvent.click(submitButton);
     
     expect(await screen.findByText(/登录中/i)).toBeInTheDocument();

@@ -1,0 +1,16 @@
+-- AIAds 邀请与增长 — 草案占位（Wave C / backlog §六、§九）
+-- 未执行迁移；与《深度拆解》第六章及反作弊策略对齐后再定稿。
+--
+-- 方向：邀请码生成与核销、设备/IP 指纹粗粒度约束、与广告主/KOL 账号绑定。
+--
+-- 示例（非最终）：
+-- CREATE TABLE invite_code (
+--   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+--   code VARCHAR(32) NOT NULL UNIQUE,
+--   inviter_user_id UUID REFERENCES "User"(id),
+--   role_target VARCHAR(16) NOT NULL,
+--   max_uses INT NOT NULL DEFAULT 1,
+--   used_count INT NOT NULL DEFAULT 0,
+--   expires_at TIMESTAMPTZ,
+--   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- );

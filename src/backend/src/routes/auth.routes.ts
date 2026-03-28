@@ -20,6 +20,13 @@ router.post('/register', authController.register);
 router.post('/login', authController.login);
 
 /**
+ * @route   POST /api/v1/auth/login-email-code
+ * @desc    Login with email + verification code (purpose=login)
+ * @access  Public
+ */
+router.post('/login-email-code', strictRateLimiter, authController.loginEmailCode);
+
+/**
  * @route   POST /api/v1/auth/refresh
  * @desc    Refresh access token
  * @access  Public

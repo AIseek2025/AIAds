@@ -2,8 +2,8 @@ import React from 'react';
 import Box from '@mui/material/Box';
 import CssBaseline from '@mui/material/CssBaseline';
 import { styled } from '@mui/material/styles';
-import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
-import { useAdminAuthStore, useAdminAppStore } from '../../stores/adminStore';
+import { useNavigate, useLocation, Link as RouterLink, Outlet } from 'react-router-dom';
+import { useAdminAuthStore } from '../../stores/adminStore';
 
 // MUI Components
 import AppBar from '@mui/material/AppBar';
@@ -14,7 +14,6 @@ import Avatar from '@mui/material/Avatar';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Tooltip from '@mui/material/Tooltip';
-import Badge from '@mui/material/Badge';
 import Drawer from '@mui/material/Drawer';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
@@ -22,49 +21,23 @@ import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import Divider from '@mui/material/Divider';
-import Button from '@mui/material/Button';
 import Link from '@mui/material/Link';
 
 // Icons
 import MenuIcon from '@mui/icons-material/Menu';
-import NotificationsIcon from '@mui/icons-material/Notifications';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import PeopleIcon from '@mui/icons-material/People';
-import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
-import FactCheckIcon from '@mui/icons-material/FactCheck';
-import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
-import AnalyticsIcon from '@mui/icons-material/Analytics';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
 import PersonIcon from '@mui/icons-material/Person';
+import {
+  ADMIN_APP_NAV_ITEMS,
+  isAdminNavRouteActive,
+} from '../admin/adminNavConfig';
+import { AdminNotificationBell } from '../admin/AdminNotificationBell';
+import { APP_PATHS, ADMIN_ROUTE_SEG, pathAdmin, pathAdminProfile } from '../../constants/appPaths';
 
 // Constants
 const HEADER_HEIGHT = 64;
 const SIDEBAR_WIDTH = 260;
-
-interface MenuItem {
-  text: string;
-  icon: React.ReactNode;
-  path: string;
-  permission?: string;
-}
-
-const menuItems: MenuItem[] = [
-  { text: '数据看板', icon: <DashboardIcon />, path: '/admin/dashboard' },
-  { text: '用户管理', icon: <PeopleIcon />, path: '/admin/users' },
-  { text: '广告主管理', icon: <AccountBalanceIcon />, path: '/admin/advertisers' },
-  { text: 'KOL 审核', icon: <VerifiedUserIcon />, path: '/admin/kol-review' },
-  { text: '内容审核', icon: <FactCheckIcon />, path: '/admin/content-review' },
-  { text: '活动管理', icon: <AnalyticsIcon />, path: '/admin/campaigns' },
-  { text: '订单管理', icon: <NotificationsIcon />, path: '/admin/orders' },
-  { text: '财务管理', icon: <AccountBalanceIcon />, path: '/admin/finance' },
-  { text: '数据统计', icon: <AnalyticsIcon />, path: '/admin/stats' },
-  { text: '系统设置', icon: <SettingsIcon />, path: '/admin/settings' },
-];
-
-interface AdminLayoutProps {
-  children: React.ReactNode;
-}
 
 // Styled Components
 const StyledAppBar = styled(AppBar)(({ theme }) => ({
@@ -133,18 +106,15 @@ const LogoText = styled(Typography)(({ theme }) => ({
   },
 }));
 
-export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
+export const AdminLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { admin, logout, hasPermission } = useAdminAuthStore();
-  const { sidebarCollapsed } = useAdminAppStore();
+  const { admin, logout } = useAdminAuthStore();
 
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
-  const [notifAnchorEl, setNotifAnchorEl] = React.useState<null | HTMLElement>(null);
 
   const userMenuOpen = Boolean(anchorEl);
-  const notifMenuOpen = Boolean(notifAnchorEl);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -158,18 +128,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     setAnchorEl(null);
   };
 
-  const handleNotifMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setNotifAnchorEl(event.currentTarget);
-  };
-
-  const handleNotifMenuClose = () => {
-    setNotifAnchorEl(null);
-  };
-
   const handleLogout = () => {
     logout();
     handleUserMenuClose();
-    navigate('/admin/login');
+    navigate(APP_PATHS.adminLogin);
   };
 
   const handleNavigate = (path: string) => {
@@ -180,15 +142,16 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const drawerContent = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <LogoContainer>
-        <Link component={RouterLink} to="/admin/dashboard" underline="none">
+        <Link component={RouterLink} to={pathAdmin(ADMIN_ROUTE_SEG.dashboard)} underline="none">
           <LogoText variant="h5">AIAds Admin</LogoText>
         </Link>
       </LogoContainer>
 
       <Box sx={{ flexGrow: 1, overflow: 'auto', py: 2 }}>
         <List>
-          {menuItems.map((item) => {
-            const isActive = location.pathname === item.path;
+          {ADMIN_APP_NAV_ITEMS.map((item) => {
+            const isActive = isAdminNavRouteActive(location.pathname, item.path);
+            const Icon = item.Icon;
             return (
               <ListItem key={item.path} disablePadding>
                 <ListItemButton
@@ -213,10 +176,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                       color: isActive ? 'primary.main' : 'text.secondary',
                     }}
                   >
-                    {item.icon}
+                    <Icon />
                   </ListItemIcon>
                   <ListItemText
-                    primary={item.text}
+                    primary={item.sidebarLabel}
                     primaryTypographyProps={{
                       fontWeight: isActive ? 600 : 400,
                     }}
@@ -255,7 +218,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
           {/* Logo */}
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Link component={RouterLink} to="/admin/dashboard" underline="none">
+            <Link component={RouterLink} to={pathAdmin(ADMIN_ROUTE_SEG.dashboard)} underline="none">
               <LogoText variant="h6">AIAds Admin</LogoText>
             </Link>
           </Box>
@@ -265,59 +228,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
           {/* Actions */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {/* Notifications */}
-            <ActionButton aria-label="notifications" onClick={handleNotifMenuOpen}>
-              <Badge badgeContent={3} color="error">
-                <NotificationsIcon />
-              </Badge>
-            </ActionButton>
-
-            <Menu
-              anchorEl={notifAnchorEl}
-              open={notifMenuOpen}
-              onClose={handleNotifMenuClose}
-              PaperProps={{
-                elevation: 3,
-                sx: { minWidth: 280, mt: 1 },
-              }}
-              transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-              anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-            >
-              <Box sx={{ px: 2, py: 1.5 }}>
-                <Typography variant="subtitle2">通知</Typography>
-              </Box>
-              <Divider />
-              <MenuItem onClick={handleNotifMenuClose}>
-                <Box sx={{ py: 1 }}>
-                  <Typography variant="body2">3 条待审核内容</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    5 分钟前
-                  </Typography>
-                </Box>
-              </MenuItem>
-              <MenuItem onClick={handleNotifMenuClose}>
-                <Box sx={{ py: 1 }}>
-                  <Typography variant="body2">2 条提现申请待处理</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    15 分钟前
-                  </Typography>
-                </Box>
-              </MenuItem>
-              <MenuItem onClick={handleNotifMenuClose}>
-                <Box sx={{ py: 1 }}>
-                  <Typography variant="body2">1 条 KOL 认证申请</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    1 小时前
-                  </Typography>
-                </Box>
-              </MenuItem>
-              <Divider />
-              <MenuItem onClick={handleNotifMenuClose}>
-                <Typography variant="body2" color="primary" sx={{ textAlign: 'center' }}>
-                  查看全部通知
-                </Typography>
-              </MenuItem>
-            </Menu>
+            <AdminNotificationBell />
 
             {/* User menu */}
             {admin && (
@@ -356,13 +267,13 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                       </Typography>
                     )}
                   </Box>
-                  <MenuItem onClick={() => { handleUserMenuClose(); navigate('/admin/profile'); }}>
+                  <MenuItem onClick={() => { handleUserMenuClose(); navigate(pathAdminProfile()); }}>
                     <ListItemIcon>
                       <PersonIcon fontSize="small" />
                     </ListItemIcon>
                     个人中心
                   </MenuItem>
-                  <MenuItem onClick={() => { handleUserMenuClose(); navigate('/admin/settings'); }}>
+                  <MenuItem onClick={() => { handleUserMenuClose(); navigate(pathAdmin(ADMIN_ROUTE_SEG.settings)); }}>
                     <ListItemIcon>
                       <SettingsIcon fontSize="small" />
                     </ListItemIcon>
@@ -419,7 +330,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       {/* Main Content */}
       <ContentWrapper>
         <MainContent>
-          {children}
+          <Outlet />
         </MainContent>
       </ContentWrapper>
     </MainContainer>

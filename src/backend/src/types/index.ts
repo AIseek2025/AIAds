@@ -1,5 +1,5 @@
 // API Response types
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: ApiError;
@@ -43,6 +43,8 @@ export interface RegisterRequest {
   phone?: string;
   role?: 'advertiser' | 'kol';
   nickname?: string;
+  /** 可选；与 REQUIRE_INVITE_CODE_FOR_REGISTRATION 联用 */
+  invite_code?: string;
 }
 
 export interface LoginRequest {
@@ -138,6 +140,8 @@ export interface AdvertiserResponse {
   total_campaigns: number;
   active_campaigns: number;
   total_orders: number;
+  /** 全部订单 frozen_amount 合计（与 /kols/balance 侧订单冻结口径一致，按广告主维度） */
+  orders_frozen_total?: number;
   created_at: string;
   updated_at: string;
 }
@@ -212,6 +216,11 @@ export interface KolResponse {
   created_at: string;
   updated_at: string;
   last_synced_at?: string;
+  /** 仅 keyword 搜索时返回：规则相关度（可解释，非向量检索） */
+  search_rank?: {
+    score: number;
+    matched_fields: string[];
+  };
 }
 
 export interface CreateKolRequest {
@@ -325,9 +334,14 @@ export interface KolOrderResponse {
   advertiser_id: string;
   advertiser_name?: string;
   order_no: string;
+  pricing_model: 'fixed' | 'cpm';
+  cpm_rate: number | null;
+  cpm_budget_cap: number | null;
+  frozen_amount: number;
   price: number;
   platform_fee: number;
   kol_earning: number;
+  cpm_breakdown?: OrderCpmBreakdown;
   content_type: string;
   content_count: number;
   content_description?: string;
@@ -403,6 +417,8 @@ export interface BalanceResponse {
   pending_balance: number;
   total_earnings: number;
   withdrawn_amount: number;
+  /** 该 KOL 名下所有合作订单的 frozen_amount 合计（与订单详情「订单冻结」同源） */
+  orders_frozen_total: number;
   currency: string;
 }
 
@@ -450,6 +466,14 @@ export interface WithdrawalHistoryResponse {
   };
 }
 
+/** 活动目标受众（创建请求与活动响应共用） */
+export interface CampaignTargetAudience {
+  age_range?: string;
+  gender?: 'male' | 'female' | 'all';
+  locations?: string[];
+  interests?: string[];
+}
+
 // Campaign types
 export interface CampaignResponse {
   id: string;
@@ -460,7 +484,7 @@ export interface CampaignResponse {
   budget: number;
   budget_type: string;
   spent_amount: number;
-  target_audience?: any;
+  target_audience?: CampaignTargetAudience;
   target_platforms: string[];
   min_followers?: number;
   max_followers?: number;
@@ -486,6 +510,8 @@ export interface CampaignResponse {
   reviewed_by?: string;
   reviewed_at?: string;
   review_notes?: string;
+  /** 本活动下订单 frozen_amount 合计（列表/详情与冻结口径一致） */
+  orders_frozen_total?: number;
   created_at: string;
   updated_at: string;
 }
@@ -496,12 +522,7 @@ export interface CreateCampaignRequest {
   objective?: 'awareness' | 'engagement' | 'traffic' | 'conversion' | 'sales';
   budget: number;
   budget_type?: 'fixed' | 'per_video';
-  target_audience?: {
-    age_range?: string;
-    gender?: 'male' | 'female' | 'all';
-    locations?: string[];
-    interests?: string[];
-  };
+  target_audience?: CampaignTargetAudience;
   target_platforms?: Array<'tiktok' | 'youtube' | 'instagram' | 'xiaohongshu' | 'weibo'>;
   min_followers?: number;
   max_followers?: number;
@@ -515,6 +536,18 @@ export interface CreateCampaignRequest {
   deadline?: string;
 }
 
+/** CPM 透明化：与订单当前 views / cpm 配置一致的预估或结算口径 */
+export interface OrderCpmBreakdown {
+  pricing_model: 'fixed' | 'cpm';
+  billable_impressions: number;
+  raw_views: number;
+  cpm_rate: number | null;
+  cpm_budget_cap: number | null;
+  gross_spend: number;
+  platform_fee: number;
+  kol_earning: number;
+}
+
 // Order types
 export interface OrderResponse {
   id: string;
@@ -522,9 +555,14 @@ export interface OrderResponse {
   kol_id: string;
   advertiser_id: string;
   order_no: string;
+  pricing_model: 'fixed' | 'cpm';
+  cpm_rate: number | null;
+  cpm_budget_cap: number | null;
+  frozen_amount: number;
   price: number;
   platform_fee: number;
   kol_earning: number;
+  cpm_breakdown?: OrderCpmBreakdown;
   content_type: string;
   content_count: number;
   content_description?: string;
@@ -549,12 +587,26 @@ export interface OrderResponse {
   shares: number;
   created_at: string;
   updated_at: string;
+  /** 列表/详情附带，便于 KOL 端展示活动标题与平台 */
+  campaign_title?: string;
+  platform?: string;
+  /** 列表接口附带，便于广告主端展示 */
+  kol?: {
+    platform_username: string;
+    platform_display_name: string | null;
+    platform_avatar_url: string | null;
+    platform: string;
+  };
 }
 
 export interface CreateOrderRequest {
   campaign_id: string;
   kol_id: string;
-  offered_price: number;
+  /** fixed：必填，为订单总价；cpm：可选，作为 CPM 预算上限 */
+  offered_price?: number;
+  pricing_model?: 'fixed' | 'cpm';
+  /** CPM 订单必填，单位与钱包货币一致（如 CNY 下为「每千次曝光价格」） */
+  cpm_rate?: number;
   requirements?: string;
 }
 

@@ -28,7 +28,7 @@ export function auditLog(req: Request, res: Response, next: NextFunction): void 
   req.startTime = startTime;
 
   // Get user ID if available (set by auth middleware)
-  const userId = (req as any).user?.id;
+  const userId = req.user?.id;
 
   // P2 Fix: Enhanced logging with more fields
   logger.info({
@@ -81,11 +81,7 @@ export function auditLog(req: Request, res: Response, next: NextFunction): void 
 /**
  * Log critical security events
  */
-export function logSecurityEvent(
-  event: string,
-  userId: string | undefined,
-  details: Record<string, any>
-): void {
+export function logSecurityEvent(event: string, userId: string | undefined, details: Record<string, unknown>): void {
   logger.info({
     event: 'security',
     action: event,
@@ -102,7 +98,7 @@ export function logAuthEvent(
   action: 'login' | 'logout' | 'register' | 'password_reset' | 'mfa_enabled' | 'mfa_disabled',
   userId: string | undefined,
   success: boolean,
-  details?: Record<string, any>
+  details?: Record<string, unknown>
 ): void {
   logger.info({
     event: 'auth',
@@ -136,15 +132,17 @@ export function logDataAccess(
 /**
  * Sanitize query parameters for logging (remove sensitive data)
  */
-function sanitizeQuery(query: any): Record<string, any> {
-  if (!query) return {};
+function sanitizeQuery(query: Request['query']): Record<string, unknown> {
+  if (!query) {
+    return {};
+  }
 
   const sensitiveKeys = ['password', 'token', 'secret', 'key', 'auth', 'credit', 'card'];
-  const sanitized: Record<string, any> = {};
+  const sanitized: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(query)) {
     const lowerKey = key.toLowerCase();
-    if (sensitiveKeys.some(sensitive => lowerKey.includes(sensitive))) {
+    if (sensitiveKeys.some((sensitive) => lowerKey.includes(sensitive))) {
       sanitized[key] = '[REDACTED]';
     } else {
       sanitized[key] = value;
@@ -158,13 +156,18 @@ function sanitizeQuery(query: any): Record<string, any> {
  * P2 Fix: Sanitize request body for logging
  * Removes sensitive data while preserving operation context
  */
-function sanitizeBody(body: any, _path: string): Record<string, any> | string {
-  if (!body) return {};
+function sanitizeBody(body: unknown, _path: string): Record<string, unknown> | string {
+  if (body === undefined || body === null) {
+    return {};
+  }
 
-  // Don't log large bodies
   const bodyStr = JSON.stringify(body);
   if (bodyStr.length > 1000) {
     return '[BODY_TOO_LARGE]';
+  }
+
+  if (typeof body !== 'object' || Array.isArray(body)) {
+    return bodyStr;
   }
 
   const sensitiveKeys = [
@@ -182,11 +185,11 @@ function sanitizeBody(body: any, _path: string): Record<string, any> | string {
     'wechatPayAccount',
   ];
 
-  const sanitized: Record<string, any> = { ...body };
+  const sanitized: Record<string, unknown> = { ...(body as Record<string, unknown>) };
 
   for (const [key] of Object.entries(sanitized)) {
     const lowerKey = key.toLowerCase();
-    if (sensitiveKeys.some(sensitive => lowerKey.includes(sensitive))) {
+    if (sensitiveKeys.some((sensitive) => lowerKey.includes(sensitive))) {
       sanitized[key] = '[REDACTED]';
     }
   }
@@ -200,8 +203,8 @@ function sanitizeBody(body: any, _path: string): Record<string, any> | string {
  */
 export function logCriticalAction(actionName: string) {
   return (req: Request, _res: Response, next: NextFunction): void => {
-    const userId = (req as any).user?.id;
-    
+    const userId = req.user?.id;
+
     logger.warn({
       event: 'critical_action',
       action: actionName,
@@ -211,7 +214,7 @@ export function logCriticalAction(actionName: string) {
       path: req.path,
       timestamp: new Date().toISOString(),
     });
-    
+
     next();
   };
 }

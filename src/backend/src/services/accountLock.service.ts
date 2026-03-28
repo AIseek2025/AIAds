@@ -101,10 +101,7 @@ export async function getLockRemainingTime(userId: string): Promise<number> {
 /**
  * Manually lock an account (for admin use)
  */
-export async function manuallyLockAccount(
-  userId: string,
-  duration: number = LOCK_DURATION
-): Promise<void> {
+export async function manuallyLockAccount(userId: string, duration: number = LOCK_DURATION): Promise<void> {
   const redis = getRedis();
   if (!redis) {
     throw new Error('Redis not available');

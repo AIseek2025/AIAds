@@ -7,11 +7,9 @@ import Grid from '@mui/material/Grid';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
 import LinearProgress from '@mui/material/LinearProgress';
 import Alert from '@mui/material/Alert';
 import Chip from '@mui/material/Chip';
-import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
@@ -38,16 +36,22 @@ import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import DownloadIcon from '@mui/icons-material/Download';
 import HistoryIcon from '@mui/icons-material/History';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
-import CancelIcon from '@mui/icons-material/Cancel';
-import RefreshIcon from '@mui/icons-material/Refresh';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import { KOL_ROUTE_SEG, pathKol, pathKolMyTask } from '../../constants/appPaths';
 
 // Types
 import type { KolEarnings, WithdrawalRecord } from '../../stores/kolStore';
+import { KolHubNav } from '../../components/kol/KolHubNav';
+import { KolFrequencyAlerts } from '../../components/kol/KolFrequencyAlerts';
 
 // Services
-import { earningsAPI } from '../../services/kolApi';
+import {
+  earningsAPI,
+  kolAcceptFrequencyQueryKey,
+  kolBalanceQueryKey,
+  kolProfileAPI,
+} from '../../services/kolApi';
 
 // Styled Components
 const StatCard = styled(Card)(({ theme }) => ({
@@ -75,7 +79,6 @@ const StatIconWrapper = styled(Box)(({ theme }) => ({
 const queryKeys = {
   earnings: 'earnings',
   withdrawals: 'withdrawals',
-  balance: 'balance',
 };
 
 // Status configurations
@@ -136,9 +139,15 @@ export const EarningsPage: React.FC = () => {
     isLoading: isBalanceLoading,
     refetch: refetchBalance,
   } = useQuery({
-    queryKey: [queryKeys.balance],
+    queryKey: [...kolBalanceQueryKey],
     queryFn: earningsAPI.getBalance,
     retry: 1,
+  });
+
+  const freqQ = useQuery({
+    queryKey: [...kolAcceptFrequencyQueryKey],
+    queryFn: kolProfileAPI.getAcceptFrequency,
+    retry: 0,
   });
 
   // Fetch earnings
@@ -177,7 +186,7 @@ export const EarningsPage: React.FC = () => {
   const withdrawMutation = useMutation({
     mutationFn: earningsAPI.requestWithdrawal,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [queryKeys.balance] });
+      queryClient.invalidateQueries({ queryKey: [...kolBalanceQueryKey] });
       queryClient.invalidateQueries({ queryKey: [queryKeys.withdrawals] });
       setWithdrawDialogOpen(false);
       setWithdrawForm({ amount: '', paymentMethod: 'alipay', paymentAccount: '' });
@@ -232,6 +241,13 @@ export const EarningsPage: React.FC = () => {
 
   const maxWithdrawAmount = balance?.availableBalance || 0;
 
+  const handleHubRefresh = () => {
+    refetchBalance();
+    refetchEarnings();
+    refetchWithdrawals();
+    void freqQ.refetch();
+  };
+
   if (isBalanceLoading) {
     return <LinearProgress />;
   }
@@ -242,27 +258,38 @@ export const EarningsPage: React.FC = () => {
       <Box
         sx={{
           display: 'flex',
+          flexWrap: 'wrap',
           justifyContent: 'space-between',
-          alignItems: 'center',
-          mb: 4,
+          alignItems: 'flex-start',
+          gap: 2,
+          mb: 2,
         }}
       >
-        <Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="h4" gutterBottom>
             收益管理
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            查看您的收益明细和管理提现
+            查看收益明细与提现。待结算、累计收益与「经营分析」页指标同源（服务端 /kols/me/stats）；关联订单即合作订单 ID，可跳转「我的任务」详情。
           </Typography>
         </Box>
-        <IconButton onClick={() => { refetchBalance(); refetchEarnings(); refetchWithdrawals(); }} color="primary">
-          <RefreshIcon />
-        </IconButton>
+        <KolHubNav preset="earnings-page" onRefresh={handleHubRefresh} />
       </Box>
+
+      <Alert severity="info" sx={{ mb: 2 }}>
+        提现与结算以平台流水为准；单笔订单收入以完成结算时为准，与任务详情中的 kol_earning / CPM 拆分一致。「订单冻结合计」为名下合作订单 frozen_amount 之和（与 /kols/balance 同源）。右上角刷新将同步余额、收益与提现列表。
+      </Alert>
+
+      <KolFrequencyAlerts
+        freqQ={freqQ}
+        tone="dashboard"
+        onRetry={() => void freqQ.refetch()}
+        onGoTaskMarket={() => navigate(pathKol(KOL_ROUTE_SEG.taskMarket))}
+      />
 
       {/* Balance Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard>
             <CardContent>
               <StatIconWrapper sx={{ bgcolor: 'success.light', color: 'success.main' }}>
@@ -287,7 +314,7 @@ export const EarningsPage: React.FC = () => {
           </StatCard>
         </Grid>
 
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard>
             <CardContent>
               <StatIconWrapper sx={{ bgcolor: 'warning.light', color: 'warning.main' }}>
@@ -306,7 +333,7 @@ export const EarningsPage: React.FC = () => {
           </StatCard>
         </Grid>
 
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard>
             <CardContent>
               <StatIconWrapper sx={{ bgcolor: 'primary.light', color: 'primary.main' }}>
@@ -321,6 +348,35 @@ export const EarningsPage: React.FC = () => {
               <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
                 历史总收入
               </Typography>
+            </CardContent>
+          </StatCard>
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <StatCard>
+            <CardContent>
+              <StatIconWrapper sx={{ bgcolor: 'info.light', color: 'info.main' }}>
+                <LockOutlinedIcon sx={{ fontSize: 32 }} />
+              </StatIconWrapper>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                订单冻结合计
+              </Typography>
+              <Typography variant="h4" color="info.main">
+                {formatCurrency(balance?.ordersFrozenTotal ?? 0)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                广告主侧为合作订单锁定的预算（各单见「我的任务」）
+              </Typography>
+              {(balance?.ordersFrozenTotal ?? 0) > 0 && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  sx={{ mt: 2 }}
+                  onClick={() => navigate(pathKol(KOL_ROUTE_SEG.myTasks))}
+                >
+                  查看我的任务
+                </Button>
+              )}
             </CardContent>
           </StatCard>
         </Grid>
@@ -365,18 +421,19 @@ export const EarningsPage: React.FC = () => {
               <TableHead>
                 <TableRow>
                   <TableCell>收益 ID</TableCell>
-                  <TableCell>任务 ID</TableCell>
+                  <TableCell>关联订单</TableCell>
                   <TableCell>类型</TableCell>
                   <TableCell>金额</TableCell>
                   <TableCell>状态</TableCell>
                   <TableCell>结算时间</TableCell>
                   <TableCell>创建时间</TableCell>
+                  <TableCell align="right">操作</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {isEarningsLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={8} align="center">
                       <LinearProgress />
                     </TableCell>
                   </TableRow>
@@ -384,11 +441,16 @@ export const EarningsPage: React.FC = () => {
                   earningsData.items.map((earning: KolEarnings) => (
                     <TableRow key={earning.id}>
                       <TableCell>{earning.id.slice(0, 8)}</TableCell>
-                      <TableCell>{earning.taskId.slice(0, 8)}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                          {earning.taskId.slice(0, 8)}…
+                        </Typography>
+                      </TableCell>
                       <TableCell>
                         {earning.type === 'task_reward' && '任务奖励'}
                         {earning.type === 'bonus' && '奖金'}
                         {earning.type === 'refund' && '退款'}
+                        {earning.type === 'withdrawal' && '提现'}
                       </TableCell>
                       <TableCell sx={{ color: 'success.main', fontWeight: 'bold' }}>
                         {formatCurrency(earning.amount)}
@@ -398,11 +460,20 @@ export const EarningsPage: React.FC = () => {
                         {earning.settledAt ? formatDate(earning.settledAt) : '-'}
                       </TableCell>
                       <TableCell>{formatDate(earning.createdAt)}</TableCell>
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={() => navigate(pathKolMyTask(earning.taskId))}
+                        >
+                          任务详情
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={8} align="center">
                       <Typography variant="body2" color="text.secondary" sx={{ py: 4 }}>
                         暂无收益记录
                       </Typography>

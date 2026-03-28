@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { type RateLimitRequestHandler } from 'express-rate-limit';
 import { logger } from '../utils/logger';
 import { cacheService } from '../services/cache.service';
 
@@ -45,7 +45,7 @@ const defaultOptions: RateLimitConfig = {
 };
 
 // Create rate limiter with fail-closed behavior
-export function createRateLimiter(options: Partial<RateLimitConfig> = {}) {
+export function createRateLimiter(options: Partial<RateLimitConfig> = {}): RateLimitRequestHandler {
   const config = { ...defaultOptions, ...options };
 
   const limiter = rateLimit({
@@ -169,30 +169,19 @@ export function redisRateLimiter(
 }
 
 // Rate limiter by user ID (requires auth middleware)
-export function userRateLimiter(
-  limit: number = 100,
-  windowSeconds: number = 60
-) {
+export function userRateLimiter(limit: number = 100, windowSeconds: number = 60) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (!req.user) {
       // Fall back to IP-based limiting
       return redisRateLimiter('ratelimit:anon', limit, windowSeconds)(req, res, next);
     }
 
-    return redisRateLimiter(`ratelimit:user:${req.user.id}`, limit, windowSeconds)(
-      req,
-      res,
-      next
-    );
+    return redisRateLimiter(`ratelimit:user:${req.user.id}`, limit, windowSeconds)(req, res, next);
   };
 }
 
 // Rate limiter for specific actions (e.g., sending verification codes)
-export function actionRateLimiter(
-  action: string,
-  limit: number = 5,
-  windowSeconds: number = 300
-) {
+export function actionRateLimiter(action: string, limit: number = 5, windowSeconds: number = 300) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const identifier = req.user?.id || req.ip || 'unknown';
     const key = `action:${action}:${identifier}`;

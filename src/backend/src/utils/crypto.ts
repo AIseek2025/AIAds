@@ -18,23 +18,23 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 
 // JWT Token types
 export interface JwtPayload {
-  sub: string;          // User ID
+  sub: string; // User ID
   email: string;
   role: string;
   iat?: number;
   exp?: number;
-  jti: string;          // Unique token ID
+  jti: string; // Unique token ID
 }
 
 // Admin JWT Token payload
 export interface AdminJwtPayload {
-  sub: string;          // Admin ID
+  sub: string; // Admin ID
   email: string;
   role: string;
   permissions: string[];
   iat?: number;
   exp?: number;
-  jti: string;          // Unique token ID
+  jti: string; // Unique token ID
 }
 
 export interface TokenPair {
@@ -53,7 +53,6 @@ export interface AdminTokenPair {
 // Generate JWT tokens
 export function generateTokens(payload: Omit<JwtPayload, 'iat' | 'exp' | 'jti'>): TokenPair {
   const jti = crypto.randomUUID();
-  const now = Math.floor(Date.now() / 1000);
 
   // P1 Fix: Validate JWT secret before using it
   const jwtSecret = process.env.JWT_SECRET;
@@ -70,8 +69,6 @@ export function generateTokens(payload: Omit<JwtPayload, 'iat' | 'exp' | 'jti'>)
       email: payload.email,
       role: payload.role,
       jti,
-      iat: now,
-      exp: now + accessTokenExpiresIn,
     },
     jwtSecret,
     {
@@ -83,7 +80,7 @@ export function generateTokens(payload: Omit<JwtPayload, 'iat' | 'exp' | 'jti'>)
   // Refresh token (7 days)
   const refreshTokenExpiresIn = 604800; // 7 days
   const refreshSecret = process.env.JWT_REFRESH_SECRET || jwtSecret;
-  
+
   // P1 Fix: Validate refresh secret
   if (!refreshSecret || refreshSecret.length < 32) {
     logger.error('Invalid JWT refresh secret - must be at least 32 characters');
@@ -94,8 +91,6 @@ export function generateTokens(payload: Omit<JwtPayload, 'iat' | 'exp' | 'jti'>)
     {
       sub: payload.sub,
       jti: crypto.randomUUID(),
-      iat: now,
-      exp: now + refreshTokenExpiresIn,
     },
     refreshSecret,
     {
@@ -116,7 +111,6 @@ export function generateTokens(payload: Omit<JwtPayload, 'iat' | 'exp' | 'jti'>)
 // Generate admin JWT tokens
 export function generateAdminTokens(payload: Omit<AdminJwtPayload, 'iat' | 'exp' | 'jti'>): AdminTokenPair {
   const jti = crypto.randomUUID();
-  const now = Math.floor(Date.now() / 1000);
 
   // P1 Fix: Validate admin JWT secret before using it
   const adminJwtSecret = process.env.ADMIN_JWT_SECRET;
@@ -134,8 +128,6 @@ export function generateAdminTokens(payload: Omit<AdminJwtPayload, 'iat' | 'exp'
       role: payload.role,
       permissions: payload.permissions,
       jti,
-      iat: now,
-      exp: now + accessTokenExpiresIn,
     },
     adminJwtSecret,
     {
@@ -147,7 +139,7 @@ export function generateAdminTokens(payload: Omit<AdminJwtPayload, 'iat' | 'exp'
   // Admin refresh token (7 days)
   const refreshTokenExpiresIn = 604800; // 7 days
   const adminRefreshSecret = process.env.ADMIN_JWT_REFRESH_SECRET || adminJwtSecret;
-  
+
   // P1 Fix: Validate admin refresh secret
   if (!adminRefreshSecret || adminRefreshSecret.length < 32) {
     logger.error('Invalid admin JWT refresh secret - must be at least 32 characters');
@@ -158,8 +150,6 @@ export function generateAdminTokens(payload: Omit<AdminJwtPayload, 'iat' | 'exp'
     {
       sub: payload.sub,
       jti: crypto.randomUUID(),
-      iat: now,
-      exp: now + refreshTokenExpiresIn,
     },
     adminRefreshSecret,
     {
@@ -178,7 +168,10 @@ export function generateAdminTokens(payload: Omit<AdminJwtPayload, 'iat' | 'exp'
 }
 
 // Verify JWT token
-export function verifyToken(token: string, type: 'access' | 'refresh' | 'admin_access' | 'admin_refresh' = 'access'): JwtPayload | AdminJwtPayload {
+export function verifyToken(
+  token: string,
+  type: 'access' | 'refresh' | 'admin_access' | 'admin_refresh' = 'access'
+): JwtPayload | AdminJwtPayload {
   try {
     let secret: string | undefined;
 

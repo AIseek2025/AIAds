@@ -8,7 +8,7 @@ export function generateRequestId(): string {
 // Add request ID to response
 export function addRequestId(req: Request, res: Response, next: NextFunction): void {
   const requestId = generateRequestId();
-  (req as any).requestId = requestId;
+  req.requestId = requestId;
   res.setHeader('X-Request-ID', requestId);
   next();
 }
@@ -33,11 +33,7 @@ export function sleep(ms: number): Promise<void> {
 }
 
 // Retry function with exponential backoff
-export async function retry<T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 3,
-  delay: number = 1000
-): Promise<T> {
+export async function retry<T>(fn: () => Promise<T>, maxRetries: number = 3, delay: number = 1000): Promise<T> {
   let lastError: Error;
 
   for (let i = 0; i < maxRetries; i++) {
@@ -102,7 +98,9 @@ export function formatNumber(num: number): string {
 
 // Truncate string
 export function truncate(str: string, length: number): string {
-  if (str.length <= length) return str;
+  if (str.length <= length) {
+    return str;
+  }
   return str.slice(0, length) + '...';
 }
 
@@ -147,14 +145,18 @@ export function deepClone<T>(obj: T): T {
 }
 
 // Flatten object
-export function flattenObject(obj: Record<string, any>, prefix = ''): Record<string, any> {
-  return Object.keys(obj).reduce((acc, key) => {
-    const prefixedKey = prefix ? `${prefix}.${key}` : key;
-    if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
-      Object.assign(acc, flattenObject(obj[key], prefixedKey));
-    } else {
-      acc[prefixedKey] = obj[key];
-    }
-    return acc;
-  }, {} as Record<string, any>);
+export function flattenObject(obj: Record<string, unknown>, prefix = ''): Record<string, unknown> {
+  return Object.keys(obj).reduce(
+    (acc, key) => {
+      const val = obj[key];
+      const prefixedKey = prefix ? `${prefix}.${key}` : key;
+      if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+        Object.assign(acc, flattenObject(val as Record<string, unknown>, prefixedKey));
+      } else {
+        acc[prefixedKey] = val;
+      }
+      return acc;
+    },
+    {} as Record<string, unknown>
+  );
 }

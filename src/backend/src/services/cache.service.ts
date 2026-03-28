@@ -1,3 +1,4 @@
+import { KolPlatform, KolStatus, Prisma } from '@prisma/client';
 import Redis from 'ioredis';
 import { logger } from '../utils/logger';
 
@@ -29,66 +30,61 @@ function getRedisInstance(): Redis | null {
 export const CacheKeys = {
   // User related
   user: {
-    byId: (id: string) => `user:${id}`,
-    byEmail: (email: string) => `user:email:${email}`,
-    byPhone: (phone: string) => `user:phone:${phone}`,
-    list: (role?: string, status?: string) => `user:list:${role || 'all'}:${status || 'all'}`,
+    byId: (id: string): string => `user:${id}`,
+    byEmail: (email: string): string => `user:email:${email}`,
+    byPhone: (phone: string): string => `user:phone:${phone}`,
+    list: (role?: string, status?: string): string => `user:list:${role || 'all'}:${status || 'all'}`,
   },
 
   // Advertiser related
   advertiser: {
-    byId: (id: string) => `advertiser:${id}`,
-    byUserId: (userId: string) => `advertiser:user:${userId}`,
-    campaigns: (advertiserId: string, status?: string) => 
+    byId: (id: string): string => `advertiser:${id}`,
+    byUserId: (userId: string): string => `advertiser:user:${userId}`,
+    campaigns: (advertiserId: string, status?: string): string =>
       `advertiser:${advertiserId}:campaigns:${status || 'all'}`,
-    wallet: (advertiserId: string) => `advertiser:${advertiserId}:wallet`,
+    wallet: (advertiserId: string): string => `advertiser:${advertiserId}:wallet`,
   },
 
   // KOL related
   kol: {
-    byId: (id: string) => `kol:${id}`,
-    byUserId: (userId: string) => `kol:user:${userId}`,
-    byPlatform: (platform: string, status?: string) => 
-      `kol:platform:${platform}:${status || 'all'}`,
-    search: (params: KolSearchParams) => `kol:search:${hashParams(params)}`,
-    stats: (kolId: string, date?: string) => `kol:${kolId}:stats:${date || 'latest'}`,
-    accounts: (kolId: string) => `kol:${kolId}:accounts`,
+    byId: (id: string): string => `kol:${id}`,
+    byUserId: (userId: string): string => `kol:user:${userId}`,
+    byPlatform: (platform: string, status?: string): string => `kol:platform:${platform}:${status || 'all'}`,
+    search: (params: KolSearchParams): string => `kol:search:${hashParams(params as Record<string, unknown>)}`,
+    stats: (kolId: string, date?: string): string => `kol:${kolId}:stats:${date || 'latest'}`,
+    accounts: (kolId: string): string => `kol:${kolId}:accounts`,
   },
 
   // Campaign related
   campaign: {
-    byId: (id: string) => `campaign:${id}`,
-    list: (advertiserId: string, status?: string) => 
-      `campaign:list:${advertiserId}:${status || 'all'}`,
-    active: () => 'campaign:active',
-    stats: (campaignId: string) => `campaign:${campaignId}:stats`,
+    byId: (id: string): string => `campaign:${id}`,
+    list: (advertiserId: string, status?: string): string => `campaign:list:${advertiserId}:${status || 'all'}`,
+    active: (): string => 'campaign:active',
+    stats: (campaignId: string): string => `campaign:${campaignId}:stats`,
   },
 
   // Order related
   order: {
-    byId: (id: string) => `order:${id}`,
-    byNo: (orderNo: string) => `order:no:${orderNo}`,
-    list: (advertiserId?: string, kolId?: string, status?: string) => 
+    byId: (id: string): string => `order:${id}`,
+    byNo: (orderNo: string): string => `order:no:${orderNo}`,
+    list: (advertiserId?: string, kolId?: string, status?: string): string =>
       `order:list:${advertiserId || 'all'}:${kolId || 'all'}:${status || 'all'}`,
-    stats: (orderId: string) => `order:${orderId}:stats`,
+    stats: (orderId: string): string => `order:${orderId}:stats`,
   },
 
   // Dashboard related
   dashboard: {
-    advertiser: (advertiserId: string, range: string) => 
-      `dashboard:advertiser:${advertiserId}:${range}`,
-    kol: (kolId: string, range: string) => 
-      `dashboard:kol:${kolId}:${range}`,
-    admin: (adminId: string, range: string) => 
-      `dashboard:admin:${adminId}:${range}`,
-    analytics: (type: string, params: string) => `dashboard:analytics:${type}:${params}`,
+    advertiser: (advertiserId: string, range: string): string => `dashboard:advertiser:${advertiserId}:${range}`,
+    kol: (kolId: string, range: string): string => `dashboard:kol:${kolId}:${range}`,
+    admin: (adminId: string, range: string): string => `dashboard:admin:${adminId}:${range}`,
+    analytics: (type: string, params: string): string => `dashboard:analytics:${type}:${params}`,
   },
 
   // System related
   system: {
-    config: (key: string) => `system:config:${key}`,
-    counters: (name: string) => `system:counters:${name}`,
-    locks: (name: string) => `system:locks:${name}`,
+    config: (key: string): string => `system:config:${key}`,
+    counters: (name: string): string => `system:counters:${name}`,
+    locks: (name: string): string => `system:locks:${name}`,
   },
 };
 
@@ -108,18 +104,22 @@ interface KolSearchParams {
 /**
  * Hash function for generating cache keys from complex parameters
  */
-function hashParams(params: Record<string, any>): string {
+function hashParams(params: Record<string, unknown>): string {
   const sorted = Object.keys(params)
     .sort()
-    .filter(key => params[key] !== undefined && params[key] !== null)
-    .map(key => `${key}=${params[key]}`)
+    .filter((key) => params[key] !== undefined && params[key] !== null)
+    .map((key) => {
+      const v = params[key];
+      const serialized = typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v);
+      return `${key}=${serialized}`;
+    })
     .join('&');
-  
+
   // Simple hash - in production, use crypto.createHash('md5')
   let hash = 0;
   for (let i = 0; i < sorted.length; i++) {
     const char = sorted.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash; // Convert to 32bit integer
   }
   return Math.abs(hash).toString(36);
@@ -132,44 +132,44 @@ function hashParams(params: Record<string, any>): string {
 export const CacheTTL = {
   // User related - high frequency access
   user: {
-    detail: 600,        // 10 minutes - user details change infrequently
-    list: 300,          // 5 minutes - user lists
+    detail: 600, // 10 minutes - user details change infrequently
+    list: 300, // 5 minutes - user lists
   },
 
   // KOL related - high frequency access
   kol: {
-    detail: 600,        // 10 minutes - KOL details
-    search: 300,        // 5 minutes - search results
-    stats: 180,         // 3 minutes - statistics
-    accounts: 300,      // 5 minutes - account list
+    detail: 600, // 10 minutes - KOL details
+    search: 300, // 5 minutes - search results
+    stats: 180, // 3 minutes - statistics
+    accounts: 300, // 5 minutes - account list
   },
 
   // Campaign related - medium frequency
   campaign: {
-    detail: 300,        // 5 minutes - campaign details
-    list: 180,          // 3 minutes - campaign lists
-    stats: 120,         // 2 minutes - statistics
+    detail: 300, // 5 minutes - campaign details
+    list: 180, // 3 minutes - campaign lists
+    stats: 120, // 2 minutes - statistics
   },
 
   // Order related - medium frequency
   order: {
-    detail: 180,        // 3 minutes - order details
-    list: 120,          // 2 minutes - order lists
-    stats: 60,          // 1 minute - real-time stats
+    detail: 180, // 3 minutes - order details
+    list: 120, // 2 minutes - order lists
+    stats: 60, // 1 minute - real-time stats
   },
 
   // Dashboard related - low frequency (aggregated data)
   dashboard: {
-    advertiser: 60,     // 1 minute - near real-time
-    kol: 60,            // 1 minute - near real-time
-    admin: 60,          // 1 minute - near real-time
-    analytics: 120,     // 2 minutes - analytics data
+    advertiser: 60, // 1 minute - near real-time
+    kol: 60, // 1 minute - near real-time
+    admin: 60, // 1 minute - near real-time
+    analytics: 120, // 2 minutes - analytics data
   },
 
   // System related
   system: {
-    config: 3600,       // 1 hour - configuration
-    counters: 60,       // 1 minute - counters
+    config: 3600, // 1 hour - configuration
+    counters: 60, // 1 minute - counters
   },
 };
 
@@ -213,13 +213,9 @@ export class AdvancedCacheService {
    * Get or Set pattern
    * Fetches from cache, if not exists, calls fetcher and caches the result
    */
-  async getOrSet<T>(
-    key: string,
-    fetcher: () => Promise<T>,
-    ttl?: number
-  ): Promise<T> {
+  async getOrSet<T>(key: string, fetcher: () => Promise<T>, ttl?: number): Promise<T> {
     const fullKey = this.buildKey(key);
-    
+
     if (!this.config.enabled || !this.redis) {
       return fetcher();
     }
@@ -236,12 +232,12 @@ export class AdvancedCacheService {
       // Cache miss, fetch from source
       this.stats.misses++;
       logger.debug('Cache miss', { key: fullKey });
-      
+
       const data = await fetcher();
-      
+
       // Cache the result
       await this.set(key, data, ttl);
-      
+
       return data;
     } catch (error) {
       this.stats.errors++;
@@ -256,7 +252,7 @@ export class AdvancedCacheService {
    */
   async get<T>(key: string): Promise<T | null> {
     const fullKey = this.buildKey(key);
-    
+
     if (!this.config.enabled || !this.redis) {
       return null;
     }
@@ -281,7 +277,7 @@ export class AdvancedCacheService {
    */
   async set<T>(key: string, value: T, ttl?: number): Promise<boolean> {
     const fullKey = this.buildKey(key);
-    
+
     if (!this.config.enabled || !this.redis) {
       return false;
     }
@@ -305,7 +301,7 @@ export class AdvancedCacheService {
    */
   async delete(key: string): Promise<boolean> {
     const fullKey = this.buildKey(key);
-    
+
     if (!this.config.enabled || !this.redis) {
       return false;
     }
@@ -326,15 +322,15 @@ export class AdvancedCacheService {
    * Batch get multiple keys
    */
   async mget<T>(keys: string[]): Promise<(T | null)[]> {
-    const fullKeys = keys.map(k => this.buildKey(k));
-    
+    const fullKeys = keys.map((k) => this.buildKey(k));
+
     if (!this.config.enabled || !this.redis || keys.length === 0) {
       return keys.map(() => null);
     }
 
     try {
       const values = await this.redis.mget(...fullKeys);
-      return values.map(v => {
+      return values.map((v) => {
         if (v) {
           this.stats.hits++;
           return JSON.parse(v) as T;
@@ -359,7 +355,7 @@ export class AdvancedCacheService {
 
     try {
       const pipeline = this.redis.pipeline();
-      
+
       entries.forEach(({ key, value, ttl }) => {
         const fullKey = this.buildKey(key);
         const expiration = ttl ?? this.config.defaultTTL;
@@ -389,14 +385,14 @@ export class AdvancedCacheService {
     try {
       const fullPattern = this.buildKey(pattern);
       const keys = await this.redis.keys(fullPattern);
-      
+
       if (keys.length > 0) {
         await this.redis.del(...keys);
         this.stats.deletes += keys.length;
         logger.info('Cache invalidation by pattern', { pattern: fullPattern, count: keys.length });
         return keys.length;
       }
-      
+
       return 0;
     } catch (error) {
       this.stats.errors++;
@@ -409,7 +405,7 @@ export class AdvancedCacheService {
    * Cache warming - preload multiple keys in parallel
    */
   async warmup(
-    entries: { key: string; fetcher: () => Promise<any>; ttl?: number }[],
+    entries: { key: string; fetcher: () => Promise<unknown>; ttl?: number }[],
     concurrency: number = 5
   ): Promise<void> {
     if (!this.config.enabled || !this.redis) {
@@ -420,7 +416,7 @@ export class AdvancedCacheService {
 
     // Process in batches to avoid overwhelming the system
     const batches = this.chunkArray(entries, concurrency);
-    
+
     for (const batch of batches) {
       await Promise.all(
         batch.map(async ({ key, fetcher, ttl }) => {
@@ -443,7 +439,7 @@ export class AdvancedCacheService {
    */
   async exists(key: string): Promise<boolean> {
     const fullKey = this.buildKey(key);
-    
+
     if (!this.config.enabled || !this.redis) {
       return false;
     }
@@ -557,14 +553,9 @@ export class CacheInvalidator {
    * Invalidate user related cache
    */
   async invalidateUser(userId: string): Promise<void> {
-    const patterns = [
-      `user:${userId}`,
-      `user:${userId}:*`,
-      `advertiser:user:${userId}`,
-      `kol:user:${userId}`,
-    ];
+    const patterns = [`user:${userId}`, `user:${userId}:*`, `advertiser:user:${userId}`, `kol:user:${userId}`];
 
-    await Promise.all(patterns.map(p => this.cache.deleteByPattern(p)));
+    await Promise.all(patterns.map((p) => this.cache.deleteByPattern(p)));
     logger.info('User cache invalidated', { userId });
   }
 
@@ -580,7 +571,7 @@ export class CacheInvalidator {
       `dashboard:advertiser:${advertiserId}:*`,
     ];
 
-    await Promise.all(patterns.map(p => this.cache.deleteByPattern(p)));
+    await Promise.all(patterns.map((p) => this.cache.deleteByPattern(p)));
     logger.info('Advertiser cache invalidated', { advertiserId });
   }
 
@@ -588,14 +579,9 @@ export class CacheInvalidator {
    * Invalidate KOL related cache
    */
   async invalidateKol(kolId: string): Promise<void> {
-    const patterns = [
-      `kol:${kolId}`,
-      `kol:${kolId}:*`,
-      `order:list:*:${kolId}:*`,
-      `dashboard:kol:${kolId}:*`,
-    ];
+    const patterns = [`kol:${kolId}`, `kol:${kolId}:*`, `order:list:*:${kolId}:*`, `dashboard:kol:${kolId}:*`];
 
-    await Promise.all(patterns.map(p => this.cache.deleteByPattern(p)));
+    await Promise.all(patterns.map((p) => this.cache.deleteByPattern(p)));
     logger.info('KOL cache invalidated', { kolId });
   }
 
@@ -603,12 +589,9 @@ export class CacheInvalidator {
    * Invalidate campaign related cache
    */
   async invalidateCampaign(campaignId: string): Promise<void> {
-    const patterns = [
-      `campaign:${campaignId}`,
-      `campaign:${campaignId}:*`,
-    ];
+    const patterns = [`campaign:${campaignId}`, `campaign:${campaignId}:*`];
 
-    await Promise.all(patterns.map(p => this.cache.deleteByPattern(p)));
+    await Promise.all(patterns.map((p) => this.cache.deleteByPattern(p)));
     logger.info('Campaign cache invalidated', { campaignId });
   }
 
@@ -616,22 +599,16 @@ export class CacheInvalidator {
    * Invalidate order related cache
    */
   async invalidateOrder(orderId: string): Promise<void> {
-    const patterns = [
-      `order:${orderId}`,
-      `order:${orderId}:*`,
-    ];
+    const patterns = [`order:${orderId}`, `order:${orderId}:*`];
 
-    await Promise.all(patterns.map(p => this.cache.deleteByPattern(p)));
+    await Promise.all(patterns.map((p) => this.cache.deleteByPattern(p)));
     logger.info('Order cache invalidated', { orderId });
   }
 
   /**
    * Invalidate dashboard cache
    */
-  async invalidateDashboard(
-    type: 'advertiser' | 'kol' | 'admin',
-    id: string
-  ): Promise<void> {
+  async invalidateDashboard(type: 'advertiser' | 'kol' | 'admin', id: string): Promise<void> {
     const pattern = `dashboard:${type}:${id}:*`;
     await this.cache.deleteByPattern(pattern);
     logger.info('Dashboard cache invalidated', { type, id });
@@ -671,10 +648,10 @@ export class CacheWarmer {
 
     try {
       const prisma = (await import('../config/database')).default;
-      
+
       // Fetch popular KOLs (by followers)
       const popularKols = await prisma.kol.findMany({
-        where: { status: 'active' },
+        where: { status: KolStatus.active },
         select: {
           id: true,
           platform: true,
@@ -717,18 +694,28 @@ export class CacheWarmer {
 
     try {
       const prisma = (await import('../config/database')).default;
-      
-      // Common search combinations
-      const commonSearches = [
-        { platform: 'tiktok', status: 'active' },
-        { platform: 'youtube', status: 'active' },
-        { platform: 'instagram', status: 'active' },
-        { platform: 'tiktok', status: 'active', minFollowers: 10000 },
-        { platform: 'tiktok', status: 'active', minFollowers: 100000 },
+
+      // Common search combinations（字段与 Prisma Kol 对齐；minFollowers 映射到 followers.gte）
+      const commonSearches: Array<{
+        platform: KolPlatform;
+        status: KolStatus;
+        minFollowers?: number;
+      }> = [
+        { platform: KolPlatform.tiktok, status: KolStatus.active },
+        { platform: KolPlatform.youtube, status: KolStatus.active },
+        { platform: KolPlatform.instagram, status: KolStatus.active },
+        { platform: KolPlatform.tiktok, status: KolStatus.active, minFollowers: 10000 },
+        { platform: KolPlatform.tiktok, status: KolStatus.active, minFollowers: 100000 },
       ];
 
       const warmupTasks = commonSearches.map(async (filters) => {
-        const where: any = filters;
+        const where: Prisma.KolWhereInput = {
+          platform: filters.platform,
+          status: filters.status,
+        };
+        if (filters.minFollowers !== undefined) {
+          where.followers = { gte: filters.minFollowers };
+        }
         const [kols, total] = await Promise.all([
           prisma.kol.findMany({
             where,
@@ -746,13 +733,17 @@ export class CacheWarmer {
           prisma.kol.count({ where }),
         ]);
 
-        const cacheKey = `kol:search:${Buffer.from(JSON.stringify({
-          p: filters.platform,
-          minF: filters.minFollowers || 0,
-          page: 1,
-          size: 20,
-        })).toString('base64').substring(0, 32)}`;
-        
+        const cacheKey = `kol:search:${Buffer.from(
+          JSON.stringify({
+            p: filters.platform,
+            minF: filters.minFollowers || 0,
+            page: 1,
+            size: 20,
+          })
+        )
+          .toString('base64')
+          .substring(0, 32)}`;
+
         await this.cache.set(cacheKey, { items: kols, total }, CacheTTL.kol.search);
         logger.debug('Warmed up search cache', { filters, cacheKey });
       });
@@ -773,7 +764,7 @@ export class CacheWarmer {
 
     try {
       const prisma = (await import('../config/database')).default;
-      
+
       // Get active advertisers (with recent campaigns)
       const activeAdvertisers = await prisma.advertiser.findMany({
         where: {
@@ -810,13 +801,13 @@ export class CacheWarmer {
    */
   async warmupAll(): Promise<void> {
     logger.info('Starting full cache warmup');
-    
+
     const startTime = Date.now();
-    
+
     await this.warmupPopularKols(50);
     await this.warmupCommonSearches();
     await this.warmupActiveDashboards();
-    
+
     const duration = Date.now() - startTime;
     logger.info('Full cache warmup completed', { duration: `${duration}ms` });
   }
@@ -830,23 +821,18 @@ export const cacheWarmer = new CacheWarmer(cacheService);
 /**
  * Decorator for caching function results
  */
-export function Cached(keyFn: (...args: any[]) => string, ttl?: number) {
-  return function (
-    _target: any,
-    _propertyKey: string,
-    descriptor: PropertyDescriptor
-  ) {
-    const originalMethod = descriptor.value;
+export function Cached(keyFn: (...args: unknown[]) => string, ttl?: number) {
+  return function (_target: object, _propertyKey: string, descriptor: PropertyDescriptor): PropertyDescriptor {
+    const originalMethod = descriptor.value as ((this: unknown, ...args: unknown[]) => Promise<unknown>) | undefined;
+    if (typeof originalMethod !== 'function') {
+      return descriptor;
+    }
 
-    descriptor.value = async function (...args: any[]) {
+    descriptor.value = async function (this: unknown, ...args: unknown[]): Promise<unknown> {
       const cacheKey = keyFn(...args);
       const cache = cacheService;
-      
-      return cache.getOrSet(
-        cacheKey,
-        () => originalMethod.apply(this, args),
-        ttl
-      );
+
+      return cache.getOrSet(cacheKey, () => originalMethod.apply(this, args), ttl);
     };
 
     return descriptor;

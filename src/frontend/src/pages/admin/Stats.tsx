@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { adminDashboardAPI, adminFinanceAPI } from '../../services/adminApi';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { adminDashboardAPI, adminStatsAPI } from '../../services/adminApi';
+import { getApiErrorMessage } from '../../utils/apiError';
 import type { AnalyticsData } from '../../types';
 
 // MUI Components
@@ -13,8 +14,6 @@ import Grid from '@mui/material/Grid';
 import Paper from '@mui/material/Paper';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
-import TextField from '@mui/material/TextField';
-import InputAdornment from '@mui/material/InputAdornment';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import Stack from '@mui/material/Stack';
@@ -24,16 +23,12 @@ import Select, { SelectChangeEvent } from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
 import Skeleton from '@mui/material/Skeleton';
 import Alert from '@mui/material/Alert';
+import Snackbar from '@mui/material/Snackbar';
+import { AdminHubNav } from '../../components/admin/AdminHubNav';
 
 // Icons
 import DownloadIcon from '@mui/icons-material/Download';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import PeopleIcon from '@mui/icons-material/People';
-import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
-import CampaignIcon from '@mui/icons-material/Campaign';
-import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
-
 // Recharts
 import {
   LineChart,
@@ -55,13 +50,68 @@ import {
 
 const COLORS = ['#1976D2', '#2E7D32', '#ED6C02', '#9C27B0', '#F44336', '#00BCD4', '#FF9800', '#4CAF50'];
 
+function formatStatsCurrency(value: number) {
+  return `¥${value.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+
+function formatStatsNumber(value: number) {
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
+  return value.toString();
+}
+
+type StatsTooltipPayloadEntry = { name?: string; value?: number; color?: string };
+
+const StatsChartTooltip: React.FC<{
+  active?: boolean;
+  payload?: StatsTooltipPayloadEntry[];
+  label?: string;
+}> = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <Box sx={{ bgcolor: 'background.paper', p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1, boxShadow: 2 }}>
+        <Typography variant="body2" fontWeight="bold" gutterBottom>
+          {label}
+        </Typography>
+        {payload.map((entry, index) => (
+          <Typography key={index} variant="body2" sx={{ color: entry.color }}>
+            {entry.name}:{' '}
+            {entry.name?.includes('金额') || entry.name?.includes('收入')
+              ? formatStatsCurrency(entry.value ?? 0)
+              : formatStatsNumber(entry.value ?? 0)}
+          </Typography>
+        ))}
+      </Box>
+    );
+  }
+  return null;
+};
+
+const piePercentLabel = ({ name, percent }: { name?: string; percent?: number }) =>
+  `${name ?? ''}: ${((percent ?? 0) * 100).toFixed(0)}%`;
+
+function statsTimeRangeToPeriod(tr: string): 'week' | 'month' | 'quarter' | 'year' {
+  if (tr === 'week') return 'week';
+  if (tr === 'quarter') return 'quarter';
+  if (tr === 'year') return 'year';
+  return 'month';
+}
+
 const StatsPage: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const [timeRange, setTimeRange] = useState('month');
-  const [platformFilter, setPlatformFilter] = useState<string>('');
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+  }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
 
   // Fetch analytics data
-  const { data: analytics, isLoading: analyticsLoading, error } = useQuery<AnalyticsData>({
+  const { data: analytics, isLoading: analyticsLoading, error, refetch: refetchAnalytics } = useQuery<AnalyticsData>({
     queryKey: ['adminAnalytics', timeRange],
     queryFn: () =>
       adminDashboardAPI.getAnalytics({
@@ -80,9 +130,34 @@ const StatsPage: React.FC = () => {
     setTimeRange(e.target.value);
   };
 
+  const exportStatsMutation = useMutation({
+    mutationFn: () =>
+      adminStatsAPI.exportStatsReport({
+        type: 'all',
+        period: statsTimeRangeToPeriod(timeRange),
+        format: 'csv',
+      }),
+    onSuccess: (blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const p = statsTimeRangeToPeriod(timeRange);
+      a.download = `platform_stats_all_${p}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setSnackbar({ open: true, message: '统计报表已开始下载', severity: 'success' });
+    },
+    onError: (err: unknown) => {
+      setSnackbar({
+        open: true,
+        message: getApiErrorMessage(err, '导出失败（需 analytics:export 权限）'),
+        severity: 'error',
+      });
+    },
+  });
+
   const handleExport = () => {
-    // Implement export functionality
-    console.log('Exporting data...');
+    exportStatsMutation.mutate();
   };
 
   // Prepare chart data
@@ -101,12 +176,14 @@ const StatsPage: React.FC = () => {
     profit: (analytics?.revenueTrend?.series.revenue[index] || 0) - (analytics?.revenueTrend?.series.payout[index] || 0),
   })) || [];
 
-  const campaignData = (analytics as any)?.campaignPerformance?.labels.map((label: string, index: number) => ({
-    name: label,
-    impressions: (analytics as any)?.campaignPerformance?.series.impressions[index] || 0,
-    clicks: (analytics as any)?.campaignPerformance?.series.clicks[index] || 0,
-    conversions: (analytics as any)?.campaignPerformance?.series.conversions[index] || 0,
-  })) || [];
+  const cp = analytics?.campaignPerformance;
+  const campaignData =
+    cp?.labels.map((label, index) => ({
+      name: label,
+      impressions: cp.series.impressions[index] ?? 0,
+      clicks: cp.series.clicks[index] ?? 0,
+      conversions: cp.series.conversions[index] ?? 0,
+    })) ?? [];
 
   const platformData = analytics?.platformDistribution
     ? Object.entries(analytics.platformDistribution).map(([platform, value]) => ({
@@ -115,54 +192,43 @@ const StatsPage: React.FC = () => {
       }))
     : [];
 
-  const categoryData = (analytics as any)?.kolCategoryDistribution
-    ? Object.entries((analytics as any).kolCategoryDistribution).map(([category, value]) => ({
+  const categoryDist = analytics?.categoryDistribution ?? analytics?.kolCategoryDistribution;
+  const categoryData = categoryDist
+    ? Object.entries(categoryDist).map(([category, value]) => ({
         name: category,
         value,
       }))
     : [];
 
-  const formatCurrency = (value: number) => {
-    return `¥${value.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-  };
-
-  const formatNumber = (value: number) => {
-    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-    if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
-    return value.toString();
-  };
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <Box sx={{ bgcolor: 'background.paper', p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1, boxShadow: 2 }}>
-          <Typography variant="body2" fontWeight="bold" gutterBottom>
-            {label}
-          </Typography>
-          {payload.map((entry: any, index: number) => (
-            <Typography key={index} variant="body2" sx={{ color: entry.color }}>
-              {entry.name}: {entry.name.includes('金额') || entry.name.includes('收入') ? formatCurrency(entry.value) : formatNumber(entry.value)}
-            </Typography>
-          ))}
-        </Box>
-      );
-    }
-    return null;
-  };
+  const campaignTotals = campaignData.reduce(
+    (acc, d) => ({
+      impressions: acc.impressions + d.impressions,
+      clicks: acc.clicks + d.clicks,
+      conversions: acc.conversions + d.conversions,
+    }),
+    { impressions: 0, clicks: 0, conversions: 0 }
+  );
+  const ctrPercent =
+    campaignTotals.impressions > 0 ? (campaignTotals.clicks / campaignTotals.impressions) * 100 : 0;
+  const cvrPercent = campaignTotals.clicks > 0 ? (campaignTotals.conversions / campaignTotals.clicks) * 100 : 0;
 
   return (
     <Box>
       {/* Page Header */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-        <Box>
-          <Typography variant="h4" fontWeight="bold" gutterBottom>
-            数据统计
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            平台数据统计与分析报表
-          </Typography>
-        </Box>
-        <Stack direction="row" spacing={2}>
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="h4" fontWeight="bold" gutterBottom>
+          数据统计
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          平台数据统计与分析报表
+        </Typography>
+      </Box>
+      <AdminHubNav onRefresh={() => void refetchAnalytics()} />
+      <Alert severity="info" sx={{ mb: 2, mt: 2 }}>
+        图表随时间范围与聚合粒度变化；「导出数据」为平台统计 CSV，与当前时间范围一致（需具备统计导出权限）。
+      </Alert>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+        <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap alignItems="center">
           <FormControl size="small" sx={{ minWidth: 120 }}>
             <InputLabel>时间范围</InputLabel>
             <Select
@@ -180,10 +246,11 @@ const StatsPage: React.FC = () => {
             variant="outlined"
             startIcon={<DownloadIcon />}
             onClick={handleExport}
+            disabled={exportStatsMutation.isPending}
           >
-            导出数据
+            {exportStatsMutation.isPending ? '导出中…' : '导出数据'}
           </Button>
-          <IconButton onClick={() => window.location.reload()}>
+          <IconButton onClick={() => void refetchAnalytics()} color="primary" aria-label="刷新统计数据">
             <RefreshIcon />
           </IconButton>
         </Stack>
@@ -214,14 +281,16 @@ const StatsPage: React.FC = () => {
                 {analyticsLoading ? (
                   <Skeleton variant="rectangular" height={300} />
                 ) : error ? (
-                  <Alert severity="error">加载失败：{(error as Error).message}</Alert>
+                  <Alert severity="error">
+                  加载失败：{getApiErrorMessage(error, '请稍后重试')}
+                </Alert>
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
                     <AreaChart data={userGrowthData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="date" />
                       <YAxis />
-                      <Tooltip content={<CustomTooltip />} />
+                      <Tooltip content={<StatsChartTooltip />} />
                       <Legend />
                       <Area type="monotone" dataKey="newUsers" stroke="#1976D2" fill="#1976D2" fillOpacity={0.3} name="新增用户" />
                       <Area type="monotone" dataKey="activeUsers" stroke="#2E7D32" fill="#2E7D32" fillOpacity={0.3} name="活跃用户" />
@@ -243,7 +312,9 @@ const StatsPage: React.FC = () => {
                 {analyticsLoading ? (
                   <Skeleton variant="rectangular" height={300} />
                 ) : error ? (
-                  <Alert severity="error">加载失败：{(error as Error).message}</Alert>
+                  <Alert severity="error">
+                  加载失败：{getApiErrorMessage(error, '请稍后重试')}
+                </Alert>
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
@@ -252,7 +323,7 @@ const StatsPage: React.FC = () => {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={({ name, percent }: any) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        label={piePercentLabel}
                         outerRadius={80}
                         fill="#8884d8"
                         dataKey="value"
@@ -261,7 +332,7 @@ const StatsPage: React.FC = () => {
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip content={<CustomTooltip />} />
+                      <Tooltip content={<StatsChartTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
                 )}
@@ -280,14 +351,16 @@ const StatsPage: React.FC = () => {
                 {analyticsLoading ? (
                   <Skeleton variant="rectangular" height={300} />
                 ) : error ? (
-                  <Alert severity="error">加载失败：{(error as Error).message}</Alert>
+                  <Alert severity="error">
+                  加载失败：{getApiErrorMessage(error, '请稍后重试')}
+                </Alert>
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={revenueData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="date" />
                       <YAxis />
-                      <Tooltip content={<CustomTooltip />} />
+                      <Tooltip content={<StatsChartTooltip />} />
                       <Legend />
                       <Bar dataKey="revenue" fill="#00897B" name="收入" />
                       <Bar dataKey="payout" fill="#ED6C02" name="支出" />
@@ -309,7 +382,9 @@ const StatsPage: React.FC = () => {
                 {analyticsLoading ? (
                   <Skeleton variant="rectangular" height={300} />
                 ) : error ? (
-                  <Alert severity="error">加载失败：{(error as Error).message}</Alert>
+                  <Alert severity="error">
+                  加载失败：{getApiErrorMessage(error, '请稍后重试')}
+                </Alert>
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
@@ -318,7 +393,7 @@ const StatsPage: React.FC = () => {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={({ name, percent }: any) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        label={piePercentLabel}
                         outerRadius={100}
                         fill="#8884d8"
                         dataKey="value"
@@ -327,7 +402,7 @@ const StatsPage: React.FC = () => {
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip content={<CustomTooltip />} />
+                      <Tooltip content={<StatsChartTooltip />} />
                       <Legend />
                     </PieChart>
                   </ResponsiveContainer>
@@ -351,14 +426,16 @@ const StatsPage: React.FC = () => {
                 {analyticsLoading ? (
                   <Skeleton variant="rectangular" height={400} />
                 ) : error ? (
-                  <Alert severity="error">加载失败：{(error as Error).message}</Alert>
+                  <Alert severity="error">
+                  加载失败：{getApiErrorMessage(error, '请稍后重试')}
+                </Alert>
                 ) : (
                   <ResponsiveContainer width="100%" height={400}>
                     <LineChart data={userGrowthData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="date" />
                       <YAxis />
-                      <Tooltip content={<CustomTooltip />} />
+                      <Tooltip content={<StatsChartTooltip />} />
                       <Legend />
                       <Line type="monotone" dataKey="newUsers" stroke="#1976D2" strokeWidth={2} name="新增用户" />
                       <Line type="monotone" dataKey="activeUsers" stroke="#2E7D32" strokeWidth={2} name="活跃用户" />
@@ -386,14 +463,16 @@ const StatsPage: React.FC = () => {
                 {analyticsLoading ? (
                   <Skeleton variant="rectangular" height={400} />
                 ) : error ? (
-                  <Alert severity="error">加载失败：{(error as Error).message}</Alert>
+                  <Alert severity="error">
+                  加载失败：{getApiErrorMessage(error, '请稍后重试')}
+                </Alert>
                 ) : (
                   <ResponsiveContainer width="100%" height={400}>
                     <BarChart data={campaignData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="name" />
                       <YAxis />
-                      <Tooltip content={<CustomTooltip />} />
+                      <Tooltip content={<StatsChartTooltip />} />
                       <Legend />
                       <Bar dataKey="impressions" fill="#1976D2" name="曝光量" />
                       <Bar dataKey="clicks" fill="#2E7D32" name="点击量" />
@@ -416,14 +495,14 @@ const StatsPage: React.FC = () => {
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                         <Typography variant="body2">点击率 (CTR)</Typography>
                         <Typography variant="body2" fontWeight="bold">
-                          {((campaignData.reduce((sum: number, d: any) => sum + d.clicks, 0) / campaignData.reduce((sum: number, d: any) => sum + d.impressions, 1)) * 100).toFixed(2)}%
+                          {ctrPercent.toFixed(2)}%
                         </Typography>
                       </Box>
                       <Box sx={{ height: 8, bgcolor: 'grey.200', borderRadius: 1 }}>
                         <Box
                           sx={{
                             height: '100%',
-                            width: `${Math.min((campaignData.reduce((sum: number, d: any) => sum + d.clicks, 0) / campaignData.reduce((sum: number, d: any) => sum + d.impressions, 1)) * 100 * 50, 100)}%`,
+                            width: `${Math.min(ctrPercent * 50, 100)}%`,
                             bgcolor: 'primary.main',
                             borderRadius: 1,
                           }}
@@ -434,14 +513,14 @@ const StatsPage: React.FC = () => {
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                         <Typography variant="body2">转化率 (CVR)</Typography>
                         <Typography variant="body2" fontWeight="bold">
-                          {((campaignData.reduce((sum: number, d: any) => sum + d.conversions, 0) / campaignData.reduce((sum: number, d: any) => sum + d.clicks, 1)) * 100).toFixed(2)}%
+                          {cvrPercent.toFixed(2)}%
                         </Typography>
                       </Box>
                       <Box sx={{ height: 8, bgcolor: 'grey.200', borderRadius: 1 }}>
                         <Box
                           sx={{
                             height: '100%',
-                            width: `${Math.min((campaignData.reduce((sum: number, d: any) => sum + d.conversions, 0) / campaignData.reduce((sum: number, d: any) => sum + d.clicks, 1)) * 100 * 20, 100)}%`,
+                            width: `${Math.min(cvrPercent * 20, 100)}%`,
                             bgcolor: 'success.main',
                             borderRadius: 1,
                           }}
@@ -469,14 +548,16 @@ const StatsPage: React.FC = () => {
                 {analyticsLoading ? (
                   <Skeleton variant="rectangular" height={400} />
                 ) : error ? (
-                  <Alert severity="error">加载失败：{(error as Error).message}</Alert>
+                  <Alert severity="error">
+                  加载失败：{getApiErrorMessage(error, '请稍后重试')}
+                </Alert>
                 ) : (
                   <ResponsiveContainer width="100%" height={400}>
                     <AreaChart data={revenueData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="date" />
                       <YAxis />
-                      <Tooltip content={<CustomTooltip />} />
+                      <Tooltip content={<StatsChartTooltip />} />
                       <Legend />
                       <Area type="monotone" dataKey="revenue" stroke="#00897B" fill="#00897B" fillOpacity={0.3} name="收入" />
                       <Area type="monotone" dataKey="payout" stroke="#ED6C02" fill="#ED6C02" fillOpacity={0.3} name="支出" />
@@ -506,7 +587,9 @@ const StatsPage: React.FC = () => {
                       {analyticsLoading ? (
                         <Skeleton variant="rectangular" height={350} />
                       ) : error ? (
-                        <Alert severity="error">加载失败：{(error as Error).message}</Alert>
+                        <Alert severity="error">
+                  加载失败：{getApiErrorMessage(error, '请稍后重试')}
+                </Alert>
                       ) : (
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
@@ -515,7 +598,7 @@ const StatsPage: React.FC = () => {
                               cx="50%"
                               cy="50%"
                               labelLine={false}
-                              label={({ name, percent }: any) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                              label={piePercentLabel}
                               outerRadius={120}
                               fill="#8884d8"
                               dataKey="value"
@@ -524,7 +607,7 @@ const StatsPage: React.FC = () => {
                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                               ))}
                             </Pie>
-                            <Tooltip content={<CustomTooltip />} />
+                            <Tooltip content={<StatsChartTooltip />} />
                             <Legend />
                           </PieChart>
                         </ResponsiveContainer>
@@ -536,7 +619,9 @@ const StatsPage: React.FC = () => {
                       {analyticsLoading ? (
                         <Skeleton variant="rectangular" height={350} />
                       ) : error ? (
-                        <Alert severity="error">加载失败：{(error as Error).message}</Alert>
+                        <Alert severity="error">
+                  加载失败：{getApiErrorMessage(error, '请稍后重试')}
+                </Alert>
                       ) : (
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
@@ -545,7 +630,7 @@ const StatsPage: React.FC = () => {
                               cx="50%"
                               cy="50%"
                               labelLine={false}
-                              label={({ name, percent }: any) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                              label={piePercentLabel}
                               outerRadius={120}
                               fill="#8884d8"
                               dataKey="value"
@@ -554,7 +639,7 @@ const StatsPage: React.FC = () => {
                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                               ))}
                             </Pie>
-                            <Tooltip content={<CustomTooltip />} />
+                            <Tooltip content={<StatsChartTooltip />} />
                             <Legend />
                           </PieChart>
                         </ResponsiveContainer>
@@ -567,6 +652,21 @@ const StatsPage: React.FC = () => {
           </Grid>
         </Grid>
       )}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={5000}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

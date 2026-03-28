@@ -13,13 +13,15 @@ describe('Tasks Module API Tests', () => {
   // Helper function to create a test KOL user
   async function createTestKolUser() {
     const email = `kol_${Date.now()}@example.com`;
-    
-    const registerRes = await request(app).post('/api/v1/auth/register').send({
-      email,
-      password: 'SecurePass123!',
-      role: 'kol' as const,
-      nickname: '测试 KOL',
-    });
+
+    const registerRes = await request(app)
+      .post('/api/v1/auth/register')
+      .send({
+        email,
+        password: 'SecurePass123!',
+        role: 'kol' as const,
+        nickname: '测试 KOL',
+      });
 
     kolUserId = registerRes.body.data.user.id;
     kolAccessToken = registerRes.body.data.tokens.access_token;
@@ -47,26 +49,25 @@ describe('Tasks Module API Tests', () => {
   // Helper function to create a test advertiser and campaign
   async function createTestCampaign() {
     const email = `advertiser_${Date.now()}@example.com`;
-    
+
     // Register advertiser
-    const registerRes = await request(app).post('/api/v1/auth/register').send({
-      email,
-      password: 'SecurePass123!',
-      role: 'advertiser' as const,
-      nickname: '测试广告主',
-    });
+    const registerRes = await request(app)
+      .post('/api/v1/auth/register')
+      .send({
+        email,
+        password: 'SecurePass123!',
+        role: 'advertiser' as const,
+        nickname: '测试广告主',
+      });
 
     advertiserAccessToken = registerRes.body.data.tokens.access_token;
 
     // Create advertiser profile
-    await request(app)
-      .post('/api/v1/advertisers')
-      .set('Authorization', `Bearer ${advertiserAccessToken}`)
-      .send({
-        company_name: '测试公司',
-        contact_person: '联系人',
-        contact_email: 'contact@example.com',
-      });
+    await request(app).post('/api/v1/advertisers').set('Authorization', `Bearer ${advertiserAccessToken}`).send({
+      company_name: '测试公司',
+      contact_person: '联系人',
+      contact_email: 'contact@example.com',
+    });
 
     // Get advertiser info to get ID
     const advertiserRes = await request(app)
@@ -166,20 +167,20 @@ describe('Tasks Module API Tests', () => {
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .get('/api/v1/tasks')
-        .expect(401);
+      const response = await request(app).get('/api/v1/tasks').expect(401);
 
       expect(response.body.success).toBe(false);
     });
 
     it('应该拒绝没有 KOL 资料的用户', async () => {
       // Create new user without KOL profile
-      const newUserRes = await request(app).post('/api/v1/auth/register').send({
-        email: `newuser_${Date.now()}@example.com`,
-        password: 'SecurePass123!',
-        role: 'kol' as const,
-      });
+      const newUserRes = await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email: `newuser_${Date.now()}@example.com`,
+          password: 'SecurePass123!',
+          role: 'kol' as const,
+        });
 
       const response = await request(app)
         .get('/api/v1/tasks')

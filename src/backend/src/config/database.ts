@@ -26,6 +26,19 @@ const adapter = new PrismaPg({
   idleTimeoutMillis: connectionPoolConfig.idleTimeoutMillis,
 });
 
+/** Subset of Prisma `$on('query')` event used for logging */
+interface PrismaQueryEventShape {
+  query: string;
+  params: string;
+  duration: number;
+}
+
+/** Subset of Prisma engine log events for `$on('error' | 'warn')` */
+interface PrismaEngineLogEventShape {
+  target?: string;
+  message: string;
+}
+
 // Create Prisma client instance with proper typing and connection pool optimization
 const prisma = new PrismaClient({
   adapter,
@@ -34,7 +47,7 @@ const prisma = new PrismaClient({
 
 const prismaWithHooks = prisma as PrismaClient & {
   $use?: (middleware: unknown) => void;
-  $on?: (event: string, cb: (e: any) => void) => void;
+  $on?: (event: string, cb: (e: unknown) => void) => void;
 };
 
 // Register performance monitoring middleware
@@ -44,47 +57,47 @@ if (typeof prismaWithHooks.$use === 'function') {
 
 // Only log slow queries in production (threshold: 100ms)
 if (typeof prismaWithHooks.$on === 'function' && isProduction) {
-  // @ts-ignore - Prisma event typing
-  prismaWithHooks.$on('query', (e: any) => {
-    const duration = e.duration;
+  prismaWithHooks.$on('query', (e: unknown) => {
+    const ev = e as PrismaQueryEventShape;
+    const duration = ev.duration;
     if (duration > 100) {
       logger.warn('Slow query detected', {
-        query: e.query,
-        params: e.params,
+        query: ev.query,
+        params: ev.params,
         duration: `${duration}ms`,
       });
     }
   });
 } else if (typeof prismaWithHooks.$on === 'function') {
   // Development: log all queries
-  // @ts-ignore - Prisma event typing
-  prismaWithHooks.$on('query', (e: any) => {
+  prismaWithHooks.$on('query', (e: unknown) => {
+    const ev = e as PrismaQueryEventShape;
     logger.debug('Query executed', {
-      query: e.query,
-      params: e.params,
-      duration: `${e.duration}ms`,
+      query: ev.query,
+      params: ev.params,
+      duration: `${ev.duration}ms`,
     });
   });
 }
 
 // Log errors
 if (typeof prismaWithHooks.$on === 'function') {
-  // @ts-ignore - Prisma event typing
-  prismaWithHooks.$on('error', (e: any) => {
+  prismaWithHooks.$on('error', (e: unknown) => {
+    const ev = e as PrismaEngineLogEventShape;
     logger.error('Prisma error', {
-      target: e.target,
-      message: e.message,
+      target: ev.target,
+      message: ev.message,
     });
   });
 }
 
 // Log warnings
 if (typeof prismaWithHooks.$on === 'function') {
-  // @ts-ignore - Prisma event typing
-  prismaWithHooks.$on('warn', (e: any) => {
+  prismaWithHooks.$on('warn', (e: unknown) => {
+    const ev = e as PrismaEngineLogEventShape;
     logger.warn('Prisma warning', {
-      target: e.target,
-      message: e.message,
+      target: ev.target,
+      message: ev.message,
     });
   });
 }

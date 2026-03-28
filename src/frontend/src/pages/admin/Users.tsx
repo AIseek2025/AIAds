@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminUserAPI } from '../../services/adminApi';
+import { getApiErrorMessage } from '../../utils/apiError';
 import type { AdminUser, UserListParams } from '../../types';
 
 // MUI Components
@@ -34,6 +35,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
 import Snackbar from '@mui/material/Snackbar';
 import Stack from '@mui/material/Stack';
+import { AdminHubNav } from '../../components/admin/AdminHubNav';
 
 // Icons
 import SearchIcon from '@mui/icons-material/Search';
@@ -41,6 +43,43 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import RefreshIcon from '@mui/icons-material/Refresh';
+
+const UserStatusBadge = ({ status }: { status: string }) => {
+  const statusConfig: Record<string, { color: 'success' | 'warning' | 'error' | 'default'; label: string }> = {
+    active: { color: 'success', label: '正常' },
+    suspended: { color: 'warning', label: '冻结' },
+    banned: { color: 'error', label: '封禁' },
+  };
+
+  const config = statusConfig[status] || { color: 'default', label: status };
+
+  return (
+    <Chip
+      label={config.label}
+      color={config.color}
+      size="small"
+      sx={{ fontWeight: 500 }}
+    />
+  );
+};
+
+const UserRoleBadge = ({ role }: { role: string }) => {
+  const roleConfig: Record<string, { color: 'primary' | 'secondary' | 'info'; label: string }> = {
+    advertiser: { color: 'primary', label: '广告主' },
+    kol: { color: 'secondary', label: 'KOL' },
+  };
+
+  const config = roleConfig[role] || { color: 'primary', label: role };
+
+  return (
+    <Chip
+      label={config.label}
+      color={config.color}
+      size="small"
+      variant="outlined"
+    />
+  );
+};
 
 const UsersPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -75,7 +114,7 @@ const UsersPage: React.FC = () => {
   if (statusFilter) queryParams.status = statusFilter as 'active' | 'suspended' | 'banned';
 
   // Fetch users
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch: refetchUsers } = useQuery({
     queryKey: ['adminUsers', queryParams],
     queryFn: () => adminUserAPI.getUsers(queryParams),
   });
@@ -92,8 +131,12 @@ const UsersPage: React.FC = () => {
       setBanDuration('');
       setSelectedUser(null);
     },
-    onError: (err: any) => {
-      setSnackbar({ open: true, message: err.response?.data?.error?.message || '操作失败', severity: 'error' });
+    onError: (err: unknown) => {
+      setSnackbar({
+        open: true,
+        message: getApiErrorMessage(err, '操作失败'),
+        severity: 'error',
+      });
     },
   });
 
@@ -105,8 +148,12 @@ const UsersPage: React.FC = () => {
       setSnackbar({ open: true, message: '用户已解封', severity: 'success' });
       setSelectedUser(null);
     },
-    onError: (err: any) => {
-      setSnackbar({ open: true, message: err.response?.data?.error?.message || '操作失败', severity: 'error' });
+    onError: (err: unknown) => {
+      setSnackbar({
+        open: true,
+        message: getApiErrorMessage(err, '操作失败'),
+        severity: 'error',
+      });
     },
   });
 
@@ -176,49 +223,10 @@ const UsersPage: React.FC = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  // Status badge component
-  const StatusBadge = ({ status }: { status: string }) => {
-    const statusConfig: Record<string, { color: 'success' | 'warning' | 'error' | 'default'; label: string }> = {
-      active: { color: 'success', label: '正常' },
-      suspended: { color: 'warning', label: '冻结' },
-      banned: { color: 'error', label: '封禁' },
-    };
-
-    const config = statusConfig[status] || { color: 'default', label: status };
-
-    return (
-      <Chip
-        label={config.label}
-        color={config.color}
-        size="small"
-        sx={{ fontWeight: 500 }}
-      />
-    );
-  };
-
-  // Role badge component
-  const RoleBadge = ({ role }: { role: string }) => {
-    const roleConfig: Record<string, { color: 'primary' | 'secondary' | 'info'; label: string }> = {
-      advertiser: { color: 'primary', label: '广告主' },
-      kol: { color: 'secondary', label: 'KOL' },
-    };
-
-    const config = roleConfig[role] || { color: 'primary', label: role };
-
-    return (
-      <Chip
-        label={config.label}
-        color={config.color}
-        size="small"
-        variant="outlined"
-      />
-    );
-  };
-
   return (
     <Box>
       {/* Page Header */}
-      <Box sx={{ mb: 4 }}>
+      <Box sx={{ mb: 2 }}>
         <Typography variant="h4" fontWeight="bold" gutterBottom>
           用户管理
         </Typography>
@@ -226,6 +234,10 @@ const UsersPage: React.FC = () => {
           管理平台用户，包括封禁、解封等操作
         </Typography>
       </Box>
+      <AdminHubNav onRefresh={() => void refetchUsers()} />
+      <Alert severity="info" sx={{ mb: 3, mt: 2 }}>
+        列表与筛选参数绑定；封禁等操作成功后列表会自动失效刷新，也可手动刷新拉取最新用户状态。
+      </Alert>
 
       {/* Filters */}
       <Card sx={{ mb: 3 }}>
@@ -277,7 +289,7 @@ const UsersPage: React.FC = () => {
             </FormControl>
 
             {/* Refresh Button */}
-            <IconButton onClick={() => queryClient.invalidateQueries({ queryKey: ['adminUsers'] })}>
+            <IconButton onClick={() => void refetchUsers()} aria-label="刷新用户列表">
               <RefreshIcon />
             </IconButton>
           </Stack>
@@ -315,7 +327,9 @@ const UsersPage: React.FC = () => {
               ) : error ? (
                 <TableRow>
                   <TableCell colSpan={7} align="center">
-                    <Alert severity="error">加载失败：{(error as Error).message}</Alert>
+                    <Alert severity="error">
+                    加载失败：{getApiErrorMessage(error, '请稍后重试')}
+                  </Alert>
                   </TableCell>
                 </TableRow>
               ) : data?.items.length === 0 ? (
@@ -343,10 +357,10 @@ const UsersPage: React.FC = () => {
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <RoleBadge role={user.role} />
+                      <UserRoleBadge role={user.role} />
                     </TableCell>
                     <TableCell>
-                      <StatusBadge status={user.status} />
+                      <UserStatusBadge status={user.status} />
                     </TableCell>
                     <TableCell>
                       <Chip
@@ -434,8 +448,8 @@ const UsersPage: React.FC = () => {
                       <Typography variant="h6">{selectedUser.nickname || '未设置昵称'}</Typography>
                       <Typography variant="body2" color="text.secondary">{selectedUser.email}</Typography>
                       <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                        <RoleBadge role={selectedUser.role} />
-                        <StatusBadge status={selectedUser.status} />
+                        <UserRoleBadge role={selectedUser.role} />
+                        <UserStatusBadge status={selectedUser.status} />
                       </Box>
                     </Box>
                   </Box>
@@ -464,7 +478,7 @@ const UsersPage: React.FC = () => {
                     </Box>
                     <Box>
                       <Typography variant="caption" color="text.secondary">语言</Typography>
-                      <Typography variant="body2">{(selectedUser as any).language || 'zh-CN'}</Typography>
+                        <Typography variant="body2">{selectedUser.language ?? 'zh-CN'}</Typography>
                     </Box>
                   </Box>
 

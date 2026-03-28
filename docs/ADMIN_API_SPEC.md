@@ -1790,8 +1790,37 @@ GET /api/v1/admin/users?page=1&page_size=20&role=advertiser&status=active&keywor
 | 导出接口 | 10 请求/小时 | 防止资源滥用 |
 | 敏感操作 | 30 请求/分钟 | 财务/审核接口 |
 
-### 9.4 版本历史
+### 9.4 运维脚本与批量订单指标（与实现同步）
+
+| 能力 | 说明 |
+|-----|------|
+| **HTTP** | `PUT /orders/metrics/batch`，请求体 `{ "items": [ { "order_id", "views"?, ... } ] }`，最多 200 条；须 `Authorization: Bearer` 且具备相应订单权限。 |
+| **Shell** | 仓库 `scripts/cron-order-metrics-batch.sh`：传入 JSON 文件；支持 `--dry-run`、`AIADS_CURL_MAX_TIME`。 |
+| **DB → JSON** | `npm run metrics:batch-payload`（`src/backend`），由 `src/scripts/lib/orderMetricsBatchPayload.ts` 组装与 `generate` 脚本一致。 |
+| **DB → API** | `npm run metrics:batch-sync`（`sync-order-metrics-batch-once.ts`）：无临时文件；环境变量 `AIADS_ADMIN_TOKEN`、`AIADS_ADMIN_API`、`AIADS_HTTP_TIMEOUT_MS`；可选 `--dry-run`。 |
+| **Crontab 示例** | `scripts/examples/crontab-order-metrics.example` |
+
+### 9.5 Playwright 管理端 API 回归（可选集成）
+
+在仓库 `tests/` 或**仓库根**执行 `npm run test:e2e:api`（根目录脚本转发到 `tests/`）。`tests/global-setup.ts` 会加载根目录与 `tests/.env`，并可由管理员邮箱密码注入 `AIADS_E2E_ADMIN_TOKEN`、自动选取 `AIADS_E2E_ORDER_ID`（见 `tests/.env.example`）。以下为常用环境变量：
+
+| 变量 | 说明 |
+|-----|------|
+| `AIADS_E2E_API_BASE` | 后端根 URL，如 `http://localhost:8080`（无尾斜杠） |
+| `AIADS_E2E_ADMIN_TOKEN` | 管理端 `Authorization: Bearer` |
+| `AIADS_E2E_ADMIN_EMAIL` / `AIADS_E2E_ADMIN_PASSWORD` | `admin-api-login.spec.ts`；亦可用于 global-setup 换 Token |
+| `AIADS_E2E_ORDER_ID` | 可选，真实订单 UUID，`admin-api-order-by-id.spec.ts` |
+| `AIADS_E2E_ADVERTISER_EMAIL` / `AIADS_E2E_ADVERTISER_PASSWORD` | `integration-order-lifecycle-api.spec.ts`（广告主须已建档且 `wallet_balance ≥ 100`） |
+| `AIADS_E2E_KOL_EMAIL` / `AIADS_E2E_KOL_PASSWORD` | 同上（KOL 须已建档） |
+
+草案索引见 `docs/drafts/README.md`。演练前可执行 `scripts/check-e2e-api-env.sh`（掩码打印 Token，缺省时退出码 1）。
+
+### 9.6 版本历史
 
 | 版本 | 日期 | 变更说明 |
 |-----|------|---------|
 | 1.0 | 2026-03-24 | 初始版本 |
+| 1.1 | 2026-03-27 | 附录 9.4：批量指标运维脚本与脚本入口 |
+| 1.2 | 2026-03-27 | 附录 9.5：Playwright E2E 环境变量与 `docs/drafts` 索引 |
+| 1.3 | 2026-03-27 | 附录 9.5：根目录 `npm run test:e2e:api`、`check-e2e-api-env.sh` |
+| 1.4 | 2026-03-27 | 附录 9.5：`integration-order-lifecycle-api` 与广告主/KOL 环境变量 |

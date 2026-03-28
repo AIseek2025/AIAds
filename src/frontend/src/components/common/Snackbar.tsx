@@ -1,6 +1,6 @@
 import React from 'react';
 import Snackbar from '@mui/material/Snackbar';
-import Alert, { AlertColor } from '@mui/material/Alert';
+import Alert from '@mui/material/Alert';
 import { styled } from '@mui/material/styles';
 
 interface SnackbarComponentProps {
@@ -11,7 +11,7 @@ interface SnackbarComponentProps {
   duration?: number;
 }
 
-const StyledSnackbar = styled(Snackbar)(({ theme }) => ({
+const StyledSnackbar = styled(Snackbar)(() => ({
   '& .MuiAlert-root': {
     borderRadius: 8,
     fontWeight: 500,

@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { adminAdvertiserService } from '../../services/admin/advertisers.service';
 import { asyncHandler } from '../../middleware/errorHandler';
-import { validateBody } from '../../middleware/validation';
+import { requireAdmin } from '../../middleware/adminAuth';
+import { parseBodyOrRespond } from '../../middleware/validation';
 import { ApiResponse } from '../../types';
 import { z } from 'zod';
 
@@ -69,7 +70,7 @@ export class AdminAdvertisersController {
       order: (order as 'asc' | 'desc') || 'desc',
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminAdvertiserService.getAdvertiserList(filters, adminId);
 
     const response: ApiResponse<typeof result> = {
@@ -86,7 +87,7 @@ export class AdminAdvertisersController {
    */
   getAdvertiserById = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminAdvertiserService.getAdvertiserById(id.toString(), adminId);
 
@@ -103,18 +104,14 @@ export class AdminAdvertisersController {
    * Verify advertiser (approve or reject)
    */
   verifyAdvertiser = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(verifyAdvertiserSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(verifyAdvertiserSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
-    const result = await adminAdvertiserService.verifyAdvertiser(
-      id.toString(),
-      req.body,
-      adminId,
-      adminEmail
-    );
+    const result = await adminAdvertiserService.verifyAdvertiser(id.toString(), req.body, adminId, adminEmail);
 
     const response: ApiResponse<typeof result> = {
       success: true,
@@ -131,14 +128,7 @@ export class AdminAdvertisersController {
    */
   getRechargeRecords = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const {
-      page,
-      page_size,
-      status,
-      payment_method,
-      created_after,
-      created_before,
-    } = req.query;
+    const { page, page_size, status, payment_method, created_after, created_before } = req.query;
 
     const filters = {
       page: page ? parseInt(page as string, 10) : 1,
@@ -149,12 +139,8 @@ export class AdminAdvertisersController {
       createdBefore: created_before as string,
     };
 
-    const adminId = req.admin?.id!;
-    const result = await adminAdvertiserService.getRechargeRecords(
-      id.toString(),
-      filters,
-      adminId
-    );
+    const adminId = requireAdmin(req).id;
+    const result = await adminAdvertiserService.getRechargeRecords(id.toString(), filters, adminId);
 
     const response: ApiResponse<typeof result> = {
       success: true,
@@ -170,14 +156,7 @@ export class AdminAdvertisersController {
    */
   getConsumptionRecords = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const {
-      page,
-      page_size,
-      type,
-      status,
-      created_after,
-      created_before,
-    } = req.query;
+    const { page, page_size, type, status, created_after, created_before } = req.query;
 
     const filters = {
       page: page ? parseInt(page as string, 10) : 1,
@@ -188,12 +167,8 @@ export class AdminAdvertisersController {
       createdBefore: created_before as string,
     };
 
-    const adminId = req.admin?.id!;
-    const result = await adminAdvertiserService.getConsumptionRecords(
-      id.toString(),
-      filters,
-      adminId
-    );
+    const adminId = requireAdmin(req).id;
+    const result = await adminAdvertiserService.getConsumptionRecords(id.toString(), filters, adminId);
 
     const response: ApiResponse<typeof result> = {
       success: true,
@@ -208,18 +183,14 @@ export class AdminAdvertisersController {
    * Adjust advertiser balance
    */
   adjustBalance = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(balanceAdjustmentSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(balanceAdjustmentSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
-    const result = await adminAdvertiserService.adjustBalance(
-      id.toString(),
-      req.body,
-      adminId,
-      adminEmail
-    );
+    const result = await adminAdvertiserService.adjustBalance(id.toString(), req.body, adminId, adminEmail);
 
     const response: ApiResponse<typeof result> = {
       success: true,
@@ -235,18 +206,14 @@ export class AdminAdvertisersController {
    * Freeze advertiser account
    */
   freezeAccount = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(freezeAccountSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(freezeAccountSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
-    const result = await adminAdvertiserService.freezeAccount(
-      id.toString(),
-      req.body,
-      adminId,
-      adminEmail
-    );
+    const result = await adminAdvertiserService.freezeAccount(id.toString(), req.body, adminId, adminEmail);
 
     const response: ApiResponse<typeof result> = {
       success: true,
@@ -262,18 +229,14 @@ export class AdminAdvertisersController {
    * Unfreeze advertiser account
    */
   unfreezeAccount = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(unfreezeAccountSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(unfreezeAccountSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
-    const result = await adminAdvertiserService.unfreezeAccount(
-      id.toString(),
-      req.body,
-      adminId,
-      adminEmail
-    );
+    const result = await adminAdvertiserService.unfreezeAccount(id.toString(), req.body, adminId, adminEmail);
 
     const response: ApiResponse<typeof result> = {
       success: true,

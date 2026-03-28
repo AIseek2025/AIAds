@@ -4,6 +4,7 @@
  */
 
 import request from 'supertest';
+import bcrypt from 'bcrypt';
 import app from '../src/app';
 import prisma from '../src/config/database';
 import { hashPassword } from '../src/utils/crypto';
@@ -36,14 +37,13 @@ describe('Medium Severity Security Fixes', () => {
    */
   describe('M01: Bcrypt Cost Factor', () => {
     it('should hash password with cost factor 12', async () => {
-      const bcrypt = require('bcrypt');
       const BCRYPT_COST = parseInt(process.env.BCRYPT_COST || '12', 10);
-      
+
       expect(BCRYPT_COST).toBeGreaterThanOrEqual(12);
-      
+
       const hash = await hashPassword(testUser.password);
       const cost = bcrypt.getRounds(hash);
-      
+
       expect(cost).toBeGreaterThanOrEqual(12);
     });
 
@@ -51,7 +51,7 @@ describe('Medium Severity Security Fixes', () => {
       const startTime = Date.now();
       await hashPassword(testUser.password);
       const duration = Date.now() - startTime;
-      
+
       // With cost 12, hashing should take 100-500ms
       expect(duration).toBeGreaterThan(50);
       expect(duration).toBeLessThan(2000);
@@ -76,12 +76,10 @@ describe('Medium Severity Security Fixes', () => {
         },
       });
 
-      const response = await request(app)
-        .post('/api/v1/auth/login')
-        .send({
-          email: testUser.email,
-          password: testUser.password,
-        });
+      const response = await request(app).post('/api/v1/auth/login').send({
+        email: testUser.email,
+        password: testUser.password,
+      });
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
@@ -103,23 +101,19 @@ describe('Medium Severity Security Fixes', () => {
 
       // Make 5 failed login attempts
       for (let i = 0; i < 5; i++) {
-        const response = await request(app)
-          .post('/api/v1/auth/login')
-          .send({
-            email: 'lock-test@example.com',
-            password: 'wrongpassword',
-          });
+        const response = await request(app).post('/api/v1/auth/login').send({
+          email: 'lock-test@example.com',
+          password: 'wrongpassword',
+        });
 
         expect(response.status).toBe(401);
       }
 
       // 6th attempt should fail with account locked message
-      const lockedResponse = await request(app)
-        .post('/api/v1/auth/login')
-        .send({
-          email: 'lock-test@example.com',
-          password: 'wrongpassword',
-        });
+      const lockedResponse = await request(app).post('/api/v1/auth/login').send({
+        email: 'lock-test@example.com',
+        password: 'wrongpassword',
+      });
 
       // Account should be locked (either 401 or 403)
       expect([401, 403]).toContain(lockedResponse.status);
@@ -145,24 +139,19 @@ describe('Medium Severity Security Fixes', () => {
       });
 
       // Login to get tokens
-      const loginResponse = await request(app)
-        .post('/api/v1/auth/login')
-        .send({
-          email: 'refresh-test@example.com',
-          password: testUser.password,
-        });
+      const loginResponse = await request(app).post('/api/v1/auth/login').send({
+        email: 'refresh-test@example.com',
+        password: testUser.password,
+      });
 
       const refreshToken = loginResponse.body.data.tokens.refresh_token;
-      
 
       // Refresh token
-      const refreshResponse = await request(app)
-        .post('/api/v1/auth/refresh')
-        .send({ refresh_token: refreshToken });
+      const refreshResponse = await request(app).post('/api/v1/auth/refresh').send({ refresh_token: refreshToken });
 
       expect(refreshResponse.status).toBe(200);
       expect(refreshResponse.body.data.refresh_token).toBeDefined();
-      
+
       // New refresh token should be different
       expect(refreshResponse.body.data.refresh_token).not.toBe(refreshToken);
     });
@@ -177,15 +166,13 @@ describe('Medium Severity Security Fixes', () => {
       // Make many requests quickly
       const requests: Promise<any>[] = [];
       for (let i = 0; i < 150; i++) {
-        requests.push(
-          request(app).get('/api/v1/health')
-        );
+        requests.push(request(app).get('/api/v1/health'));
       }
 
       const responses = await Promise.all(requests);
-      
+
       // At least some requests should be rate limited
-      const rateLimited = responses.filter(r => r.status === 429);
+      const rateLimited = responses.filter((r) => r.status === 429);
       expect(rateLimited.length).toBeGreaterThan(0);
     });
   });
@@ -197,14 +184,12 @@ describe('Medium Severity Security Fixes', () => {
   describe('M05: Audit Logging', () => {
     it('should include request ID in response headers', async () => {
       const response = await request(app).get('/api/v1/health');
-      
+
       expect(response.headers['x-request-id']).toBeDefined();
     });
 
     it('should log requests with required fields', async () => {
-      const response = await request(app)
-        .get('/api/v1/health')
-        .set('X-Request-ID', 'test-request-id');
+      const response = await request(app).get('/api/v1/health').set('X-Request-ID', 'test-request-id');
 
       expect(response.status).toBe(200);
       expect(response.headers['x-request-id']).toBe('test-request-id');
@@ -229,20 +214,16 @@ describe('Medium Severity Security Fixes', () => {
         },
       });
 
-      const response = await request(app)
-        .post('/api/v1/auth/login')
-        .send({
-          email: 'cookie-test@example.com',
-          password: testUser.password,
-        });
+      const response = await request(app).post('/api/v1/auth/login').send({
+        email: 'cookie-test@example.com',
+        password: testUser.password,
+      });
 
       // Check for Set-Cookie header
       const setCookie = response.headers['set-cookie'];
       if (setCookie) {
         // Verify HttpOnly flag
-        const hasHttpOnly = Array.isArray(setCookie) && setCookie.some((cookie: string) => 
-          cookie.includes('HttpOnly')
-        );
+        const hasHttpOnly = Array.isArray(setCookie) && setCookie.some((cookie: string) => cookie.includes('HttpOnly'));
         expect(hasHttpOnly).toBe(true);
       }
     });
@@ -256,8 +237,7 @@ describe('Medium Severity Security Fixes', () => {
     it('should have MFA setup endpoint', async () => {
       // This test verifies the endpoint exists
       // Full MFA testing requires authenticated user
-      const response = await request(app)
-        .post('/api/v1/auth/mfa/setup');
+      const response = await request(app).post('/api/v1/auth/mfa/setup');
 
       // Should return 401 (unauthorized) not 404 (not found)
       expect(response.status).not.toBe(404);
@@ -271,7 +251,7 @@ describe('Medium Severity Security Fixes', () => {
   describe('M08: Production Query Logging', () => {
     it('should have correct NODE_ENV configuration', async () => {
       const isProduction = process.env.NODE_ENV === 'production';
-      
+
       // This test just verifies the config is accessible
       expect(typeof isProduction).toBe('boolean');
     });

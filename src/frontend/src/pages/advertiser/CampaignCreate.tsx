@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Card from '@mui/material/Card';
@@ -28,20 +28,24 @@ import Divider from '@mui/material/Divider';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
-import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import Autocomplete from '@mui/material/Autocomplete';
-import Checkbox from '@mui/material/Checkbox';
 import { styled } from '@mui/material/styles';
 
 // Icons
-import AddIcon from '@mui/icons-material/Add';
-import DeleteIcon from '@mui/icons-material/Delete';
 import CheckIcon from '@mui/icons-material/Check';
 import InfoIcon from '@mui/icons-material/Info';
-
 // Services
-import { campaignAPI } from '../../services/advertiserApi';
+import { advertiserAPI, advertiserBalanceQueryKey, campaignAPI } from '../../services/advertiserApi';
+import { AdvertiserHubNav } from '../../components/advertiser/AdvertiserHubNav';
+import { AdvertiserLowBalanceAlert } from '../../components/advertiser/AdvertiserLowBalanceAlert';
+import {
+  ADVERTISER_ROUTE_SEG,
+  pathAdvertiser,
+  pathAdvertiserCampaign,
+} from '../../constants/appPaths';
+import { getApiErrorMessage } from '../../utils/apiError';
+import { usePublicUiConfig } from '../../hooks/usePublicUiConfig';
 
 // Types
 import type { Campaign } from '../../types';
@@ -56,31 +60,13 @@ const PreviewCard = styled(Paper)(({ theme }) => ({
   backgroundColor: theme.palette.action.hover,
 }));
 
-const tagsOptions = [
-  '时尚',
-  '美妆',
-  '科技',
-  '数码',
-  '美食',
-  '旅行',
-  '健身',
-  '教育',
-  '游戏',
-  '音乐',
-  '影视',
-  '母婴',
-  '家居',
-  '汽车',
-  '金融',
-];
-
+/** 与后端 createCampaignSchema.target_platforms 枚举一致 */
 const platformOptions = [
   { value: 'tiktok', label: 'TikTok' },
   { value: 'youtube', label: 'YouTube' },
   { value: 'instagram', label: 'Instagram' },
-  { value: 'facebook', label: 'Facebook' },
-  { value: 'twitter', label: 'Twitter' },
-  { value: 'linkedin', label: 'LinkedIn' },
+  { value: 'xiaohongshu', label: '小红书' },
+  { value: 'weibo', label: '微博' },
 ];
 
 const locationOptions = [
@@ -129,10 +115,11 @@ const interestOptions = [
 
 export const CampaignCreatePage: React.FC = () => {
   const navigate = useNavigate();
+  const { id: editCampaignId } = useParams<{ id?: string }>();
   const [activeStep, setActiveStep] = useState(0);
 
-  // Form state
-  const [formData, setFormData] = useState<Partial<Campaign>>({
+  // Form state（惰性初始化，避免在 render 中调用 Date.now）
+  const [formData, setFormData] = useState<Partial<Campaign>>(() => ({
     title: '',
     description: '',
     objective: 'awareness',
@@ -154,9 +141,7 @@ export const CampaignCreatePage: React.FC = () => {
     requiredHashtags: [],
     startDate: new Date().toISOString().split('T')[0],
     endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-  });
-
-  const [hashtagInput, setHashtagInput] = useState('');
+  }));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
@@ -164,24 +149,106 @@ export const CampaignCreatePage: React.FC = () => {
     message: string;
   }>({ open: false, severity: 'success', message: '' });
 
+  const {
+    data: existingCampaign,
+    isLoading: editLoading,
+    isError: editLoadError,
+    error: editError,
+    refetch: refetchCampaignForEdit,
+  } = useQuery({
+    queryKey: ['campaign', editCampaignId, 'for-edit'],
+    queryFn: () => campaignAPI.getCampaign(editCampaignId!),
+    enabled: Boolean(editCampaignId),
+    retry: 1,
+  });
+
+  const { data: publicUi } = usePublicUiConfig();
+
+  const balanceQ = useQuery({
+    queryKey: [...advertiserBalanceQueryKey],
+    queryFn: advertiserAPI.getBalance,
+    retry: 1,
+  });
+
+  const handleCampaignHubRefresh = () => {
+    void balanceQ.refetch();
+    if (editCampaignId) void refetchCampaignForEdit();
+  };
+
+  useEffect(() => {
+    if (!existingCampaign) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- edit 模式用接口数据填充表单
+    setFormData({
+      title: existingCampaign.title,
+      description: existingCampaign.description ?? '',
+      objective: existingCampaign.objective,
+      budget: existingCampaign.budget,
+      budgetType: existingCampaign.budgetType,
+      targetAudience: {
+        ageRange: existingCampaign.targetAudience?.ageRange ?? '18-35',
+        gender: existingCampaign.targetAudience?.gender ?? 'all',
+        locations: existingCampaign.targetAudience?.locations ?? [],
+        interests: existingCampaign.targetAudience?.interests ?? [],
+      },
+      targetPlatforms: existingCampaign.targetPlatforms ?? [],
+      minFollowers: existingCampaign.minFollowers,
+      maxFollowers: existingCampaign.maxFollowers,
+      minEngagementRate: existingCampaign.minEngagementRate,
+      requiredCategories: existingCampaign.requiredCategories ?? [],
+      targetCountries: existingCampaign.targetCountries ?? [],
+      contentRequirements: existingCampaign.contentRequirements ?? '',
+      requiredHashtags: existingCampaign.requiredHashtags ?? [],
+      startDate: existingCampaign.startDate,
+      endDate: existingCampaign.endDate,
+      deadline: existingCampaign.deadline,
+    });
+  }, [existingCampaign]);
+
   // Create mutation
   const createMutation = useMutation({
     mutationFn: campaignAPI.createCampaign,
-    onSuccess: (data: any) => {
+    onSuccess: (data: Campaign) => {
       setSnackbar({
         open: true,
         severity: 'success',
         message: '活动创建成功！',
       });
       setTimeout(() => {
-        navigate(`/advertiser/campaigns/${data.id}`);
+        navigate(pathAdvertiserCampaign(data.id));
       }, 1000);
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       setSnackbar({
         open: true,
         severity: 'error',
-        message: error.response?.data?.error?.message || '创建失败，请稍后重试',
+        message: getApiErrorMessage(error, '创建失败，请稍后重试'),
+      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<Campaign>;
+    }) => campaignAPI.updateCampaign(id, data),
+    onSuccess: (data) => {
+      setSnackbar({
+        open: true,
+        severity: 'success',
+        message: '活动已保存',
+      });
+      setTimeout(() => {
+        navigate(pathAdvertiserCampaign(data.id));
+      }, 800);
+    },
+    onError: (error: unknown) => {
+      setSnackbar({
+        open: true,
+        severity: 'error',
+        message: getApiErrorMessage(error, '保存失败，请稍后重试'),
       });
     },
   });
@@ -201,38 +268,21 @@ export const CampaignCreatePage: React.FC = () => {
   };
 
   // Handle target audience changes
-  const handleTargetAudienceChange = (field: string, value: any) => {
+  type AudienceKey = keyof NonNullable<Campaign['targetAudience']>;
+
+  const handleTargetAudienceChange = <K extends AudienceKey>(
+    field: K,
+    value: NonNullable<Campaign['targetAudience']>[K]
+  ) => {
     setFormData((prev) => ({
       ...prev,
-      targetAudience: { ...prev.targetAudience!, [field]: value },
+      targetAudience: { ...prev.targetAudience, [field]: value },
     }));
   };
 
   // Handle array field changes
   const handleArrayFieldChange = (field: string, values: string[]) => {
     setFormData((prev) => ({ ...prev, [field]: values }));
-  };
-
-  // Handle hashtag add
-  const handleHashtagAdd = () => {
-    if (hashtagInput.trim()) {
-      const newHashtag = hashtagInput.trim().replace('#', '');
-      if (!formData.requiredHashtags?.includes(newHashtag)) {
-        handleArrayFieldChange('requiredHashtags', [
-          ...(formData.requiredHashtags || []),
-          newHashtag,
-        ]);
-      }
-      setHashtagInput('');
-    }
-  };
-
-  // Handle hashtag delete
-  const handleHashtagDelete = (hashtag: string) => {
-    handleArrayFieldChange(
-      'requiredHashtags',
-      formData.requiredHashtags?.filter((h) => h !== hashtag) || []
-    );
   };
 
   // Validate current step
@@ -306,7 +356,14 @@ export const CampaignCreatePage: React.FC = () => {
           interests: formData.targetAudience?.interests || [],
         },
       };
-      createMutation.mutate(submitData as Partial<Campaign>);
+      if (editCampaignId) {
+        updateMutation.mutate({
+          id: editCampaignId,
+          data: submitData as Partial<Campaign>,
+        });
+      } else {
+        createMutation.mutate(submitData as Partial<Campaign>);
+      }
     }
   };
 
@@ -669,6 +726,13 @@ export const CampaignCreatePage: React.FC = () => {
                 设置活动预算和时间安排
               </Typography>
 
+              {publicUi ? (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  平台预算风险预警：当已消耗 ≥ {Math.round(publicUi.budget_risk_threshold * 100)}%
+                  预算时，活动列表「占用率」列与仪表盘将提示预警（与运营 Cron / 管理端一致）。
+                </Alert>
+              ) : null}
+
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <FormControl component="fieldset" fullWidth>
@@ -702,7 +766,12 @@ export const CampaignCreatePage: React.FC = () => {
                     value={formData.budget}
                     onChange={handleInputChange}
                     error={!!errors.budget}
-                    helperText={errors.budget || '最低预算 ¥100'}
+                    helperText={
+                      errors.budget ||
+                      (publicUi
+                        ? `最低预算 ¥100；达到已消耗 ≥${Math.round(publicUi.budget_risk_threshold * 100)}% 将触发风险预警`
+                        : '最低预算 ¥100')
+                    }
                     required
                     InputProps={{
                       startAdornment: (
@@ -933,17 +1002,88 @@ export const CampaignCreatePage: React.FC = () => {
     }
   };
 
+  if (editCampaignId && editLoading) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <CircularProgress />
+        <Typography variant="body2" sx={{ mt: 2 }}>
+          加载活动信息…
+        </Typography>
+      </Box>
+    );
+  }
+
+  if (editCampaignId && editLoadError) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {getApiErrorMessage(editError, '加载活动失败')}
+        </Alert>
+        <Button variant="contained" onClick={() => navigate(pathAdvertiser(ADVERTISER_ROUTE_SEG.campaigns))}>
+          返回活动列表
+        </Button>
+      </Box>
+    );
+  }
+
+  if (
+    editCampaignId &&
+    existingCampaign &&
+    (existingCampaign.status === 'completed' ||
+      existingCampaign.status === 'cancelled')
+  ) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          已完成或已取消的活动不能修改，与后端策略一致。
+        </Alert>
+        <Button
+          variant="contained"
+          onClick={() => navigate(pathAdvertiserCampaign(editCampaignId))}
+        >
+          返回活动详情
+        </Button>
+      </Box>
+    );
+  }
+
+  const savePending = createMutation.isPending || updateMutation.isPending;
+
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          创建活动
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          按照步骤填写活动信息，创建您的广告投放活动
-        </Typography>
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 2,
+          mb: 2,
+        }}
+      >
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="h4" gutterBottom>
+            {editCampaignId ? '编辑活动' : '创建活动'}
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            {editCampaignId
+              ? '修改活动信息并保存，将返回活动详情页'
+              : '按照步骤填写活动信息，创建您的广告投放活动'}
+          </Typography>
+        </Box>
+        <AdvertiserHubNav preset="campaign-wizard" onRefresh={handleCampaignHubRefresh} />
       </Box>
+      <Alert severity="info" sx={{ mb: 4 }}>
+        保存后可在活动列表与活动详情中查看与调整；产生合作订单后，消耗与明细见订单中心与数据分析。
+      </Alert>
+
+      <AdvertiserLowBalanceAlert
+        balance={balanceQ.data}
+        publicUi={publicUi}
+        context="campaign-wizard"
+        sx={{ mb: 3 }}
+      />
 
       {/* Stepper */}
       <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
@@ -975,16 +1115,20 @@ export const CampaignCreatePage: React.FC = () => {
             <Button
               onClick={handleSubmit}
               variant="contained"
-              disabled={createMutation.isPending}
+              disabled={savePending}
               startIcon={
-                createMutation.isPending ? (
+                savePending ? (
                   <CircularProgress size={20} color="inherit" />
                 ) : (
                   <CheckIcon />
                 )
               }
             >
-              {createMutation.isPending ? '提交中...' : '提交活动'}
+              {savePending
+                ? '提交中...'
+                : editCampaignId
+                  ? '保存修改'
+                  : '提交活动'}
             </Button>
           )}
         </Box>

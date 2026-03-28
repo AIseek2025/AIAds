@@ -533,6 +533,7 @@ campaign = client.campaigns.create(
 |-----|------|------|
 | `POST /auth/register` | 用户注册 | [API_AUTH.md](API_AUTH.md) |
 | `POST /auth/login` | 用户登录 | [API_AUTH.md](API_AUTH.md) |
+| `POST /auth/login-email-code` | 邮箱验证码登录 | [API_AUTH.md](API_AUTH.md) |
 | `POST /auth/refresh` | 刷新 Token | [API_AUTH.md](API_AUTH.md) |
 | `POST /auth/logout` | 用户登出 | [API_AUTH.md](API_AUTH.md) |
 | `POST /auth/verification-code` | 发送验证码 | [API_AUTH.md](API_AUTH.md) |

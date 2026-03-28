@@ -16,7 +16,7 @@ describe('Advertisers API Tests', () => {
     // Create test user
     const email = `advertiser_test_${Date.now()}@example.com`;
     const passwordHash = await hashPassword('SecurePass123!');
-    
+
     testUser = await prisma.user.create({
       data: {
         email,
@@ -43,12 +43,10 @@ describe('Advertisers API Tests', () => {
   describe('POST /api/v1/advertisers', () => {
     it('应该成功创建广告主资料', async () => {
       // Login to get token
-      const loginRes = await request(app)
-        .post('/api/v1/auth/login')
-        .send({
-          email: testUser.email,
-          password: 'SecurePass123!',
-        });
+      const loginRes = await request(app).post('/api/v1/auth/login').send({
+        email: testUser.email,
+        password: 'SecurePass123!',
+      });
 
       accessToken = loginRes.body.data.tokens.access_token;
 
@@ -90,10 +88,7 @@ describe('Advertisers API Tests', () => {
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .post('/api/v1/advertisers')
-        .send({ company_name: '测试' })
-        .expect(401);
+      const response = await request(app).post('/api/v1/advertisers').send({ company_name: '测试' }).expect(401);
 
       expect(response.body.error.code).toBe('AUTH_REQUIRED');
     });
@@ -111,9 +106,7 @@ describe('Advertisers API Tests', () => {
         },
       });
 
-      const loginRes = await request(app)
-        .post('/api/v1/auth/login')
-        .send({ email, password: 'SecurePass123!' });
+      const loginRes = await request(app).post('/api/v1/auth/login').send({ email, password: 'SecurePass123!' });
 
       const token2 = loginRes.body.data.tokens.access_token;
 
@@ -143,9 +136,7 @@ describe('Advertisers API Tests', () => {
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .get('/api/v1/advertisers/me')
-        .expect(401);
+      const response = await request(app).get('/api/v1/advertisers/me').expect(401);
 
       expect(response.body.error.code).toBe('AUTH_REQUIRED');
     });
@@ -171,10 +162,7 @@ describe('Advertisers API Tests', () => {
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .put('/api/v1/advertisers/me')
-        .send({ contact_person: '测试' })
-        .expect(401);
+      const response = await request(app).put('/api/v1/advertisers/me').send({ contact_person: '测试' }).expect(401);
 
       expect(response.body.error.code).toBe('AUTH_REQUIRED');
     });
@@ -230,12 +218,11 @@ describe('Advertisers API Tests', () => {
       expect(response.body.data).toHaveProperty('wallet_balance');
       expect(response.body.data).toHaveProperty('frozen_balance');
       expect(response.body.data).toHaveProperty('total_recharged');
+      expect(response.body.data).toHaveProperty('low_balance_alert_cny');
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .get('/api/v1/advertisers/me/balance')
-        .expect(401);
+      const response = await request(app).get('/api/v1/advertisers/me/balance').expect(401);
 
       expect(response.body.error.code).toBe('AUTH_REQUIRED');
     });
@@ -265,9 +252,7 @@ describe('Advertisers API Tests', () => {
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .get('/api/v1/advertisers/me/transactions')
-        .expect(401);
+      const response = await request(app).get('/api/v1/advertisers/me/transactions').expect(401);
 
       expect(response.body.error.code).toBe('AUTH_REQUIRED');
     });

@@ -1,6 +1,7 @@
 import React from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { adminDashboardAPI } from '../../services/adminApi';
+import { adminDashboardAPI, adminCampaignAPI } from '../../services/adminApi';
 import type { DashboardStats, AnalyticsData, DashboardKolRankings } from '../../types';
 
 // MUI Components
@@ -20,6 +21,15 @@ import Avatar from '@mui/material/Avatar';
 import Chip from '@mui/material/Chip';
 import LinearProgress from '@mui/material/LinearProgress';
 import Skeleton from '@mui/material/Skeleton';
+import Alert from '@mui/material/Alert';
+
+import { AdminHubNav } from '../../components/admin/AdminHubNav';
+import {
+  ADMIN_ROUTE_SEG,
+  pathAdmin,
+  pathAdminCampaign,
+  pathAdminCampaignAnomalies,
+} from '../../constants/appPaths';
 
 // Icons
 import PeopleIcon from '@mui/icons-material/People';
@@ -29,6 +39,11 @@ import CampaignIcon from '@mui/icons-material/Campaign';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import IconButton from '@mui/material/IconButton';
+import Button from '@mui/material/Button';
+import Link from '@mui/material/Link';
 
 // Recharts
 import {
@@ -120,22 +135,42 @@ const LoadingStatCard = () => (
 
 const AdminDashboard: React.FC = () => {
   // Fetch dashboard stats
-  const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
+  const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery<DashboardStats>({
     queryKey: ['adminDashboardStats'],
     queryFn: () => adminDashboardAPI.getStats({ period: 'today' }),
   });
 
   // Fetch analytics data
-  const { data: analytics, isLoading: analyticsLoading } = useQuery<AnalyticsData>({
+  const { data: analytics, isLoading: analyticsLoading, refetch: refetchAnalytics } = useQuery<AnalyticsData>({
     queryKey: ['adminDashboardAnalytics'],
     queryFn: () => adminDashboardAPI.getAnalytics({ metric: 'user_growth', period: 'month', group_by: 'day' }),
   });
 
   // Fetch KOL rankings
-  const { data: kolRankings, isLoading: rankingsLoading } = useQuery<DashboardKolRankings>({
+  const { data: kolRankings, isLoading: rankingsLoading, refetch: refetchRankings } = useQuery<DashboardKolRankings>({
     queryKey: ['adminKolRankings'],
     queryFn: () => adminDashboardAPI.getKolRankings({ metric: 'earnings', limit: 5 }),
   });
+
+  const riskTh = stats?.campaigns?.budgetRiskThreshold ?? 0.85;
+  const { data: budgetRisks, isLoading: budgetRisksLoading, refetch: refetchBudgetRisks } = useQuery({
+    queryKey: ['adminCampaignBudgetRisks', riskTh],
+    queryFn: () => adminCampaignAPI.getBudgetRiskCampaigns({ threshold: riskTh }),
+  });
+
+  const { data: abnormalBrief, isLoading: abnormalLoading, refetch: refetchAbnormal } = useQuery({
+    queryKey: ['adminAbnormalCampaignsCount'],
+    queryFn: () => adminCampaignAPI.getAbnormalCampaigns({ page: 1, page_size: 1 }),
+  });
+  const abnormalTotal = abnormalBrief?.pagination?.total ?? 0;
+
+  const handleHubRefresh = () => {
+    void refetchStats();
+    void refetchAnalytics();
+    void refetchRankings();
+    void refetchBudgetRisks();
+    void refetchAbnormal();
+  };
 
   // Prepare chart data
   const userGrowthData = analytics?.userGrowth?.labels.map((label, index) => ({
@@ -164,7 +199,7 @@ const AdminDashboard: React.FC = () => {
   return (
     <Box>
       {/* Page Header */}
-      <Box sx={{ mb: 4 }}>
+      <Box sx={{ mb: 2 }}>
         <Typography variant="h4" fontWeight="bold" gutterBottom>
           数据看板
         </Typography>
@@ -172,6 +207,42 @@ const AdminDashboard: React.FC = () => {
           实时平台数据统计与分析
         </Typography>
       </Box>
+      <AdminHubNav onRefresh={handleHubRefresh} />
+      <Alert severity="info" sx={{ mb: 3, mt: 2 }}>
+        指标与图表来自管理端聚合接口；刷新将同步概览、趋势、KOL 排行、预算风险与异常巡检条数。
+      </Alert>
+      {!abnormalLoading && abnormalTotal > 0 && (
+        <Alert
+          severity="warning"
+          sx={{ mb: 3 }}
+          action={
+            <Button component={RouterLink} to={pathAdminCampaignAnomalies()} color="inherit" size="small">
+              查看全部
+            </Button>
+          }
+        >
+          规则巡检发现 <strong>{abnormalTotal}</strong> 条活动异常，建议及时跟进。
+        </Alert>
+      )}
+      {!statsLoading && (stats?.campaigns?.budgetRiskCount ?? 0) > 0 && (
+        <Alert
+          severity="warning"
+          sx={{ mb: 3 }}
+          action={
+            <Button
+              component={RouterLink}
+              to={`${pathAdmin(ADMIN_ROUTE_SEG.campaigns)}#budget-risk`}
+              color="inherit"
+              size="small"
+            >
+              活动管理
+            </Button>
+          }
+        >
+          当前 <strong>{stats?.campaigns?.budgetRiskCount}</strong> 个活动预算占用 ≥{' '}
+          {((stats?.campaigns?.budgetRiskThreshold ?? 0.85) * 100).toFixed(0)}%，请关注投放与续费。
+        </Alert>
+      )}
 
       {/* Statistics Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -212,7 +283,7 @@ const AdminDashboard: React.FC = () => {
               value={formatNumber(stats?.users.kols || 0)}
               icon={<VerifiedUserIcon />}
               color="#ED6C02"
-              subValue={`待审核 ${stats?.content.pendingReview || 0}`}
+              subValue={`待审核 ${stats?.kol?.pendingVerification ?? 0}`}
             />
           )}
         </Grid>
@@ -243,6 +314,90 @@ const AdminDashboard: React.FC = () => {
               subValue={`本月累计 ${formatCurrency(stats?.finance.totalRevenue || 0)}`}
             />
           )}
+        </Grid>
+      </Grid>
+
+      {/* 活动预算占用预警（与 GET /admin/campaigns/budget-risks 一致） */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid size={{ xs: 12 }}>
+          <Card variant="outlined" sx={{ borderColor: 'warning.light' }}>
+            <CardHeader
+              avatar={
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <WarningAmberIcon color="warning" />
+                </Box>
+              }
+              title="活动预算占用预警"
+              subheader={`进行中/已暂停活动中，消耗/预算 ≥ ${((budgetRisks?.threshold ?? 0.85) * 100).toFixed(0)}% 的活动（运维 Cron 可请求同一接口）`}
+            />
+            <CardContent>
+              {budgetRisksLoading ? (
+                <Skeleton variant="rectangular" height={120} />
+              ) : !budgetRisks?.items?.length ? (
+                <Typography variant="body2" color="text.secondary">
+                  当前无高占用活动
+                </Typography>
+              ) : (
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>活动名称</TableCell>
+                        <TableCell align="right">预算</TableCell>
+                        <TableCell align="right">已消耗</TableCell>
+                        <TableCell align="right">占用率</TableCell>
+                        <TableCell>状态</TableCell>
+                        <TableCell align="center">活动 ID</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {budgetRisks.items.map((row) => (
+                        <TableRow key={row.id} hover>
+                          <TableCell>
+                            <Link
+                              component={RouterLink}
+                              to={pathAdminCampaign(row.id)}
+                              underline="hover"
+                              fontWeight={500}
+                              variant="body2"
+                            >
+                              {row.title}
+                            </Link>
+                          </TableCell>
+                          <TableCell align="right">{formatCurrency(row.budget)}</TableCell>
+                          <TableCell align="right">{formatCurrency(row.spentAmount)}</TableCell>
+                          <TableCell align="right">
+                            <Typography
+                              variant="body2"
+                              fontWeight="bold"
+                              color={row.utilization >= 0.95 ? 'error.main' : 'warning.main'}
+                            >
+                              {(row.utilization * 100).toFixed(1)}%
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip label={row.status} size="small" variant="outlined" />
+                          </TableCell>
+                          <TableCell align="center">
+                            <IconButton
+                              size="small"
+                              title="复制活动 ID"
+                              onClick={() => {
+                                void navigator.clipboard.writeText(row.id);
+                              }}
+                              aria-label="复制活动 ID"
+                            >
+                              <ContentCopyIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </CardContent>
+          </Card>
         </Grid>
       </Grid>
 
@@ -293,7 +448,8 @@ const AdminDashboard: React.FC = () => {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ name, percent }: any) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      label={({ name, percent }: { name?: string; percent?: number }) =>
+                        `${name ?? ''}: ${((percent ?? 0) * 100).toFixed(0)}%`}
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="value"
@@ -445,6 +601,33 @@ const AdminDashboard: React.FC = () => {
                       variant="determinate"
                       value={(stats?.orders.inProgress || 0) / (stats?.orders.total || 1) * 100}
                       color="info"
+                    />
+                  </Box>
+                  <Box sx={{ mb: 3 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center' }}>
+                      <Typography variant="body2">纠纷 / 待结案工单</Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2" fontWeight="bold">
+                          {stats?.orders.disputed ?? 0} / {stats?.orders.pendingDisputes ?? 0}
+                        </Typography>
+                        <Link
+                          component={RouterLink}
+                          to={`${pathAdmin(ADMIN_ROUTE_SEG.orders)}?tab=disputes`}
+                          variant="caption"
+                          underline="hover"
+                        >
+                          处理
+                        </Link>
+                      </Box>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={
+                        (stats?.orders.total || 0) > 0
+                          ? ((stats?.orders.pendingDisputes || 0) / (stats?.orders.total || 1)) * 100
+                          : 0
+                      }
+                      color="error"
                     />
                   </Box>
                   <Box sx={{ mb: 3 }}>

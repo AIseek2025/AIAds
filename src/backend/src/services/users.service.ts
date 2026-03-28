@@ -1,8 +1,25 @@
+import { Prisma, type User } from '@prisma/client';
 import prisma from '../config/database';
 import { logger } from '../utils/logger';
 import { errors } from '../middleware/errorHandler';
 import { hashPassword, verifyPassword } from '../utils/crypto';
 import { UpdateUserRequest, UserResponse } from '../types';
+
+type UserProfileRow = Pick<User, 'id' | 'email' | 'role' | 'status' | 'emailVerified' | 'createdAt' | 'updatedAt'> &
+  Partial<
+    Pick<
+      User,
+      | 'phone'
+      | 'nickname'
+      | 'avatarUrl'
+      | 'realName'
+      | 'phoneVerified'
+      | 'language'
+      | 'timezone'
+      | 'currency'
+      | 'lastLoginAt'
+    >
+  >;
 
 export class UserService {
   /**
@@ -75,7 +92,7 @@ export class UserService {
    * Update user
    */
   async updateUser(userId: string, data: UpdateUserRequest): Promise<UserResponse> {
-    const updateData: any = {};
+    const updateData: Prisma.UserUpdateInput = {};
 
     if (data.nickname !== undefined) {
       updateData.nickname = data.nickname;
@@ -258,21 +275,21 @@ export class UserService {
   /**
    * Format user response
    */
-  private formatUserResponse(user: any): UserResponse {
+  private formatUserResponse(user: UserProfileRow): UserResponse {
     return {
       id: user.id,
       email: user.email,
-      phone: user.phone,
-      nickname: user.nickname,
-      avatar_url: user.avatarUrl,
-      real_name: user.realName,
+      phone: user.phone ?? undefined,
+      nickname: user.nickname ?? undefined,
+      avatar_url: user.avatarUrl ?? undefined,
+      real_name: user.realName ?? undefined,
       role: user.role,
       status: user.status,
       email_verified: user.emailVerified,
-      phone_verified: user.phoneVerified,
-      language: user.language,
-      timezone: user.timezone,
-      currency: user.currency,
+      phone_verified: user.phoneVerified ?? false,
+      language: user.language || 'zh-CN',
+      timezone: user.timezone || 'Asia/Shanghai',
+      currency: user.currency || 'CNY',
       last_login_at: user.lastLoginAt?.toISOString(),
       created_at: user.createdAt.toISOString(),
       updated_at: user.updatedAt.toISOString(),

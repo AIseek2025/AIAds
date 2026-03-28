@@ -1,9 +1,58 @@
-import { Prisma, TransactionStatus, TransactionType } from '@prisma/client';
+import { PaymentMethod, Prisma, TransactionStatus, TransactionType } from '@prisma/client';
 import prisma from '../../config/database';
 import { logger } from '../../utils/logger';
 import { ApiError } from '../../middleware/errorHandler';
 import { logAdminAction } from './audit.service';
 import { decimalToNumber } from '../../utils/decimal';
+import type { PaginationResponse } from '../../types';
+import { cacheService } from '../cache.service';
+
+function mergeWithdrawalMetadata(
+  current: Prisma.JsonValue,
+  patch: Record<string, Prisma.InputJsonValue>
+): Prisma.InputJsonValue {
+  const base =
+    current && typeof current === 'object' && !Array.isArray(current)
+      ? { ...(current as Record<string, Prisma.InputJsonValue>) }
+      : {};
+  return { ...base, ...patch };
+}
+
+function csvCell(v: string | number | boolean | null | undefined): string {
+  const s = v === null || v === undefined ? '' : String(v);
+  if (/[",\n\r]/.test(s)) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+function withdrawalMetaNotes(meta: Prisma.JsonValue): { note?: string; adminNote?: string } {
+  if (meta && typeof meta === 'object' && !Array.isArray(meta)) {
+    const o = meta as Record<string, unknown>;
+    return {
+      note: typeof o.note === 'string' ? o.note : undefined,
+      adminNote: typeof o.adminNote === 'string' ? o.adminNote : undefined,
+    };
+  }
+  return {};
+}
+
+type TransactionListRow = Prisma.TransactionGetPayload<{
+  include: {
+    advertiser: { select: { id: true; userId: true; companyName: true } };
+    kol: { select: { id: true; userId: true; platform: true; platformUsername: true } };
+  };
+}>;
+
+type WithdrawalDetailRow = Prisma.WithdrawalGetPayload<{
+  include: {
+    kol: {
+      include: {
+        user: { select: { email: true; nickname: true } };
+      };
+    };
+  };
+}>;
 
 // Transaction list filters
 export interface TransactionListFilters {
@@ -89,11 +138,70 @@ export interface WithdrawalResponse {
   failureReason?: string;
 }
 
+export type ApproveWithdrawalResponse = {
+  id: string;
+  status: string;
+  processedAt: Date | null;
+  message: string;
+};
+
+export type RejectWithdrawalResponse = {
+  id: string;
+  status: string;
+  rejectedAt: Date;
+  rejectedBy: string;
+  rejectionReason: string;
+  message: string;
+};
+
+export type FinanceOverviewResponse = {
+  period: string;
+  /** 全站已完成流水合计（所有类型、completed） */
+  total_completed_volume: number;
+  /** 待审核提现笔数 */
+  pending_withdrawals: number;
+  /** 周期内平台费 + 佣金（completed），与 period 对齐；默认 period=month 即自然月 */
+  monthly_revenue: number;
+  /** 待确认 / 处理中充值笔数 */
+  pending_recharges: number;
+  /** 发票待处理（暂无发票表时为 0） */
+  pending_invoices: number;
+};
+
+function overviewPeriodBounds(period: string, now = new Date()): { gte: Date; lte: Date } | null {
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const d = now.getUTCDate();
+  if (period === 'month' || period === '') {
+    const gte = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
+    const lte = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999));
+    return { gte, lte };
+  }
+  if (period === 'year') {
+    const gte = new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0));
+    const lte = new Date(Date.UTC(y, 11, 31, 23, 59, 59, 999));
+    return { gte, lte };
+  }
+  if (period === 'week') {
+    const day = now.getUTCDay();
+    const mondayOffset = day === 0 ? -6 : 1 - day;
+    const monday = new Date(Date.UTC(y, m, d + mondayOffset, 0, 0, 0, 0));
+    const sunday = new Date(monday);
+    sunday.setUTCDate(monday.getUTCDate() + 6);
+    sunday.setUTCHours(23, 59, 59, 999);
+    return { gte: monday, lte: sunday };
+  }
+  return null;
+}
+
 export class AdminFinanceService {
   /**
    * Get transaction list with filters
    */
-  async getTransactionList(filters: TransactionListFilters, adminId: string) {
+  async getTransactionList(
+    filters: TransactionListFilters,
+    adminId: string
+  ): Promise<PaginationResponse<TransactionResponse>> {
     const {
       page = 1,
       limit = 20,
@@ -109,48 +217,58 @@ export class AdminFinanceService {
       order = 'desc',
     } = filters;
 
+    const sortField =
+      sort === 'created_at' || sort === 'createdAt'
+        ? 'createdAt'
+        : sort === 'updated_at' || sort === 'updatedAt'
+          ? 'updatedAt'
+          : sort === 'completed_at' || sort === 'completedAt'
+            ? 'completedAt'
+            : sort === 'amount'
+              ? 'amount'
+              : 'createdAt';
+
     const skip = (page - 1) * limit;
     const take = limit;
 
-    const where: any = {};
+    const where: Prisma.TransactionWhereInput = {};
 
     if (type) {
-      where.type = type;
+      where.type = type as TransactionType;
     }
 
     if (status) {
-      where.status = status;
+      where.status = status as TransactionStatus;
     }
 
     if (paymentMethod) {
-      where.paymentMethod = paymentMethod;
+      where.paymentMethod = paymentMethod as PaymentMethod;
     }
 
     if (userId) {
-      where.OR = [
-        { advertiserId: userId },
-        { kolId: userId },
-      ];
+      where.OR = [{ advertiserId: userId }, { kolId: userId }];
     }
 
     if (minAmount !== undefined || maxAmount !== undefined) {
-      where.amount = {};
+      const amount: Prisma.DecimalFilter = {};
       if (minAmount !== undefined) {
-        where.amount.gte = minAmount;
+        amount.gte = new Prisma.Decimal(minAmount);
       }
       if (maxAmount !== undefined) {
-        where.amount.lte = maxAmount;
+        amount.lte = new Prisma.Decimal(maxAmount);
       }
+      where.amount = amount;
     }
 
     if (createdAfter || createdBefore) {
-      where.createdAt = {};
+      const createdAt: Prisma.DateTimeFilter = {};
       if (createdAfter) {
-        where.createdAt.gte = new Date(createdAfter);
+        createdAt.gte = new Date(createdAfter);
       }
       if (createdBefore) {
-        where.createdAt.lte = new Date(createdBefore);
+        createdAt.lte = new Date(createdBefore);
       }
+      where.createdAt = createdAt;
     }
 
     const [total, transactions] = await Promise.all([
@@ -159,7 +277,7 @@ export class AdminFinanceService {
         where,
         skip,
         take,
-        orderBy: { [sort]: order },
+        orderBy: { [sortField]: order },
         include: {
           advertiser: {
             select: {
@@ -206,34 +324,33 @@ export class AdminFinanceService {
   /**
    * Get pending withdrawals
    */
-  async getPendingWithdrawals(filters: {
-    page?: number;
-    limit?: number;
-    minAmount?: number;
-    maxAmount?: number;
-  }, adminId: string) {
-    const {
-      page = 1,
-      limit = 20,
-      minAmount,
-      maxAmount,
-    } = filters;
+  async getPendingWithdrawals(
+    filters: {
+      page?: number;
+      limit?: number;
+      minAmount?: number;
+      maxAmount?: number;
+    },
+    adminId: string
+  ): Promise<PaginationResponse<WithdrawalResponse>> {
+    const { page = 1, limit = 20, minAmount, maxAmount } = filters;
 
     const skip = (page - 1) * limit;
     const take = limit;
 
-    const where: any = {
+    const where: Prisma.WithdrawalWhereInput = {
       status: 'pending',
     };
 
     if (minAmount !== undefined || maxAmount !== undefined) {
-      where.amount = {};
+      const amount: Prisma.DecimalFilter = {};
       if (minAmount !== undefined) {
-        where.amount.gte = minAmount;
+        amount.gte = new Prisma.Decimal(minAmount);
       }
       if (maxAmount !== undefined) {
-        where.amount.lte = maxAmount;
+        amount.lte = new Prisma.Decimal(maxAmount);
       }
+      where.amount = amount;
     }
 
     const [total, withdrawals] = await Promise.all([
@@ -323,7 +440,12 @@ export class AdminFinanceService {
   /**
    * Approve withdrawal
    */
-  async approveWithdrawal(withdrawalId: string, data: ApproveWithdrawalRequest, adminId: string, adminEmail: string) {
+  async approveWithdrawal(
+    withdrawalId: string,
+    data: ApproveWithdrawalRequest,
+    adminId: string,
+    adminEmail: string
+  ): Promise<ApproveWithdrawalResponse> {
     const withdrawal = await prisma.withdrawal.findUnique({
       where: { id: withdrawalId },
       include: {
@@ -352,12 +474,11 @@ export class AdminFinanceService {
         data: {
           status: 'processing',
           processedAt: new Date(),
-          metadata: {
-            ...(withdrawal.metadata as any) || {},
+          metadata: mergeWithdrawalMetadata(withdrawal.metadata, {
             approvedBy: adminId,
             approvedAt: new Date().toISOString(),
-            adminNote: data.note,
-          },
+            adminNote: data.note ?? '',
+          }),
         },
       });
 
@@ -377,12 +498,12 @@ export class AdminFinanceService {
           kolId: withdrawal.kolId,
           withdrawalId: withdrawalId,
           transactionNo: `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-          type: 'withdrawal',
+          type: TransactionType.withdrawal,
           amount: withdrawal.amount,
           currency: withdrawal.currency,
-          paymentMethod: withdrawal.paymentMethod as any,
+          paymentMethod: withdrawal.paymentMethod as PaymentMethod,
           paymentRef: withdrawalId,
-          status: 'processing',
+          status: TransactionStatus.processing,
           description: `KOL 提现：${withdrawal.withdrawalNo}`,
         },
       });
@@ -418,7 +539,12 @@ export class AdminFinanceService {
   /**
    * Reject withdrawal
    */
-  async rejectWithdrawal(withdrawalId: string, data: RejectWithdrawalRequest, adminId: string, adminEmail: string) {
+  async rejectWithdrawal(
+    withdrawalId: string,
+    data: RejectWithdrawalRequest,
+    adminId: string,
+    adminEmail: string
+  ): Promise<RejectWithdrawalResponse> {
     const withdrawal = await prisma.withdrawal.findUnique({
       where: { id: withdrawalId },
       include: {
@@ -440,13 +566,12 @@ export class AdminFinanceService {
       data: {
         status: 'rejected',
         failureReason: data.reason,
-        metadata: {
-          ...(withdrawal.metadata as any) || {},
+        metadata: mergeWithdrawalMetadata(withdrawal.metadata, {
           rejectedBy: adminId,
           rejectedAt: new Date().toISOString(),
           rejectionReason: data.reason,
-          adminNote: data.note,
-        },
+          adminNote: data.note ?? '',
+        }),
       },
     });
 
@@ -480,29 +605,33 @@ export class AdminFinanceService {
   /**
    * Format transaction response
    */
-  private formatTransactionResponse(transaction: any): TransactionResponse {
-    const user = transaction.advertiser || transaction.kol;
+  private formatTransactionResponse(transaction: TransactionListRow): TransactionResponse {
+    const adv = transaction.advertiser;
+    const k = transaction.kol;
+    const party = adv ?? k;
     return {
       id: transaction.id,
       transactionNo: transaction.transactionNo,
       type: transaction.type,
       amount: Number(transaction.amount),
       currency: transaction.currency,
-      paymentMethod: transaction.paymentMethod,
-      paymentRef: transaction.paymentRef,
+      paymentMethod: transaction.paymentMethod ?? undefined,
+      paymentRef: transaction.paymentRef ?? undefined,
       status: transaction.status,
       balanceBefore: transaction.balanceBefore ? Number(transaction.balanceBefore) : undefined,
       balanceAfter: transaction.balanceAfter ? Number(transaction.balanceAfter) : undefined,
-      description: transaction.description,
-      user: user ? {
-        id: user.id,
-        email: (user as any).user?.email || '',
-        companyName: (user as any).companyName,
-      } : null,
+      description: transaction.description ?? undefined,
+      user: party
+        ? {
+            id: party.id,
+            email: '',
+            companyName: adv ? (adv.companyName ?? undefined) : undefined,
+          }
+        : null,
       createdAt: transaction.createdAt,
-      completedAt: transaction.completedAt,
-      failedAt: transaction.failedAt,
-      failureReason: transaction.failureReason,
+      completedAt: transaction.completedAt ?? undefined,
+      failedAt: transaction.failedAt ?? undefined,
+      failureReason: transaction.failureReason ?? undefined,
     };
   }
 
@@ -512,13 +641,37 @@ export class AdminFinanceService {
   /**
    * Finance dashboard overview
    */
-  async getFinanceOverview(period: string, adminId: string) {
-    const [completedVolume, pendingWithdrawals] = await Promise.all([
+  async getFinanceOverview(period: string, adminId: string): Promise<FinanceOverviewResponse> {
+    const bounds = overviewPeriodBounds(period);
+    const platformRevenueWhere: Prisma.TransactionWhereInput = {
+      status: TransactionStatus.completed,
+      type: { in: [TransactionType.platform_fee, TransactionType.commission] },
+      ...(bounds
+        ? {
+            OR: [
+              { completedAt: { gte: bounds.gte, lte: bounds.lte } },
+              { completedAt: null, createdAt: { gte: bounds.gte, lte: bounds.lte } },
+            ],
+          }
+        : {}),
+    };
+
+    const [completedVolume, pendingWithdrawals, platformRevenue, pendingRecharges] = await Promise.all([
       prisma.transaction.aggregate({
         where: { status: TransactionStatus.completed },
         _sum: { amount: true },
       }),
       prisma.withdrawal.count({ where: { status: 'pending' } }),
+      prisma.transaction.aggregate({
+        where: platformRevenueWhere,
+        _sum: { amount: true },
+      }),
+      prisma.transaction.count({
+        where: {
+          type: TransactionType.recharge,
+          status: { in: [TransactionStatus.pending, TransactionStatus.processing] },
+        },
+      }),
     ]);
 
     await logAdminAction({
@@ -534,17 +687,20 @@ export class AdminFinanceService {
       period,
       total_completed_volume: decimalToNumber(completedVolume._sum?.amount),
       pending_withdrawals: pendingWithdrawals,
+      monthly_revenue: decimalToNumber(platformRevenue._sum?.amount),
+      pending_recharges: pendingRecharges,
+      pending_invoices: 0,
     };
   }
 
   /**
    * Deposit records (recharge transactions)
    */
-  async getDeposits(filters: TransactionListFilters, adminId: string) {
-    return this.getTransactionList(
-      { ...filters, type: TransactionType.recharge },
-      adminId
-    );
+  async getDeposits(
+    filters: TransactionListFilters,
+    adminId: string
+  ): Promise<PaginationResponse<TransactionResponse>> {
+    return this.getTransactionList({ ...filters, type: TransactionType.recharge }, adminId);
   }
 
   /**
@@ -553,31 +709,36 @@ export class AdminFinanceService {
   async getWithdrawals(
     filters: TransactionListFilters & { kolId?: string },
     adminId: string
-  ) {
-    const {
-      page = 1,
-      limit = 20,
-      status,
-      kolId,
-      minAmount,
-      maxAmount,
-      createdAfter,
-      createdBefore,
-    } = filters;
+  ): Promise<PaginationResponse<WithdrawalResponse>> {
+    const { page = 1, limit = 20, status, kolId, minAmount, maxAmount, createdAfter, createdBefore } = filters;
 
     const skip = (page - 1) * limit;
-    const where: any = {};
-    if (status) where.status = status;
-    if (kolId) where.kolId = kolId;
+    const where: Prisma.WithdrawalWhereInput = {};
+    if (status) {
+      where.status = status;
+    }
+    if (kolId) {
+      where.kolId = kolId;
+    }
     if (minAmount !== undefined || maxAmount !== undefined) {
-      where.amount = {};
-      if (minAmount !== undefined) where.amount.gte = minAmount;
-      if (maxAmount !== undefined) where.amount.lte = maxAmount;
+      const amount: Prisma.DecimalFilter = {};
+      if (minAmount !== undefined) {
+        amount.gte = new Prisma.Decimal(minAmount);
+      }
+      if (maxAmount !== undefined) {
+        amount.lte = new Prisma.Decimal(maxAmount);
+      }
+      where.amount = amount;
     }
     if (createdAfter || createdBefore) {
-      where.createdAt = {};
-      if (createdAfter) where.createdAt.gte = new Date(createdAfter);
-      if (createdBefore) where.createdAt.lte = new Date(createdBefore);
+      const createdAt: Prisma.DateTimeFilter = {};
+      if (createdAfter) {
+        createdAt.gte = new Date(createdAfter);
+      }
+      if (createdBefore) {
+        createdAt.lte = new Date(createdBefore);
+      }
+      where.createdAt = createdAt;
     }
 
     const [total, withdrawals] = await Promise.all([
@@ -631,25 +792,27 @@ export class AdminFinanceService {
     note: string | undefined,
     adminId: string,
     adminEmail: string
-  ) {
+  ): Promise<ApproveWithdrawalResponse | RejectWithdrawalResponse> {
     if (action === 'approve') {
       return this.approveWithdrawal(withdrawalId, { note }, adminId, adminEmail);
     }
-    return this.rejectWithdrawal(
-      withdrawalId,
-      { reason: reason || '审核未通过', note },
-      adminId,
-      adminEmail
-    );
+    return this.rejectWithdrawal(withdrawalId, { reason: reason || '审核未通过', note }, adminId, adminEmail);
   }
 
   /**
-   * Export finance CSV (minimal placeholder rows)
+   * Export finance CSV (UTF-8 BOM for Excel)
    */
   async exportFinance(
     body: { type: string; startDate: string; endDate: string; format?: string },
     adminId: string
-  ) {
+  ): Promise<{ csvData: string; filenameBase: string }> {
+    const start = new Date(body.startDate);
+    const end = new Date(body.endDate);
+    end.setHours(23, 59, 59, 999);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+      throw new ApiError('日期范围无效', 400, 'INVALID_DATE_RANGE');
+    }
+
     await logAdminAction({
       adminId,
       action: 'export',
@@ -658,33 +821,148 @@ export class AdminFinanceService {
       requestPath: '/api/v1/admin/finance/export',
       status: 'success',
     });
-    const header = 'type,startDate,endDate\n';
-    const row = `${body.type},${body.startDate},${body.endDate}\n`;
-    return { csvData: header + row };
+
+    const lines: string[] = [];
+
+    if (body.type === 'withdrawals') {
+      const rows = await prisma.withdrawal.findMany({
+        where: { createdAt: { gte: start, lte: end } },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          kol: { include: { user: { select: { email: true, nickname: true } } } },
+        },
+      });
+      lines.push(
+        ['withdrawal_no', 'kol_email', 'amount', 'currency', 'status', 'created_at', 'account_name', 'account_number']
+          .map(csvCell)
+          .join(',')
+      );
+      for (const row of rows) {
+        lines.push(
+          [
+            row.withdrawalNo,
+            row.kol.user?.email ?? '',
+            row.amount.toString(),
+            row.currency,
+            row.status,
+            row.createdAt.toISOString(),
+            row.accountName,
+            row.accountNumber,
+          ]
+            .map(csvCell)
+            .join(',')
+        );
+      }
+    } else {
+      const typeWhere: Prisma.TransactionWhereInput = {
+        createdAt: { gte: start, lte: end },
+      };
+      if (body.type === 'deposits') {
+        typeWhere.type = TransactionType.recharge;
+      }
+      // transactions | all：区间内全部流水（all 与 transactions 一致，提现请单独选 withdrawals）
+      const txs = await prisma.transaction.findMany({
+        where: typeWhere,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          advertiser: { select: { companyName: true } },
+          kol: { select: { platformUsername: true } },
+        },
+      });
+      lines.push(
+        ['transaction_no', 'type', 'amount', 'currency', 'status', 'created_at', 'completed_at', 'party', 'description']
+          .map(csvCell)
+          .join(',')
+      );
+      for (const t of txs) {
+        const party = t.advertiser?.companyName ?? t.kol?.platformUsername ?? '';
+        const desc = (t.description ?? '').replace(/\r?\n/g, ' ');
+        lines.push(
+          [
+            t.transactionNo,
+            t.type,
+            t.amount.toString(),
+            t.currency,
+            t.status,
+            t.createdAt.toISOString(),
+            t.completedAt?.toISOString() ?? '',
+            party,
+            desc,
+          ]
+            .map(csvCell)
+            .join(',')
+        );
+      }
+    }
+
+    const csvData = `\uFEFF${lines.join('\n')}`;
+    const filenameBase = `finance_${body.type}_${body.startDate}_${body.endDate}`;
+    return { csvData, filenameBase };
   }
 
   /**
-   * Confirm a pending recharge transaction
+   * Confirm a pending recharge transaction（入账广告主余额 + totalRecharged）
    */
   async confirmRecharge(
     transactionId: string,
     note: string | undefined,
     adminId: string,
     adminEmail: string
-  ) {
-    const tx = await prisma.transaction.findUnique({ where: { id: transactionId } });
+  ): Promise<{ id: string; status: string }> {
+    const tx = await prisma.transaction.findUnique({
+      where: { id: transactionId },
+      include: {
+        advertiser: { select: { id: true, userId: true } },
+      },
+    });
     if (!tx) {
       throw new ApiError('交易不存在', 404, 'TRANSACTION_NOT_FOUND');
     }
+    if (tx.type !== TransactionType.recharge) {
+      throw new ApiError('仅支持充值类交易', 400, 'INVALID_TRANSACTION_TYPE');
+    }
+    if (tx.status === TransactionStatus.completed) {
+      throw new ApiError('该充值已入账', 400, 'RECHARGE_ALREADY_COMPLETED');
+    }
+    if (tx.status !== TransactionStatus.pending && tx.status !== TransactionStatus.processing) {
+      throw new ApiError('当前状态不可确认入账', 400, 'INVALID_TRANSACTION_STATUS');
+    }
+    if (!tx.advertiserId || !tx.advertiser) {
+      throw new ApiError('缺少广告主关联', 400, 'ADVERTISER_REQUIRED');
+    }
 
-    const updated = await prisma.transaction.update({
-      where: { id: transactionId },
-      data: {
-        status: TransactionStatus.completed,
-        completedAt: new Date(),
-        description: note ? `${tx.description ?? ''} [确认] ${note}`.trim() : tx.description,
-      },
+    const amount = decimalToNumber(tx.amount);
+
+    await prisma.$transaction(async (db) => {
+      const adv = await db.advertiser.findUnique({ where: { id: tx.advertiserId! } });
+      if (!adv) {
+        throw new ApiError('广告主不存在', 404, 'ADVERTISER_NOT_FOUND');
+      }
+      const balanceBefore = decimalToNumber(adv.walletBalance);
+      const balanceAfter = balanceBefore + amount;
+
+      await db.transaction.update({
+        where: { id: transactionId },
+        data: {
+          status: TransactionStatus.completed,
+          completedAt: new Date(),
+          balanceBefore: new Prisma.Decimal(balanceBefore),
+          balanceAfter: new Prisma.Decimal(balanceAfter),
+          description: note ? `${tx.description ?? ''} [管理员确认] ${note}`.trim() : tx.description,
+        },
+      });
+
+      await db.advertiser.update({
+        where: { id: adv.id },
+        data: {
+          walletBalance: new Prisma.Decimal(balanceAfter),
+          totalRecharged: { increment: amount },
+        },
+      });
     });
+
+    await cacheService.delete(`advertiser:user:${tx.advertiser.userId}`);
+    await cacheService.delete(`advertiser:${tx.advertiser.id}`);
 
     await logAdminAction({
       adminId,
@@ -697,7 +975,7 @@ export class AdminFinanceService {
       status: 'success',
     });
 
-    return { id: updated.id, status: updated.status };
+    return { id: transactionId, status: TransactionStatus.completed };
   }
 
   /**
@@ -711,7 +989,7 @@ export class AdminFinanceService {
     note: string | undefined,
     adminId: string,
     adminEmail: string
-  ) {
+  ): Promise<{ userId: string; new_balance: number }> {
     const advertiser = await prisma.advertiser.findUnique({ where: { userId } });
     if (!advertiser) {
       throw new ApiError('未找到广告主账户', 404, 'ADVERTISER_NOT_FOUND');
@@ -759,7 +1037,8 @@ export class AdminFinanceService {
     return { userId, new_balance: after };
   }
 
-  private formatWithdrawalResponse(withdrawal: any): WithdrawalResponse {
+  private formatWithdrawalResponse(withdrawal: WithdrawalDetailRow): WithdrawalResponse {
+    const meta = withdrawalMetaNotes(withdrawal.metadata);
     return {
       id: withdrawal.id,
       withdrawalNo: withdrawal.withdrawalNo,
@@ -778,17 +1057,17 @@ export class AdminFinanceService {
       paymentMethod: withdrawal.paymentMethod,
       accountName: withdrawal.accountName,
       accountNumber: withdrawal.accountNumber,
-      bankName: withdrawal.bankName,
+      bankName: withdrawal.bankName ?? undefined,
       status: withdrawal.status,
       availableBalance: Number(withdrawal.kol.availableBalance),
       pendingBalance: Number(withdrawal.kol.pendingBalance),
       totalEarnings: Number(withdrawal.kol.totalEarnings),
-      note: (withdrawal.metadata as any)?.note,
-      adminNote: (withdrawal.metadata as any)?.adminNote,
+      note: meta.note,
+      adminNote: meta.adminNote,
       submittedAt: withdrawal.createdAt,
       createdAt: withdrawal.createdAt,
-      processedAt: withdrawal.processedAt,
-      failureReason: withdrawal.failureReason,
+      processedAt: withdrawal.processedAt ?? undefined,
+      failureReason: withdrawal.failureReason ?? undefined,
     };
   }
 }

@@ -1,7 +1,9 @@
+import { Prisma, type ContentModeration } from '@prisma/client';
 import prisma from '../../config/database';
 import { logger } from '../../utils/logger';
 import { ApiError } from '../../middleware/errorHandler';
 import { logAdminAction } from './audit.service';
+import type { PaginationResponse } from '../../types';
 
 // Content list filters
 export interface ContentListFilters {
@@ -61,29 +63,74 @@ export interface ContentResponse {
   updatedAt: Date;
 }
 
+/** 待审 / 列表分页结构（与全局 PaginationResponse 一致） */
+export type ContentPaginatedList = PaginationResponse<ContentResponse>;
+
+export interface ContentReviewHistoryResult {
+  items: ContentModeration[];
+  pagination: {
+    page: number;
+    page_size: number;
+    total: number;
+    total_pages: number;
+    has_next: boolean;
+    has_prev: boolean;
+  };
+}
+
+export interface ApproveContentResult {
+  id: string;
+  status: string;
+  reviewedAt: Date | null;
+  reviewedBy: string;
+}
+
+export interface RejectContentResult {
+  id: string;
+  status: string;
+  rejectedAt: Date;
+  rejectedBy: string;
+  rejectionReason: string;
+  requireRevision?: boolean;
+  revisionNote?: string;
+}
+
+export type BatchVerifyResultItem =
+  | {
+      contentId: string;
+      success: true;
+      action: 'approve' | 'reject';
+      result: ApproveContentResult | RejectContentResult;
+    }
+  | { contentId: string; success: false; error: string };
+
+export interface BatchVerifyResult {
+  total: number;
+  successCount: number;
+  failedCount: number;
+  results: BatchVerifyResultItem[];
+}
+
 export class AdminContentService {
   /**
    * Get pending content for review
    */
-  async getPendingContent(filters: {
-    page?: number;
-    limit?: number;
-    contentType?: string;
-    sourceType?: string;
-    priority?: string;
-  }, adminId: string) {
-    const {
-      page = 1,
-      limit = 20,
-      contentType,
-      sourceType,
-      priority,
-    } = filters;
+  async getPendingContent(
+    filters: {
+      page?: number;
+      limit?: number;
+      contentType?: string;
+      sourceType?: string;
+      priority?: string;
+    },
+    adminId: string
+  ): Promise<ContentPaginatedList> {
+    const { page = 1, limit = 20, contentType, sourceType, priority } = filters;
 
     const skip = (page - 1) * limit;
     const take = limit;
 
-    const where: any = {
+    const where: Prisma.ContentModerationWhereInput = {
       status: 'pending',
     };
 
@@ -135,7 +182,7 @@ export class AdminContentService {
   /**
    * Get content list with filters
    */
-  async getContentList(filters: ContentListFilters, _adminId: string) {
+  async getContentList(filters: ContentListFilters, _adminId: string): Promise<ContentPaginatedList> {
     const {
       page = 1,
       limit = 20,
@@ -150,7 +197,7 @@ export class AdminContentService {
     const skip = (page - 1) * limit;
     const take = limit;
 
-    const where: any = {};
+    const where: Prisma.ContentModerationWhereInput = {};
 
     if (contentType) {
       where.contentType = contentType;
@@ -174,7 +221,7 @@ export class AdminContentService {
         where,
         skip,
         take,
-        orderBy: { [sort]: order },
+        orderBy: { [sort]: order } as Prisma.ContentModerationOrderByWithRelationInput,
       }),
     ]);
 
@@ -221,7 +268,12 @@ export class AdminContentService {
   /**
    * Approve content
    */
-  async approveContent(contentId: string, data: ApproveContentRequest, adminId: string, adminEmail: string) {
+  async approveContent(
+    contentId: string,
+    data: ApproveContentRequest,
+    adminId: string,
+    adminEmail: string
+  ): Promise<ApproveContentResult> {
     const content = await prisma.contentModeration.findUnique({
       where: { id: contentId },
     });
@@ -273,7 +325,12 @@ export class AdminContentService {
   /**
    * Reject content
    */
-  async rejectContent(contentId: string, data: RejectContentRequest, adminId: string, adminEmail: string) {
+  async rejectContent(
+    contentId: string,
+    data: RejectContentRequest,
+    adminId: string,
+    adminEmail: string
+  ): Promise<RejectContentResult> {
     const content = await prisma.contentModeration.findUnique({
       where: { id: contentId },
     });
@@ -329,7 +386,12 @@ export class AdminContentService {
   /**
    * Delete content
    */
-  async deleteContent(contentId: string, data: { reason: string; notifyUser?: boolean; banUser?: boolean }, adminId: string, adminEmail: string) {
+  async deleteContent(
+    contentId: string,
+    data: { reason: string; notifyUser?: boolean; banUser?: boolean },
+    adminId: string,
+    adminEmail: string
+  ): Promise<{ id: string; deleted: boolean }> {
     const content = await prisma.contentModeration.findUnique({
       where: { id: contentId },
     });
@@ -368,35 +430,37 @@ export class AdminContentService {
   /**
    * Format content response
    */
-  private formatContentResponse(content: any): ContentResponse {
+  private formatContentResponse(content: ContentModeration): ContentResponse {
     return {
       id: content.id,
       contentType: content.contentType,
       sourceType: content.sourceType,
       title: content.title,
-      description: content.description,
-      thumbnailUrl: content.thumbnailUrl,
+      description: content.description ?? undefined,
+      thumbnailUrl: content.thumbnailUrl ?? undefined,
       contentUrl: content.contentUrl,
-      duration: content.duration,
+      duration: content.duration ?? undefined,
       submitter: {
         id: content.submitterId,
         name: content.submitterName,
-        platform: (content as any).platform,
+        platform: undefined,
       },
-      relatedOrderId: content.relatedOrderId,
-      relatedOrder: content.relatedOrderId ? {
-        id: (content as any).relatedOrderId,
-        orderNo: (content as any).relatedOrderNo,
-        campaignTitle: (content as any).campaignTitle,
-      } : null,
+      relatedOrderId: content.relatedOrderId ?? undefined,
+      relatedOrder: content.relatedOrderId
+        ? {
+            id: content.relatedOrderId,
+            orderNo: '',
+            campaignTitle: undefined,
+          }
+        : null,
       priority: content.priority,
       status: content.status,
-      aiScore: content.aiScore,
+      aiScore: content.aiScore ?? undefined,
       aiFlags: content.aiFlags,
-      reviewNotes: content.reviewNotes,
-      rejectionReason: content.rejectionReason,
-      reviewedBy: content.reviewedBy,
-      reviewedAt: content.reviewedAt,
+      reviewNotes: content.reviewNotes ?? undefined,
+      rejectionReason: content.rejectionReason ?? undefined,
+      reviewedBy: content.reviewedBy ?? undefined,
+      reviewedAt: content.reviewedAt ?? undefined,
       submittedAt: content.submittedAt,
       createdAt: content.createdAt,
       updatedAt: content.updatedAt,
@@ -406,17 +470,16 @@ export class AdminContentService {
   /**
    * Get review history
    */
-  async getReviewHistory(filters: { page?: number; limit?: number; status?: string }, _adminId: string) {
-    const {
-      page = 1,
-      limit = 20,
-      status,
-    } = filters;
+  async getReviewHistory(
+    filters: { page?: number; limit?: number; status?: string },
+    _adminId: string
+  ): Promise<ContentReviewHistoryResult> {
+    const { page = 1, limit = 20, status } = filters;
 
     const skip = (page - 1) * limit;
     const take = limit;
 
-    const where: any = {};
+    const where: Prisma.ContentModerationWhereInput = {};
     if (status) {
       where.status = status;
     }
@@ -438,6 +501,8 @@ export class AdminContentService {
         page_size: limit,
         total,
         total_pages: Math.ceil(total / limit),
+        has_next: page * limit < total,
+        has_prev: page > 1,
       },
     };
   }
@@ -445,7 +510,12 @@ export class AdminContentService {
   /**
    * Verify content (alias for approve)
    */
-  async verifyContent(contentId: string, data: ApproveContentRequest, adminId: string, adminEmail: string) {
+  async verifyContent(
+    contentId: string,
+    data: ApproveContentRequest,
+    adminId: string,
+    adminEmail: string
+  ): Promise<ApproveContentResult> {
     return this.approveContent(contentId, data, adminId, adminEmail);
   }
 
@@ -459,8 +529,8 @@ export class AdminContentService {
     note?: string,
     adminId?: string,
     adminEmail?: string
-  ) {
-    const results = [];
+  ): Promise<BatchVerifyResult> {
+    const results: BatchVerifyResultItem[] = [];
     let successCount = 0;
     let failedCount = 0;
 
@@ -471,7 +541,12 @@ export class AdminContentService {
           results.push({ contentId, success: true, action: 'approve', result });
           successCount++;
         } else {
-          const result = await this.rejectContent(contentId, { reason: reason || '批量拒绝' }, adminId || 'system', adminEmail || 'system');
+          const result = await this.rejectContent(
+            contentId,
+            { reason: reason || '批量拒绝' },
+            adminId || 'system',
+            adminEmail || 'system'
+          );
           results.push({ contentId, success: true, action: 'reject', result });
           successCount++;
         }

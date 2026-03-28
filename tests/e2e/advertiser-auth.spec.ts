@@ -6,8 +6,8 @@ test.describe('广告主认证流程', () => {
     const testEmail = `advertiser${timestamp}@test.com`;
     const testPassword = 'TestPass123!';
 
-    // 1. 访问首页
-    await page.goto('http://localhost:3000');
+    // 1. 访问首页（使用 playwright baseURL，默认与 Vite 4173 一致）
+    await page.goto('/');
     await expect(page).toHaveTitle(/AIAds/);
 
     // 2. 点击注册
@@ -52,7 +52,7 @@ test.describe('广告主认证流程', () => {
     const testPassword = 'TestPass123!';
 
     // 注册
-    await page.goto('http://localhost:3000/register');
+    await page.goto('/register');
     await page.click('text=广告主');
     await page.click('button:has-text("下一步")');
     await page.fill('label:has-text("邮箱") input', testEmail);
@@ -70,7 +70,7 @@ test.describe('广告主认证流程', () => {
   });
 
   test('应该显示表单验证错误', async ({ page }) => {
-    await page.goto('http://localhost:3000/register');
+    await page.goto('/register');
 
     // 选择角色
     await page.click('text=广告主');
@@ -85,7 +85,7 @@ test.describe('广告主认证流程', () => {
   });
 
   test('应该验证密码强度', async ({ page }) => {
-    await page.goto('http://localhost:3000/register');
+    await page.goto('/register');
 
     // 选择角色
     await page.click('text=广告主');

@@ -1,4 +1,6 @@
+import { Prisma, type Campaign, type Kol, type KolPlatform } from '@prisma/client';
 import prisma from '../config/database';
+import { errors } from '../middleware/errorHandler';
 import { KolResponse } from '../types';
 
 export interface KolRecommendation {
@@ -23,17 +25,19 @@ export class AiMatchingService {
   /**
    * Recommend KOLs based on campaign requirements
    */
-  async recommendKols(
-    campaignId: string,
-    limit: number = 20
-  ): Promise<KolRecommendation[]> {
-    // Get campaign details
+  async recommendKols(campaignId: string, advertiserUserId: string, limit: number = 20): Promise<KolRecommendation[]> {
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
+      include: {
+        advertiser: { select: { userId: true } },
+      },
     });
 
     if (!campaign) {
-      throw new Error('Campaign not found');
+      throw errors.notFound('活动不存在');
+    }
+    if (campaign.advertiser.userId !== advertiserUserId) {
+      throw errors.forbidden('无权查看该活动的 KOL 推荐');
     }
 
     // Build matching criteria from campaign
@@ -62,29 +66,27 @@ export class AiMatchingService {
   /**
    * Get candidate KOLs based on basic criteria
    */
-  private async getCandidateKols(
-    criteria: MatchingCriteria,
-    limit: number
-  ): Promise<any[]> {
-    const where: any = {
+  private async getCandidateKols(criteria: MatchingCriteria, limit: number): Promise<Kol[]> {
+    const where: Prisma.KolWhereInput = {
       status: 'active',
       verified: true,
     };
 
     // Platform filter
     if (criteria.platform) {
-      where.platform = criteria.platform;
+      where.platform = criteria.platform as KolPlatform;
     }
 
     // Followers range
     if (criteria.min_followers !== undefined || criteria.max_followers !== undefined) {
-      where.followers = {};
+      const fr: Prisma.IntFilter = {};
       if (criteria.min_followers !== undefined) {
-        where.followers.gte = criteria.min_followers;
+        fr.gte = criteria.min_followers;
       }
       if (criteria.max_followers !== undefined) {
-        where.followers.lte = criteria.max_followers;
+        fr.lte = criteria.max_followers;
       }
+      where.followers = fr;
     }
 
     // Engagement rate filter
@@ -114,10 +116,7 @@ export class AiMatchingService {
   /**
    * Score a KOL based on campaign match
    */
-  private scoreKol(
-    kol: any,
-    campaign: any
-  ): KolRecommendation {
+  private scoreKol(kol: Kol, campaign: Campaign): KolRecommendation {
     let score = 0;
     const reasons: string[] = [];
 
@@ -172,7 +171,7 @@ export class AiMatchingService {
   /**
    * Calculate follower score (0-30 points)
    */
-  private calculateFollowerScore(followers: number, campaign: any): number {
+  private calculateFollowerScore(followers: number, campaign: Campaign): number {
     const minFollowers = campaign.minFollowers || 0;
     const maxFollowers = campaign.maxFollowers || 1000000;
     const targetMin = minFollowers;
@@ -196,9 +195,9 @@ export class AiMatchingService {
   /**
    * Calculate engagement rate score (0-25 points)
    */
-  private calculateEngagementScore(engagementRate: number, campaign: any): number {
+  private calculateEngagementScore(engagementRate: number, campaign: Campaign): number {
     const minEngagement = campaign.minEngagementRate?.toNumber() || 0.01;
-    
+
     if (engagementRate >= minEngagement * 2) {
       return 25; // Excellent
     } else if (engagementRate >= minEngagement * 1.5) {
@@ -213,7 +212,7 @@ export class AiMatchingService {
   /**
    * Calculate category match score (0-20 points)
    */
-  private calculateCategoryScore(kolCategory: string, requiredCategories: string[]): number {
+  private calculateCategoryScore(kolCategory: string | null, requiredCategories: string[]): number {
     if (!requiredCategories || requiredCategories.length === 0) {
       return 10; // No preference
     }
@@ -234,7 +233,7 @@ export class AiMatchingService {
   /**
    * Calculate region match score (0-15 points)
    */
-  private calculateRegionScore(kolCountry: string, targetCountries: string[]): number {
+  private calculateRegionScore(kolCountry: string | null, targetCountries: string[]): number {
     if (!targetCountries || targetCountries.length === 0) {
       return 10; // No preference
     }
@@ -253,7 +252,7 @@ export class AiMatchingService {
   /**
    * Calculate historical performance score (0-10 points)
    */
-  private calculatePerformanceScore(kol: any): number {
+  private calculatePerformanceScore(kol: Kol): number {
     let score = 0;
 
     // Completed orders score (0-5 points)
@@ -266,7 +265,7 @@ export class AiMatchingService {
     }
 
     // Rating score (0-5 points)
-    const avgRating = kol.avgRating?.toNumber() || 0;
+    const avgRating = kol.avgRating.toNumber() || 0;
     if (avgRating >= 4.8) {
       score += 5;
     } else if (avgRating >= 4.5) {
@@ -281,21 +280,21 @@ export class AiMatchingService {
   /**
    * Format KOL response
    */
-  private formatKolResponse(kol: any): KolResponse {
+  private formatKolResponse(kol: Kol): KolResponse {
     return {
       id: kol.id,
       user_id: kol.userId,
       platform: kol.platform,
       platform_id: kol.platformId,
       platform_username: kol.platformUsername,
-      platform_display_name: kol.platformDisplayName,
-      platform_avatar_url: kol.platformAvatarUrl,
-      bio: kol.bio,
-      category: kol.category,
-      subcategory: kol.subcategory,
-      country: kol.country,
-      region: kol.region,
-      city: kol.city,
+      platform_display_name: kol.platformDisplayName ?? undefined,
+      platform_avatar_url: kol.platformAvatarUrl ?? undefined,
+      bio: kol.bio ?? undefined,
+      category: kol.category ?? undefined,
+      subcategory: kol.subcategory ?? undefined,
+      country: kol.country ?? undefined,
+      region: kol.region ?? undefined,
+      city: kol.city ?? undefined,
       followers: kol.followers,
       following: kol.following,
       total_videos: kol.totalVideos,

@@ -23,7 +23,7 @@ describe('Admin KOLs API Tests', () => {
     testRoleId = role.id;
 
     const email = `admin_kols_${Date.now()}@aiads.com`;
-    
+
     const admin = await prisma.admin.create({
       data: {
         email,
@@ -35,12 +35,10 @@ describe('Admin KOLs API Tests', () => {
     });
     testAdminId = admin.id;
 
-    const loginRes = await request(app)
-      .post('/api/v1/admin/auth/login')
-      .send({
-        username: email,
-        password: 'AdminPass123!',
-      });
+    const loginRes = await request(app).post('/api/v1/admin/auth/login').send({
+      username: email,
+      password: 'AdminPass123!',
+    });
 
     adminAccessToken = loginRes.body.data.tokens.access_token;
   };
@@ -118,7 +116,13 @@ describe('Admin KOLs API Tests', () => {
     });
 
     it('应该只返回 pending 状态的 KOL', async () => {
-      const items = response.body.data.items || []; items.forEach((item: any) => {
+      const response = await request(app)
+        .get('/api/v1/admin/kols/pending')
+        .set('Authorization', `Bearer ${adminAccessToken}`)
+        .expect(200);
+
+      const items = response.body.data.items || [];
+      items.forEach((item: { status?: string }) => {
         expect(item.status).toBe('pending');
       });
     });
@@ -133,9 +137,7 @@ describe('Admin KOLs API Tests', () => {
     });
 
     it('应该拒绝未认证请求', async () => {
-      const response = await request(app)
-        .get('/api/v1/admin/kols/pending')
-        .expect(401);
+      const response = await request(app).get('/api/v1/admin/kols/pending').expect(401);
 
       expect(response.body.success).toBe(false);
     });
@@ -160,7 +162,8 @@ describe('Admin KOLs API Tests', () => {
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      const items = response.body.data.items || []; items.forEach((item: any) => {
+      const items = response.body.data.items || [];
+      items.forEach((item: any) => {
         expect(item.status).toBe('pending');
       });
     });
@@ -172,7 +175,8 @@ describe('Admin KOLs API Tests', () => {
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      const items = response.body.data.items || []; items.forEach((item: any) => {
+      const items = response.body.data.items || [];
+      items.forEach((item: any) => {
         expect(item.platform).toBe('tiktok');
       });
     });
@@ -184,7 +188,8 @@ describe('Admin KOLs API Tests', () => {
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      const items = response.body.data.items || []; items.forEach((item: any) => {
+      const items = response.body.data.items || [];
+      items.forEach((item: any) => {
         expect(item.followers).toBeGreaterThanOrEqual(5000);
       });
     });

@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { adminKolsService } from '../../services/admin/kols.service';
 import { asyncHandler } from '../../middleware/errorHandler';
-import { validateBody } from '../../middleware/validation';
+import { requireAdmin } from '../../middleware/adminAuth';
+import { parseBodyOrRespond } from '../../middleware/validation';
 import { ApiResponse } from '../../types';
 import { z } from 'zod';
 
@@ -45,7 +46,7 @@ export class AdminKolsController {
       platform: platform as string,
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminKolsService.getPendingKols(filters, adminId);
 
     const response: ApiResponse<typeof result> = {
@@ -61,18 +62,7 @@ export class AdminKolsController {
    * Get KOL list with filters
    */
   getKolList = asyncHandler(async (req: Request, res: Response) => {
-    const {
-      page,
-      limit,
-      status,
-      platform,
-      category,
-      min_followers,
-      max_followers,
-      verified,
-      sort,
-      order,
-    } = req.query;
+    const { page, limit, status, platform, category, min_followers, max_followers, verified, sort, order } = req.query;
 
     const filters = {
       page: page ? parseInt(page as string, 10) : 1,
@@ -82,14 +72,12 @@ export class AdminKolsController {
       category: category as string,
       minFollowers: min_followers ? parseInt(min_followers as string, 10) : undefined,
       maxFollowers: max_followers ? parseInt(max_followers as string, 10) : undefined,
-      verified: verified === 'true' || verified === 'false'
-        ? verified === 'true'
-        : undefined,
+      verified: verified === 'true' || verified === 'false' ? verified === 'true' : undefined,
       sort: sort as string,
       order: (order as 'asc' | 'desc') || 'desc',
     };
 
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
     const result = await adminKolsService.getKolList(filters, adminId);
 
     const response: ApiResponse<typeof result> = {
@@ -106,7 +94,7 @@ export class AdminKolsController {
    */
   getKolById = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminKolsService.getKolById(id.toString(), adminId);
 
@@ -123,11 +111,12 @@ export class AdminKolsController {
    * Verify KOL (admin verification)
    */
   verifyKol = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(verifyKolSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(verifyKolSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminKolsService.verifyKol(id.toString(), req.body, adminId, adminEmail);
 
@@ -145,11 +134,12 @@ export class AdminKolsController {
    * Rate KOL
    */
   rateKol = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(rateKolSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(rateKolSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminKolsService.rateKol(id.toString(), req.body, adminId, adminEmail);
 
@@ -167,11 +157,12 @@ export class AdminKolsController {
    * Add KOL to blacklist
    */
   blacklistKol = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(blacklistKolSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(blacklistKolSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminKolsService.blacklistKol(id.toString(), req.body, adminId, adminEmail);
 
@@ -190,8 +181,7 @@ export class AdminKolsController {
    */
   removeFromBlacklist = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminKolsService.removeFromBlacklist(id.toString(), adminId, adminEmail);
 
@@ -209,11 +199,12 @@ export class AdminKolsController {
    * Approve KOL
    */
   approveKol = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(approveKolSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(approveKolSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminKolsService.approveKol(id.toString(), req.body, adminId, adminEmail);
 
@@ -231,11 +222,12 @@ export class AdminKolsController {
    * Reject KOL
    */
   rejectKol = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(rejectKolSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(rejectKolSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminKolsService.rejectKol(id.toString(), req.body, adminId, adminEmail);
 
@@ -258,11 +250,12 @@ export class AdminKolsController {
       durationDays: z.number().min(1),
     });
 
-    validateBody(suspendSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(suspendSchema, req, res)) {
+      return;
+    }
 
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminKolsService.suspendKol(id.toString(), req.body, adminId, adminEmail);
 
@@ -281,8 +274,7 @@ export class AdminKolsController {
    */
   unsuspendKol = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const adminId = req.admin?.id!;
-    const adminEmail = req.admin?.email!;
+    const { id: adminId, email: adminEmail } = requireAdmin(req);
 
     const result = await adminKolsService.unsuspendKol(id.toString(), adminId, adminEmail);
 
@@ -301,7 +293,7 @@ export class AdminKolsController {
    */
   syncKolData = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const adminId = req.admin?.id!;
+    const adminId = requireAdmin(req).id;
 
     const result = await adminKolsService.syncKolData(id.toString(), adminId);
 

@@ -123,7 +123,7 @@ export class InstagramService {
         throw new ApiError('Failed to get access token from Instagram', 500, 'INSTAGRAM_TOKEN_ERROR');
       }
 
-      const data = await response.json() as InstagramTokenResponse;
+      const data = (await response.json()) as InstagramTokenResponse;
 
       // Exchange for long-lived token
       const longLivedToken = await this.exchangeForLongLivedToken(data.access_token);
@@ -171,7 +171,7 @@ export class InstagramService {
         throw new ApiError('Failed to exchange for long-lived token', 500, 'INSTAGRAM_TOKEN_EXCHANGE_ERROR');
       }
 
-      const data = await response.json() as InstagramLongLivedTokenResponse;
+      const data = (await response.json()) as InstagramLongLivedTokenResponse;
       return data;
     } catch (error) {
       if (error instanceof ApiError) {
@@ -202,7 +202,7 @@ export class InstagramService {
         throw new ApiError('Failed to refresh access token', 500, 'INSTAGRAM_TOKEN_REFRESH_ERROR');
       }
 
-      const data = await response.json() as InstagramLongLivedTokenResponse;
+      const data = (await response.json()) as InstagramLongLivedTokenResponse;
 
       const now = new Date();
       const token: InstagramToken = {
@@ -230,7 +230,8 @@ export class InstagramService {
    */
   async getAccountInfo(accessToken: string): Promise<InstagramAccountInfo> {
     const params = new URLSearchParams({
-      fields: 'id,username,name,profile_picture_url,followers_count,follows_count,media_count,biography,website,is_verified,is_business_account,account_type',
+      fields:
+        'id,username,name,profile_picture_url,followers_count,follows_count,media_count,biography,website,is_verified,is_business_account,account_type',
       access_token: accessToken,
     });
 
@@ -245,7 +246,7 @@ export class InstagramService {
         throw new ApiError('Failed to get account info from Instagram', 500, 'INSTAGRAM_ACCOUNT_INFO_ERROR');
       }
 
-      const data = await response.json() as InstagramAccountInfoResponse;
+      const data = (await response.json()) as InstagramAccountInfoResponse;
 
       const accountInfo: InstagramAccountInfo = {
         accountId: data.id,
@@ -280,12 +281,10 @@ export class InstagramService {
   /**
    * Get user's media list
    */
-  async getMediaList(
-    accessToken: string,
-    maxResults: number = 30
-  ): Promise<InstagramMedia[]> {
+  async getMediaList(accessToken: string, maxResults: number = 30): Promise<InstagramMedia[]> {
     const media: InstagramMedia[] = [];
-    let nextUrl: string | null = `${this.baseUrl}/me/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count,is_video,video_url,username&limit=${Math.min(50, maxResults)}&access_token=${accessToken}`;
+    let nextUrl: string | null =
+      `${this.baseUrl}/me/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count,is_video,video_url,username&limit=${Math.min(50, maxResults)}&access_token=${accessToken}`;
 
     try {
       while (nextUrl && media.length < maxResults) {
@@ -299,7 +298,7 @@ export class InstagramService {
           break;
         }
 
-        const data = await response.json() as InstagramMediaListResponse;
+        const data = (await response.json()) as InstagramMediaListResponse;
 
         for (const mediaItem of data.data) {
           media.push(this.parseMediaItem(mediaItem));
@@ -340,10 +339,7 @@ export class InstagramService {
   /**
    * Get media statistics
    */
-  async getMediaStats(
-    accessToken: string,
-    mediaId: string
-  ): Promise<InstagramMediaStats> {
+  async getMediaStats(accessToken: string, mediaId: string): Promise<InstagramMediaStats> {
     const params = new URLSearchParams({
       fields: 'id,like_count,comments_count,saved,reach,impressions,engagement,video_views,play_count',
       access_token: accessToken,
@@ -360,14 +356,12 @@ export class InstagramService {
         throw new ApiError('Failed to get media statistics', 500, 'INSTAGRAM_MEDIA_STATS_ERROR');
       }
 
-      const data = await response.json() as InstagramMediaStatsResponse;
+      const data = (await response.json()) as InstagramMediaStatsResponse;
 
       // Calculate engagement rate
       const totalEngagements = (data.like_count || 0) + (data.comments_count || 0);
       const reach = data.reach || data.impressions || totalEngagements;
-      const engagementRate = reach > 0
-        ? (totalEngagements / reach) * 100
-        : 0;
+      const engagementRate = reach > 0 ? (totalEngagements / reach) * 100 : 0;
 
       const mediaStats: InstagramMediaStats = {
         mediaId,
@@ -401,10 +395,7 @@ export class InstagramService {
   /**
    * Handle OAuth callback and save token to database
    */
-  async handleCallback(
-    params: InstagramCallbackParams,
-    kolId: string
-  ): Promise<InstagramCallbackResult> {
+  async handleCallback(params: InstagramCallbackParams, kolId: string): Promise<InstagramCallbackResult> {
     try {
       // Exchange code for token
       const token = await this.getAccessToken(params.code);
@@ -574,9 +565,8 @@ export class InstagramService {
         const avgLikes = Math.round(accountInfo.followersCount * 0.03);
         const avgComments = Math.round(accountInfo.followersCount * 0.005);
         const avgShares = Math.round(accountInfo.followersCount * 0.002);
-        const engagementRate = avgLikes > 0
-          ? ((avgLikes + avgComments + avgShares) / accountInfo.followersCount) * 100
-          : 0;
+        const engagementRate =
+          avgLikes > 0 ? ((avgLikes + avgComments + avgShares) / accountInfo.followersCount) * 100 : 0;
 
         // Create stats history
         await prisma.kolStatsHistory.create({
@@ -596,18 +586,15 @@ export class InstagramService {
 
       // Sync media
       if (defaultOptions.syncMedia) {
-        const media = await this.getMediaList(
-          accessToken,
-          defaultOptions.maxMedia
-        );
+        const media = await this.getMediaList(accessToken, defaultOptions.maxMedia);
         result.media = media;
       }
 
       // Sync media stats (for recent media)
       if (defaultOptions.syncMediaStats && result.media) {
-        const mediaStatsPromises = result.media.slice(0, 5).map(
-          (mediaItem) => this.getMediaStats(accessToken, mediaItem.mediaId)
-        );
+        const mediaStatsPromises = result.media
+          .slice(0, 5)
+          .map((mediaItem) => this.getMediaStats(accessToken, mediaItem.mediaId));
         result.mediaStats = await Promise.all(mediaStatsPromises);
       }
 
@@ -682,10 +669,7 @@ export class InstagramService {
   /**
    * Calculate sync statistics
    */
-  calculateSyncStats(
-    accountInfo: InstagramAccountInfo,
-    mediaStats: InstagramMediaStats[]
-  ): InstagramSyncStats {
+  calculateSyncStats(accountInfo: InstagramAccountInfo, mediaStats: InstagramMediaStats[]): InstagramSyncStats {
     const totalMedia = mediaStats.length;
     const totalLikes = mediaStats.reduce((sum, s) => sum + s.likeCount, 0);
     const totalComments = mediaStats.reduce((sum, s) => sum + s.commentsCount, 0);
@@ -697,9 +681,7 @@ export class InstagramService {
     const avgReach = totalMedia > 0 ? Math.round(totalReach / totalMedia) : 0;
     const avgImpressions = totalMedia > 0 ? Math.round(totalImpressions / totalMedia) : 0;
 
-    const engagementRate = avgLikes > 0
-      ? ((avgLikes + avgComments) / accountInfo.followersCount) * 100
-      : 0;
+    const engagementRate = avgLikes > 0 ? ((avgLikes + avgComments) / accountInfo.followersCount) * 100 : 0;
 
     return {
       totalFollowers: accountInfo.followersCount,

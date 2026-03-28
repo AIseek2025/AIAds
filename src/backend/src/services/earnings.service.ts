@@ -1,13 +1,26 @@
+import { Prisma, type TransactionStatus, type TransactionType, type Withdrawal } from '@prisma/client';
 import prisma from '../config/database';
+import { sumFrozenAmountForKol } from './order-frozen.util';
 import { logger } from '../utils/logger';
 import { errors, ApiError } from '../middleware/errorHandler';
-import {
-  EarningsResponse,
-  EarningsDetail,
-  BalanceResponse,
-  WithdrawRequest,
-  WithdrawalResponse,
-} from '../types';
+import { EarningsResponse, EarningsDetail, BalanceResponse, WithdrawRequest, WithdrawalResponse } from '../types';
+
+const earningsHistoryTx = Prisma.validator<Prisma.TransactionDefaultArgs>()({
+  include: {
+    order: {
+      select: {
+        orderNo: true,
+        campaign: {
+          select: {
+            title: true,
+          },
+        },
+      },
+    },
+  },
+});
+
+type EarningsHistoryTransaction = Prisma.TransactionGetPayload<typeof earningsHistoryTx>;
 
 export class EarningsService {
   /**
@@ -76,11 +89,14 @@ export class EarningsService {
 
     const withdrawnAmount = withdrawnTransactions._sum.amount?.toNumber() || 0;
 
+    const orders_frozen_total = await sumFrozenAmountForKol(kolId);
+
     return {
       available_balance: kol.availableBalance.toNumber(),
       pending_balance: kol.pendingBalance.toNumber(),
       total_earnings: kol.totalEarnings.toNumber(),
       withdrawn_amount: withdrawnAmount,
+      orders_frozen_total,
       currency: kol.currency,
     };
   }
@@ -105,22 +121,17 @@ export class EarningsService {
       throw errors.notFound('KOL 不存在');
     }
 
-    const where: any = {
+    const where: Prisma.TransactionWhereInput = {
       kolId,
-      OR: [
-        { type: 'order_income' },
-        { type: 'withdrawal' },
-        { type: 'adjustment' },
-        { type: 'bonus' },
-      ],
+      OR: [{ type: 'order_income' }, { type: 'withdrawal' }, { type: 'adjustment' }, { type: 'bonus' }],
     };
 
     if (filters?.type) {
-      where.type = filters.type;
+      where.type = filters.type as TransactionType;
     }
 
     if (filters?.status) {
-      where.status = filters.status;
+      where.status = filters.status as TransactionStatus;
     }
 
     const [transactions, total] = await Promise.all([
@@ -129,18 +140,7 @@ export class EarningsService {
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
-        include: {
-          order: {
-            select: {
-              orderNo: true,
-              campaign: {
-                select: {
-                  title: true,
-                },
-              },
-            },
-          },
-        },
+        ...earningsHistoryTx,
       }),
       prisma.transaction.count({ where }),
     ]);
@@ -264,7 +264,7 @@ export class EarningsService {
       throw errors.notFound('KOL 不存在');
     }
 
-    const where: any = { kolId };
+    const where: Prisma.WithdrawalWhereInput = { kolId };
 
     if (filters?.status) {
       where.status = filters.status;
@@ -308,7 +308,7 @@ export class EarningsService {
 
     await prisma.$transaction(async (tx) => {
       // Update withdrawal status
-      const updateData: any = {
+      const updateData: Prisma.WithdrawalUpdateInput = {
         status: status === 'approved' ? 'processing' : 'rejected',
       };
 
@@ -425,17 +425,17 @@ export class EarningsService {
   /**
    * Format earnings detail
    */
-  private formatEarningsDetail(transaction: any): EarningsDetail {
+  private formatEarningsDetail(transaction: EarningsHistoryTransaction): EarningsDetail {
     return {
       id: transaction.id,
-      order_id: transaction.orderId,
+      order_id: transaction.orderId ?? undefined,
       order_no: transaction.order?.orderNo,
       campaign_title: transaction.order?.campaign?.title,
       type: transaction.type,
       amount: transaction.amount.toNumber(),
       currency: transaction.currency,
       status: transaction.status,
-      description: transaction.description,
+      description: transaction.description ?? undefined,
       created_at: transaction.createdAt.toISOString(),
       completed_at: transaction.completedAt?.toISOString(),
     };
@@ -444,7 +444,7 @@ export class EarningsService {
   /**
    * Format withdrawal response
    */
-  private formatWithdrawalResponse(withdrawal: any): WithdrawalResponse {
+  private formatWithdrawalResponse(withdrawal: Withdrawal): WithdrawalResponse {
     return {
       id: withdrawal.id,
       kol_id: withdrawal.kolId,
@@ -456,10 +456,10 @@ export class EarningsService {
       payment_method: withdrawal.paymentMethod,
       account_name: withdrawal.accountName,
       account_number: withdrawal.accountNumber,
-      bank_name: withdrawal.bankName,
+      bank_name: withdrawal.bankName ?? undefined,
       status: withdrawal.status,
-      description: withdrawal.description,
-      failure_reason: withdrawal.failureReason,
+      description: withdrawal.description ?? undefined,
+      failure_reason: withdrawal.failureReason ?? undefined,
       processed_at: withdrawal.processedAt?.toISOString(),
       created_at: withdrawal.createdAt.toISOString(),
       updated_at: withdrawal.updatedAt.toISOString(),

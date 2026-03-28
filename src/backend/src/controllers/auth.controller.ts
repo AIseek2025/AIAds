@@ -1,8 +1,17 @@
 import { Request, Response } from 'express';
 import { authService } from '../services/auth.service';
 import { asyncHandler, errors } from '../middleware/errorHandler';
-import { validateBody } from '../middleware/validation';
-import { registerSchema, loginSchema, refreshTokenSchema, verificationCodeSchema, changePasswordSchema } from '../utils/validator';
+import { parseBodyOrRespond } from '../middleware/validation';
+import {
+  registerSchema,
+  loginSchema,
+  refreshTokenSchema,
+  sendVerificationCodeSchema,
+  verifyCodeBodySchema,
+  resetPasswordBodySchema,
+  loginEmailCodeSchema,
+  changePasswordSchema,
+} from '../utils/validator';
 import { hashPassword, verifyPassword } from '../utils/crypto';
 import { getClientIP } from '../utils/helpers';
 import { maskEmail, maskPhone, maskRealName } from '../utils/mask';
@@ -15,7 +24,9 @@ export class AuthController {
    * Register a new user
    */
   register = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(registerSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(registerSchema, req, res)) {
+      return;
+    }
 
     const result = await authService.register(req.body);
 
@@ -33,7 +44,9 @@ export class AuthController {
    * Login user
    */
   login = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(loginSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(loginSchema, req, res)) {
+      return;
+    }
 
     const result = await authService.login(req.body);
 
@@ -43,7 +56,7 @@ export class AuthController {
         where: { id: result.user.id },
         data: { lastLoginIp: getClientIP(req) },
       });
-    } catch (error) {
+    } catch {
       // Ignore errors
     }
 
@@ -61,7 +74,9 @@ export class AuthController {
    * Refresh access token
    */
   refresh = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(refreshTokenSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(refreshTokenSchema, req, res)) {
+      return;
+    }
 
     const result = await authService.refreshToken(req.body.refresh_token);
 
@@ -157,11 +172,37 @@ export class AuthController {
   });
 
   /**
+   * POST /api/v1/auth/login-email-code
+   * Login with email + 6-digit code（需先调用发送验证码，purpose=login）
+   */
+  loginEmailCode = asyncHandler(async (req: Request, res: Response) => {
+    if (!parseBodyOrRespond(loginEmailCodeSchema, req, res)) {
+      return;
+    }
+
+    const result = await authService.loginWithEmailCode(req.body.email, req.body.code, getClientIP(req));
+
+    if (result.requiresMFA) {
+      throw errors.badRequest('当前账号已开启 MFA，请使用密码登录并完成 MFA');
+    }
+
+    const response: ApiResponse<typeof result> = {
+      success: true,
+      data: result,
+      message: '登录成功',
+    };
+
+    res.status(200).json(response);
+  });
+
+  /**
    * POST /api/v1/auth/verification-code
    * Send verification code
    */
   sendVerificationCode = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(verificationCodeSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(sendVerificationCodeSchema, req, res)) {
+      return;
+    }
 
     const { type, target, purpose } = req.body;
 
@@ -180,10 +221,12 @@ export class AuthController {
    * Verify verification code
    */
   verifyCode = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(verificationCodeSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(verifyCodeBodySchema, req, res)) {
+      return;
+    }
 
     const { type, target, code } = req.body;
-    const purpose = req.body.purpose || 'verify';
+    const purpose = req.body.purpose ?? 'register';
 
     await authService.verifyCode(type, target, code, purpose);
 
@@ -200,11 +243,9 @@ export class AuthController {
    * Reset password
    */
   resetPassword = asyncHandler(async (req: Request, res: Response) => {
-    const schema = verificationCodeSchema.extend({
-      new_password: registerSchema.shape.password,
-    });
-
-    validateBody(schema)(req, res, () => {});
+    if (!parseBodyOrRespond(resetPasswordBodySchema, req, res)) {
+      return;
+    }
 
     const { target, code, new_password } = req.body;
 
@@ -223,7 +264,9 @@ export class AuthController {
    * Change password (requires auth)
    */
   changePassword = asyncHandler(async (req: Request, res: Response) => {
-    validateBody(changePasswordSchema)(req, res, () => {});
+    if (!parseBodyOrRespond(changePasswordSchema, req, res)) {
+      return;
+    }
 
     const userId = req.user?.id;
     if (!userId) {
