@@ -104,12 +104,14 @@ export async function closeRedis(): Promise<void> {
 
 // Cache utilities
 export class CacheService {
-  private redis: Redis | null;
   private defaultTTL: number;
 
-  constructor(redisInstance: Redis | null = null, defaultTTL: number = 3600) {
-    this.redis = redisInstance || getRedis();
+  constructor(defaultTTL: number = 3600) {
     this.defaultTTL = defaultTTL;
+  }
+
+  private get redis(): Redis | null {
+    return getRedis();
   }
 
   // Get value from cache
