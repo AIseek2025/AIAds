@@ -178,9 +178,11 @@ export const authAPI = {
     const body: Record<string, unknown> = {
       email: data.email,
       password: data.password,
-      phone: data.phone,
       role: data.role,
     };
+    if (data.phone?.trim()) {
+      body.phone = data.phone.trim();
+    }
     if (data.inviteCode?.trim()) {
       body.invite_code = data.inviteCode.trim();
     }

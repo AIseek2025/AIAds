@@ -7,11 +7,10 @@ export const emailSchema = z
   .min(1, '邮箱不能为空')
   .max(255, '邮箱长度不能超过 255 个字符');
 
-export const phoneSchema = z
-  .string()
-  .regex(/^\+?[1-9]\d{1,14}$/, '手机号格式不正确')
-  .optional()
-  .nullable();
+export const phoneSchema = z.preprocess(
+  (v) => (v === '' || v === undefined || v === null ? undefined : v),
+  z.string().regex(/^\+?[1-9]\d{1,14}$/, '手机号格式不正确').optional().nullable()
+);
 
 export const passwordSchema = z
   .string()
