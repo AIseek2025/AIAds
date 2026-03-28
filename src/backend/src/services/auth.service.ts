@@ -14,6 +14,7 @@ import { cacheService } from '../config/redis';
 import { isAccountLocked, recordLoginFailure, resetLoginFailures } from './accountLock.service';
 import { rotateRefreshToken, storeRefreshToken, validateRefreshToken } from './tokenRotation.service';
 import { isMFARequired } from './mfa.service';
+import { sendVerificationEmail } from './email.service';
 import type { User, UserRole, UserStatus } from '@prisma/client';
 import { inviteCodeService } from './invite-code.service';
 
@@ -48,7 +49,10 @@ export class AuthService {
    * Register a new user
    */
   async register(data: RegisterRequest): Promise<AuthResponse> {
-    // Check if email already exists
+    if (data.verification_code) {
+      await this.verifyCode('email', data.email, data.verification_code, 'register');
+    }
+
     const existingUser = await prisma.user.findUnique({
       where: { email: data.email },
     });
@@ -403,11 +407,14 @@ export class AuthService {
     const key = `verification:${type}:${target}:${purpose}`;
     await cacheService.set(key, codeHash, 300);
 
-    logger.info('Verification code sent', { type, target, purpose, code: '******' });
+    logger.info('Verification code stored', { type, target, purpose });
 
-    // In a real implementation, send email/SMS here
-    // Note: Never log the actual verification code in production
-    logger.debug('Verification code generated (DEV only)', { code: '******' });
+    if (type === 'email') {
+      const sent = await sendVerificationEmail(target, code, purpose);
+      if (!sent) {
+        logger.warn('Email delivery failed or SendGrid not configured', { target, purpose });
+      }
+    }
   }
 
   /**

@@ -45,6 +45,8 @@ export interface RegisterRequest {
   nickname?: string;
   /** 可选；与 REQUIRE_INVITE_CODE_FOR_REGISTRATION 联用 */
   invite_code?: string;
+  /** 邮箱验证码（6 位） */
+  verification_code?: string;
 }
 
 export interface LoginRequest {

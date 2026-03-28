@@ -42,6 +42,7 @@ export const registerSchema = z.object({
     (v) => (v === '' || v === undefined || v === null ? undefined : v),
     z.string().min(4).max(64).optional()
   ),
+  verification_code: z.string().length(6, '验证码为 6 位数字').optional(),
 });
 
 export const loginSchema = z.object({

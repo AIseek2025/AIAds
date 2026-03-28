@@ -184,6 +184,9 @@ export const authAPI = {
     if (data.inviteCode?.trim()) {
       body.invite_code = data.inviteCode.trim();
     }
+    if (data.verificationCode?.trim()) {
+      body.verification_code = data.verificationCode.trim();
+    }
     const response = await api.post<ApiResponse<AuthResponse>>('/auth/register', body);
     return mapAuthResponseData(response.data.data);
   },
