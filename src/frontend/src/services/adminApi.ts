@@ -1,4 +1,5 @@
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosHeaders, AxiosInstance } from 'axios';
+import { ensureCsrfToken } from './csrf';
 import type {
   ApiResponse,
   ListResponse,
@@ -56,18 +57,29 @@ const ADMIN_API_BASE_URL = import.meta.env.VITE_ADMIN_API_URL || 'http://localho
 // Create axios instance for admin API
 const adminApi: AxiosInstance = axios.create({
   baseURL: ADMIN_API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
   timeout: 30000,
 });
 
-// Request interceptor - Add admin auth token
+// Request interceptor：CSRF + Admin JWT
 adminApi.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    const method = (config.method || 'get').toLowerCase();
+    const url = config.url || '';
+    if (['post', 'put', 'patch', 'delete'].includes(method) && !url.includes('csrf-token')) {
+      const csrf = await ensureCsrfToken();
+      const headers = AxiosHeaders.from(config.headers ?? {});
+      headers.set('X-CSRF-Token', csrf);
+      config.headers = headers;
+    }
     const token = localStorage.getItem('adminAccessToken');
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      const headers = AxiosHeaders.from(config.headers ?? {});
+      headers.set('Authorization', `Bearer ${token}`);
+      config.headers = headers;
     }
     return config;
   },
@@ -90,7 +102,7 @@ adminApi.interceptors.response.use(
           throw new Error('No refresh token');
         }
 
-        const response = await axios.post(`${ADMIN_API_BASE_URL}/auth/refresh`, {
+        const response = await adminApi.post('/auth/refresh', {
           refresh_token: refreshToken,
         });
 

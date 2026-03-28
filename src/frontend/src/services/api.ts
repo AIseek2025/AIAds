@@ -2,6 +2,7 @@ import axios, { AxiosError, AxiosHeaders } from 'axios';
 import { getApiErrorMessage } from '../utils/apiError';
 import { isAuthRefreshPath, isPublicAuthRequestPath } from '../utils/authRequestPaths';
 import { redirectToAppLogin } from '../utils/redirectOnUnauthorized';
+import { clearCsrfToken, ensureCsrfToken, getApiBaseUrlForCsrf } from './csrf';
 import type { ApiResponse, LoginData, RegisterData, ForgotPasswordData } from '../types';
 import type { AuthResponse, User } from '../types';
 
@@ -32,24 +33,35 @@ function mapAuthResponseData(raw: unknown): AuthResponse {
   };
 }
 
-// API base URL from environment or default
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
+// API base URL from environment or default（与 csrf.ts 同源）
+const API_BASE_URL = getApiBaseUrlForCsrf();
 
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
   timeout: 30000,
 });
 
-// Request interceptor - Add auth token
+// Request interceptor：CSRF（POST/PUT/PATCH/DELETE）+ JWT
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    const method = (config.method || 'get').toLowerCase();
+    const url = config.url || '';
+    if (['post', 'put', 'patch', 'delete'].includes(method) && !url.includes('csrf-token')) {
+      const csrf = await ensureCsrfToken();
+      const headers = AxiosHeaders.from(config.headers ?? {});
+      headers.set('X-CSRF-Token', csrf);
+      config.headers = headers;
+    }
     const token = localStorage.getItem('accessToken');
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      const headers = AxiosHeaders.from(config.headers ?? {});
+      headers.set('Authorization', `Bearer ${token}`);
+      config.headers = headers;
     }
     return config;
   },
@@ -64,6 +76,13 @@ api.interceptors.response.use(
   async (error: AxiosError<ApiResponse>) => {
     const originalRequest = error.config as (typeof error.config & { _retry?: boolean }) | undefined;
     const status = error.response?.status;
+
+    if (status === 403) {
+      const errBody = error.response?.data as ApiResponse | undefined;
+      if (errBody?.error?.code === 'CSRF_TOKEN_INVALID') {
+        clearCsrfToken();
+      }
+    }
 
     const logAndReject = () => {
       const errorMessage = getApiErrorMessage(error, '请求失败，请稍后重试');
@@ -104,9 +123,17 @@ api.interceptors.response.use(
 
     originalRequest._retry = true;
     try {
+      const csrf = await ensureCsrfToken();
       const { data } = await axios.post<
         ApiResponse<{ access_token: string; refresh_token: string; expires_in: number }>
-      >(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken });
+      >(
+        `${API_BASE_URL}/auth/refresh`,
+        { refresh_token: refreshToken },
+        {
+          withCredentials: true,
+          headers: { 'X-CSRF-Token': csrf },
+        }
+      );
       if (!data.success || !data.data) {
         throw new Error('refresh response invalid');
       }
@@ -215,9 +242,13 @@ export const authAPI = {
    * Refresh token（直连 POST，避免走带拦截器的 `api` 实例导致与拦截器逻辑交织）
    */
   refreshToken: async (refreshToken: string): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> => {
+    const csrf = await ensureCsrfToken();
     const { data } = await axios.post<
       ApiResponse<{ access_token: string; refresh_token: string; expires_in: number }>
-    >(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken });
+    >(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken }, {
+      withCredentials: true,
+      headers: { 'X-CSRF-Token': csrf },
+    });
     if (!data.success || !data.data) {
       throw new Error('刷新 Token 失败');
     }

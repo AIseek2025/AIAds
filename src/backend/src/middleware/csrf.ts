@@ -3,12 +3,18 @@ import { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger';
 import config from '../config';
 
-// CSRF protection middleware configuration
+/**
+ * SPA 与 API 常见为不同子域（如 www / api）或前后端分离端口；
+ * SameSite=Strict 会导致跨站 POST 不携带该 Cookie，从而 CSRF 校验失败。
+ * 生产环境 HTTPS 下使用 none + secure，配合前端 `withCredentials` 与 `X-CSRF-Token`。
+ */
+const csrfCookieSameSite = (process.env.CSRF_COOKIE_SAME_SITE as 'strict' | 'lax' | 'none' | undefined) ?? (config.nodeEnv === 'production' ? 'none' : 'lax');
+
 const csrfProtection = csrf({
   cookie: {
     httpOnly: true,
-    secure: config.nodeEnv === 'production', // Require HTTPS in production
-    sameSite: 'strict', // Prevent CSRF on cross-site requests
+    secure: config.nodeEnv === 'production',
+    sameSite: csrfCookieSameSite,
     path: '/',
     maxAge: 60 * 60 * 1000, // 1 hour
   },

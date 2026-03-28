@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { clearCsrfToken } from '../services/csrf';
 import type { Admin, AdminRole, AdminPermission } from '../types';
 
 interface AdminAuthState {
@@ -52,6 +53,7 @@ export const useAdminAuthStore = create<AdminAuthState>()(
       },
 
       logout: () => {
+        clearCsrfToken();
         localStorage.removeItem('adminAccessToken');
         localStorage.removeItem('adminRefreshToken');
         set({

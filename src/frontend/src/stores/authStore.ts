@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { clearCsrfToken } from '../services/csrf';
 import type { User } from '../types';
 
 interface AuthState {
@@ -31,6 +32,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        clearCsrfToken();
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         set({
